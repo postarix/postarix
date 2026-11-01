@@ -1,0 +1,32 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+build/
+.next/
+out/
+.turbo/
+coverage/
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Datos locales de servicios
+docker/compose/data/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
