@@ -1,0 +1,26 @@
+{
+  "name": "postarix",
+  "private": true,
+  "description": "Plataforma de correo electrónico autoalojada, moderna y open source",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/postarix/postarix.git"
+  },
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:services": "docker compose -f docker/compose/dev.yml up -d",
+    "dev:services:down": "docker compose -f docker/compose/dev.yml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.10"
+  }
+}
