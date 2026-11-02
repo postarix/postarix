@@ -4,6 +4,11 @@ import { ApiClient, config, smtp, unique, waitForMessage } from './support.js';
 
 const PASSWORD = 'murder mailbox password';
 
+/** The container of a compose service. */
+function container(service: string): string {
+  return execFileSync('docker', ['ps', '-q', '--filter', `label=com.docker.compose.service=${service}`]).toString().trim().split('\n')[0]!;
+}
+
 /** Runs a query in the stack's PostgreSQL (found by its compose service label). */
 function sql(query: string): string {
   const id = execFileSync('docker', ['ps', '-q', '--filter', 'label=com.docker.compose.service=postgres']).toString().trim().split('\n')[0]!;
@@ -60,5 +65,38 @@ describe.skipIf(!process.env.MURDER)('Cyrus Murder', () => {
       });
       expect(methodResponses.map(([name]) => name)).toEqual(['Mailbox/get', 'Calendar/get']);
     }
+  });
+
+  it('moves a mailbox to another backend with its mail, filters and calendar', async () => {
+    const person = people[0]!;
+    const subject = unique('before-move');
+    await smtp(config.smtpPort).sendMail({ from: 'someone@outside.example', to: person.address, subject, text: 'Moved along' });
+    await waitForMessage(person.address, PASSWORD, subject);
+    const from = serverOf(person.address);
+    const to = from === 'b1' ? 'b2' : 'b1';
+
+    const output = execFileSync('docker', ['exec', container('api'), 'node', 'dist/cli/move-mailboxes.js', '--to', to, person.address]).toString();
+    expect(output).toContain(`moved ${person.address} to ${to}`);
+    expect(serverOf(person.address)).toBe(to);
+
+    // Old mail is there (once the frontend has the new location), new mail
+    // arrives, and the webmail reaches the new backend.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await waitForMessage(person.address, PASSWORD, subject, 10_000);
+        break;
+      } catch (error) {
+        if (attempt >= 5) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+    const after = unique('after-move');
+    await smtp(config.smtpPort).sendMail({ from: 'someone@outside.example', to: person.address, subject: after, text: 'Still here' });
+    await waitForMessage(person.address, PASSWORD, after);
+    const { methodResponses } = await person.client.ok<{ methodResponses: [string, Record<string, unknown>, string][] }>('POST', '/api/jmap/', {
+      using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:calendars'],
+      methodCalls: [['Calendar/get', { accountId: person.address, properties: ['id'] }, 'c']],
+    });
+    expect(methodResponses[0]![0]).toBe('Calendar/get');
   });
 });

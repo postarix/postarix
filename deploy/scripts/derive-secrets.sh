@@ -15,7 +15,7 @@ fi
 derive() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$token" -r | cut -d' ' -f1; }
 
 added=0
-for purpose in mail-auth submission cyrus-smtp murder-mupdate murder-proxy; do
+for purpose in mail-auth submission cyrus-smtp murder-mupdate murder-proxy murder-xfer; do
   name="POSTARIX_SECRET_$(echo "$purpose" | tr 'a-z-' 'A-Z_')"
   if grep -q "^$name=." "$file"; then continue; fi
   sed -i "/^$name=/d" "$file"

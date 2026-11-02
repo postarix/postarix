@@ -42,6 +42,38 @@ describe('MurderEngine', () => {
     await expect(engine.getUsage('nobody@example.com')).rejects.toBeInstanceOf(MailEngineError);
   });
 
+  it('moves a mailbox to another backend and records it there', async () => {
+    const servers: Record<string, MemoryMailEngine> = {};
+    class Backend extends MemoryMailEngine {
+      async transfer(address: string, server: string) {
+        const target = servers[server]!;
+        target.mailboxes.set(address, this.mailboxes.get(address)!);
+        this.mailboxes.delete(address);
+      }
+    }
+    const one = new Backend();
+    const two = new Backend();
+    servers['cyrus-1'] = one;
+    servers['cyrus-2'] = two;
+    const placed = new Map<string, string>();
+    const engine = new MurderEngine({
+      propagationMs: 0,
+      backends: { one, two },
+      serverNames: { one: 'cyrus-1', two: 'cyrus-2' },
+      locate: async (address) => placed.get(address) ?? null,
+      place: async (address) => (placed.set(address, 'one'), 'one'),
+      relocate: async (address, backend) => void placed.set(address, backend),
+    });
+    await engine.createMailbox('a@example.com', { quotaBytes: 1000 });
+    await engine.moveMailbox('a@example.com', 'two');
+    expect(one.mailboxes.size).toBe(0);
+    expect([...two.mailboxes.keys()]).toEqual(['a@example.com']);
+    expect(placed.get('a@example.com')).toBe('two');
+    expect(await engine.getUsage('a@example.com')).toEqual({ usedBytes: 0, quotaBytes: 1000 });
+    await expect(engine.moveMailbox('a@example.com', 'three')).rejects.toMatchObject({ code: 'rejected' });
+    await expect(engine.moveMailbox('nobody@example.com', 'one')).rejects.toMatchObject({ code: 'not_found' });
+  });
+
   it('is healthy only when every backend is', async () => {
     const { engine } = setup();
     expect(await engine.health()).toEqual({ ok: true });

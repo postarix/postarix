@@ -74,13 +74,37 @@ the existing Cyrus data (`/var/lib/cyrus`, `/var/spool/cyrus`,
 restoring a backup (`docs/BACKUP.md`); the backend publishes its mailboxes to
 the mupdate server when it starts.
 
+## Moving mailboxes between backends
+
+To rebalance, or to empty a backend before removing it, move mailboxes with
+the `move-mailboxes` command in the API container. Each mailbox moves whole
+(folders, calendars, contacts, filters) with Cyrus' `XFER`; the backends log
+in to each other as `postarix-xfer` (`POSTARIX_SECRET_MURDER_XFER`, added by
+`deploy/scripts/derive-secrets.sh`). Mail arriving during a move waits in
+Postfix' queue, and people using the mailbox may be disconnected once.
+
+```bash
+# How many mailboxes each backend holds
+docker compose … exec api node dist/cli/move-mailboxes.js --list
+# One or more mailboxes
+docker compose … exec api node dist/cli/move-mailboxes.js --to b2 ann@example.com bob@example.com
+# A whole organization (keeps its people together)
+docker compose … exec api node dist/cli/move-mailboxes.js --to b2 --organization <organization id>
+```
+
+On Kubernetes: `kubectl exec deploy/<release>-api -- node dist/cli/move-mailboxes.js …`.
+Move an organization's mailboxes together: calendars and contacts shared
+between colleagues reach the webmail only on the same backend.
+
 ## Limits
 
-- Lowering the number of backends, or removing one, needs its mailboxes moved
-  first (Cyrus' `XFER`); Postarix does not do it automatically yet.
+- Backends are not replicated: each mailbox lives on one backend, so keep
+  each backend's volume on reliable (replicated) storage and back it up
+  (`docs/BACKUP.md`). Cyrus replication (`sync_client`/`sync_server`) for a
+  standby backend is not set up by Postarix yet.
 - An organization larger than one backend can hold does not fit this
   placement yet. Calendars and contacts shared between people on different
   backends would not be visible in the webmail (JMAP only reaches the person's
   own backend); free/busy and invitations work across backends.
-- `deploy/scripts/backup.sh` backs up a single Cyrus; back up each backend's
-  volumes in a Murder.
+- On Kubernetes, back up each backend's volume (volume snapshots or Velero);
+  `deploy/scripts/backup.sh` covers Docker Compose (Murder included).
