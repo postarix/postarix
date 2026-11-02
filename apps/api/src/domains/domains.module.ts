@@ -1,0 +1,11 @@
+import { Module } from '@nestjs/common';
+import { OrgAccessGuard } from '../tenancy/org-access.guard.js';
+import { DomainsController } from './domains.controller.js';
+import { DomainsRepository } from './domains.repository.js';
+import { DomainsService } from './domains.service.js';
+
+@Module({
+  controllers: [DomainsController],
+  providers: [DomainsRepository, DomainsService, OrgAccessGuard],
+})
+export class DomainsModule {}

@@ -1,0 +1,16 @@
+// Used only by the Better Auth CLI to generate src/db/schema/auth.ts.
+// Run: pnpm --filter @postarix/api auth:schema
+import { createAuth } from '../src/auth/auth.js';
+import type { Database } from '../src/db/client.js';
+
+export const auth = createAuth({} as Database, {
+  NODE_ENV: 'development',
+  PORT: 3000,
+  DATABASE_URL: 'postgresql://localhost/postarix',
+  AUTH_URL: 'http://localhost:3000',
+  AUTH_SECRET: 'schema-generation-only-secret-not-used-anywhere',
+  TRUSTED_ORIGINS: [],
+  TRUSTED_PROXIES: [],
+  ALLOW_SIGNUP: false,
+  ALLOW_USER_CREATE_ORG: false,
+});
