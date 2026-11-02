@@ -7,10 +7,11 @@ import { useMemo, useState } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { Avatar } from '@/components/avatar';
 import { ContactDialog } from '@/components/contact-dialog';
+import { ImportButton } from '@/components/import-button';
 import { ShareDialog } from '@/components/share-dialog';
 import { errorMessage } from '@/lib/api';
 import { emptyDraft } from '@/lib/compose';
-import { type AccountContact, contactName, matchesContact, primaryEmail, useContacts, useDeleteContact } from '@/lib/contacts';
+import { type AccountContact, contactKeys, contactName, matchesContact, primaryEmail, useContacts, useDeleteContact } from '@/lib/contacts';
 import { navigate } from '@/lib/router';
 import { useComposer } from './mail';
 
@@ -131,6 +132,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
         <Share2 aria-hidden />
         Share contacts
       </Button>
+      <ImportButton kind="contacts" queryKey={contactKeys.all} />
       <p className="px-1.5 text-xs leading-relaxed text-sidebar-muted">
         Your contacts also sync to phones and desktop apps over CardDAV, with an app password.
       </p>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, UnsupportedMediaTypeException } from '@nestjs/common';
 import type { z } from 'zod';
 import { type AuthSession, CurrentSession } from '../auth/session.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -14,6 +14,7 @@ import {
   type SharedCollection,
   sharesSchema,
 } from './calendar.service.js';
+import { type ImportResult, importQuerySchema, ImportService } from './import.service.js';
 import { type Invitation, InvitationService, respondSchema } from './invitation.service.js';
 
 /** The signed-in person's calendar: guests, free/busy of colleagues, sharing. */
@@ -100,4 +101,35 @@ export class InvitationController {
   ): Promise<Invitation> {
     return this.invitations.apply(session.user.id, emailId);
   }
+}
+
+/**
+ * Imports another service's exports into the signed-in person's calendar and
+ * contacts. The body is the file itself: Content-Type text/calendar (.ics) or
+ * text/vcard (.vcf), up to 10 MB.
+ */
+@Controller()
+export class ImportController {
+  constructor(@Inject(ImportService) private readonly imports: ImportService) {}
+
+  @Post('calendar/import')
+  @HttpCode(200)
+  importCalendar(
+    @CurrentSession() session: AuthSession,
+    @Body() body: unknown,
+    @Query(new ZodValidationPipe(importQuerySchema)) query: z.infer<typeof importQuerySchema>,
+  ): Promise<ImportResult> {
+    return this.imports.importCalendar(session.user.id, fileBody(body), query.calendarId);
+  }
+
+  @Post('contacts/import')
+  @HttpCode(200)
+  importContacts(@CurrentSession() session: AuthSession, @Body() body: unknown): Promise<ImportResult> {
+    return this.imports.importContacts(session.user.id, fileBody(body));
+  }
+}
+
+function fileBody(body: unknown): string {
+  if (typeof body !== 'string' || body.length === 0) throw new UnsupportedMediaTypeException('Send the file as text/calendar or text/vcard');
+  return body;
 }

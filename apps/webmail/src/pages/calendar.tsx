@@ -5,10 +5,11 @@ import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Repeat, Share2, Users 
 import { useMemo, useState } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { type EventDraft, EventDialog } from '@/components/event-dialog';
+import { ImportButton } from '@/components/import-button';
 import { errorMessage } from '@/lib/api';
 import { ShareDialog } from '@/components/share-dialog';
 import { TimeGrid } from '@/components/time-grid';
-import { type AccountEvent, type CalendarView, dayKey, eventSpan, monthGrid, overlapsDay, shiftDate, useCalendars, useEvents, weekDays } from '@/lib/calendar';
+import { type AccountEvent, type CalendarView, calendarKeys, dayKey, eventSpan, monthGrid, overlapsDay, shiftDate, useCalendars, useEvents, weekDays } from '@/lib/calendar';
 import { navigate } from '@/lib/router';
 
 const time = (d: Date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
@@ -150,6 +151,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
           </>
         ) : null}
       </div>
+      <ImportButton kind="calendar" queryKey={calendarKeys.allEvents} />
     </div>
   );
 
