@@ -47,7 +47,7 @@ jobs:
       TEST_VALKEY_URL: redis://127.0.0.1:6379
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Installs the pnpm version pinned in package.json ("packageManager").
       - uses: pnpm/action-setup@v4
@@ -105,7 +105,7 @@ jobs:
       E2E_DATABASE_URL: postgresql://postarix:postarix@127.0.0.1:5432/postarix_e2e_test
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
@@ -173,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: azure/setup-helm@v4
       - name: The chart's init script matches the Compose one
         run: cmp deploy/helm/postarix/files/10-postarix-mail-role.sh docker/postgres/10-postarix-mail-role.sh
@@ -201,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
 
