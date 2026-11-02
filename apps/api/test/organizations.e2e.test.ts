@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import type TestAgent from 'supertest/lib/agent.js';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSuperAdmin } from '../src/auth/create-super-admin.js';
 import { SYSTEM_MAILER } from '../src/core/tokens.js';
 import type { MemorySystemMailer } from '../src/mail/system-mailer.js';
@@ -105,7 +105,9 @@ describe('Organizations, members and audit', () => {
       const log = await alice.agent.get(`/api/orgs/${orgA}/audit?limit=1`).expect(200);
       expect(log.body.data[0]).toMatchObject({ action: 'member.added', targetLabel: frida.email, details: { viaSuperAdmin: true } });
       // The new member is told, by mail.
-      const notice = app.get<MemorySystemMailer>(SYSTEM_MAILER).sent.find((m) => m.to === frida.email);
+      const mailer = app.get<MemorySystemMailer>(SYSTEM_MAILER);
+      await vi.waitFor(() => expect(mailer.sent.some((m) => m.to === frida.email)).toBe(true));
+      const notice = mailer.sent.find((m) => m.to === frida.email);
       expect(notice?.subject).toMatch(/^You are now a member of /);
       expect(notice?.text).toContain('Nothing changes for your mailbox');
     });

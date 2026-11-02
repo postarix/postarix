@@ -15,6 +15,9 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # The images run as "node"; Kubernetes needs its numeric id to check it is not root.
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
         - name: webmail
           image: {{ include "postarix.image" (list . "webmail") }}

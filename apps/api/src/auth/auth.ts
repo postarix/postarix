@@ -9,7 +9,7 @@ import type { Database } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { type CounterStore, MemoryCounterStore } from '../core/counter-store.js';
-import { openOidcConfig } from '../sso/sso-crypto.js';
+import { mapOidcConfigSecret, openOidcConfig } from '../sso/sso-crypto.js';
 import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
 
@@ -53,7 +53,13 @@ function withOpenedSsoSecrets(factory: AdapterFactory, secret: string): AdapterF
     if (model !== 'ssoProvider' || !row || typeof row !== 'object') return row;
     const record = row as Record<string, unknown>;
     if (typeof record.oidcConfig !== 'string') return row;
-    return { ...record, oidcConfig: openOidcConfig(record.oidcConfig, secret) } as T;
+    try {
+      return { ...record, oidcConfig: openOidcConfig(record.oidcConfig, secret) } as T;
+    } catch {
+      // A secret that no longer opens (say, AUTH_SECRET changed) breaks this
+      // one provider only: Better Auth may list every provider at sign-in.
+      return { ...record, oidcConfig: mapOidcConfigSecret(record.oidcConfig, () => '') } as T;
+    }
   };
   const wrap = (adapter: ReturnType<AdapterFactory>): ReturnType<AdapterFactory> => ({
     ...adapter,
@@ -67,6 +73,7 @@ function withOpenedSsoSecrets(factory: AdapterFactory, secret: string): AdapterF
 }
 
 export function createAuth(db: Database, env: Env, counters: CounterStore = new MemoryCounterStore()) {
+  const localCounters = new MemoryCounterStore();
   const authUrl = new URL(env.AUTH_URL);
 
   return betterAuth({
@@ -105,7 +112,13 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
       // counted in one atomic step.
       customStorage: {
         consume: async (key, rule) => {
-          const allowed = await counters.tryAdd(`ratelimit:${key}`, 1, rule.max, rule.window * 1000);
+          let allowed: boolean;
+          try {
+            allowed = await counters.tryAdd(`ratelimit:${key}`, 1, rule.max, rule.window * 1000);
+          } catch {
+            // Valkey unreachable: limit per instance rather than fail every sign-in.
+            allowed = await localCounters.tryAdd(`ratelimit:${key}`, 1, rule.max, rule.window * 1000);
+          }
           return { allowed, retryAfter: allowed ? null : rule.window };
         },
       },

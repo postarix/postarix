@@ -94,7 +94,7 @@ spec:
             - name: POSTFIX_DB_HOST
               value: {{ include "postarix.postgresHost" . }}
             - name: MESSAGE_SIZE_LIMIT
-              value: {{ .Values.mail.messageSizeLimit | quote }}
+              value: {{ .Values.mail.messageSizeLimit | int64 | toString | quote }}
             - name: RSPAMD_MILTER
               value: "inet:{{ include "postarix.name" (list . "rspamd") }}:11332"
           ports:

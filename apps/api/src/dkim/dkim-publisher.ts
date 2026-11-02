@@ -10,11 +10,19 @@ export interface DkimPublisher {
   unpublish(domain: string): Promise<void>;
   /** Domains currently published (used to clean up after missed events). */
   publishedDomains(): Promise<string[]>;
+  /**
+   * The set of hosted (active) domains, with or without a key. Rspamd uses it
+   * to decide which recipients of a message were hosted here.
+   */
+  markHosted(domain: string): Promise<void>;
+  unmarkHosted(domain: string): Promise<void>;
+  replaceHosted(domains: string[]): Promise<void>;
   close(): Promise<void>;
 }
 
 export const DKIM_SELECTORS_HASH = 'DKIM_SELECTORS';
 export const DKIM_KEYS_HASH = 'DKIM_KEYS';
+export const HOSTED_DOMAINS_SET = 'POSTARIX_DOMAINS';
 
 export class ValkeyDkimPublisher implements DkimPublisher {
   private readonly client: Redis;
@@ -44,6 +52,20 @@ export class ValkeyDkimPublisher implements DkimPublisher {
     return this.client.hkeys(DKIM_SELECTORS_HASH);
   }
 
+  async markHosted(domain: string): Promise<void> {
+    await this.client.sadd(HOSTED_DOMAINS_SET, domain);
+  }
+
+  async unmarkHosted(domain: string): Promise<void> {
+    await this.client.srem(HOSTED_DOMAINS_SET, domain);
+  }
+
+  async replaceHosted(domains: string[]): Promise<void> {
+    const pipeline = this.client.multi().del(HOSTED_DOMAINS_SET);
+    if (domains.length > 0) pipeline.sadd(HOSTED_DOMAINS_SET, ...domains);
+    await pipeline.exec();
+  }
+
   async close(): Promise<void> {
     if (this.client.status !== 'end') this.client.disconnect();
   }
@@ -69,6 +91,21 @@ export class MemoryDkimPublisher implements DkimPublisher {
 
   async publishedDomains(): Promise<string[]> {
     return [...this.selectors.keys()];
+  }
+
+  readonly hosted = new Set<string>();
+
+  async markHosted(domain: string): Promise<void> {
+    this.hosted.add(domain);
+  }
+
+  async unmarkHosted(domain: string): Promise<void> {
+    this.hosted.delete(domain);
+  }
+
+  async replaceHosted(domains: string[]): Promise<void> {
+    this.hosted.clear();
+    for (const d of domains) this.hosted.add(d);
   }
 
   async close(): Promise<void> {}

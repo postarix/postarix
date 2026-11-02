@@ -170,6 +170,7 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
     "10587/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "10587/inet/smtpd_client_message_rate_limit=0" \
     "10587/inet/smtpd_client_connection_count_limit=0" \
+    "10587/inet/smtpd_client_auth_rate_limit=0" \
     "10587/inet/milter_macro_daemon_name=ORIGINATING"
 
   # Cyrus sends only vacation replies (null envelope sender) and redirects;
@@ -191,6 +192,9 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
     "10588/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
     "10588/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "10588/inet/milter_macro_daemon_name=CYRUS" \
+    "10588/inet/smtpd_client_auth_rate_limit=0" \
+    "10588/inet/smtpd_client_connection_count_limit=0" \
+    "10588/inet/smtpd_client_message_rate_limit=1200" \
     "10588/inet/cleanup_service_name=cyrus-cleanup"
   postconf -M "cyrus-cleanup/unix=cyrus-cleanup unix n - n - 0 cleanup"
   postconf -P \

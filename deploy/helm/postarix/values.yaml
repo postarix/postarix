@@ -34,6 +34,9 @@ tls:
 
 api:
   replicas: 2
+  # Always "production" for real installations (it enforces the production
+  # checks: https, DNS-verified domains, Valkey). CI uses "development".
+  nodeEnv: production
   domainVerification: dns
   trustedOrigins: []
   # Addresses of the ingress controller pods, allowed to set X-Forwarded-For.

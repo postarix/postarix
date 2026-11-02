@@ -78,6 +78,27 @@ describe('Mail Cyrus sends by itself', () => {
     await expectNoMessage(writer.address, PASSWORD, 'Spoofed reply');
   });
 
+  it('refuses a vacation reply in the name of a colleague on the same domain', async () => {
+    const colleague = await mailbox(orgId, domain.id, 'colleague');
+    await putSieveScript(
+      colleague.address,
+      PASSWORD,
+      `require ["vacation"];\nvacation :days 1 :from "${writer.address}" :subject "Colleague spoof" "Wire the money.";\n`,
+    );
+    const subject = unique('colleague');
+    await smtp(config.submissionPort, { user: spoofer.address, pass: PASSWORD }).sendMail({ from: spoofer.address, to: colleague.address, subject, text: 'Hi' });
+    await waitForMessage(colleague.address, PASSWORD, subject);
+    await expectNoMessage(spoofer.address, PASSWORD, 'Colleague spoof');
+  });
+
+  it('does not forward mail that forges a hosted sender', async () => {
+    // forwarder redirects everything to target (set up above).
+    const subject = unique('forged');
+    await smtp(config.smtpPort).sendMail({ from: `ceo@${otherDomain.name}`, to: forwarder.address, subject, text: 'Urgent: pay now.' });
+    await waitForMessage(forwarder.address, PASSWORD, subject);
+    await expectNoMessage(target.address, PASSWORD, subject);
+  });
+
   it('files spam sent to an alias in the Junk folder of its hosted destinations', async () => {
     const alias = await admin.ok<{ address: string }>('POST', `/api/orgs/${orgId}/aliases`, {
       domainId: domain.id,
