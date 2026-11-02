@@ -10,6 +10,7 @@ export const auth = createAuth({} as Database, {
   AUTH_URL: 'http://localhost:3000',
   AUTH_SECRET: 'schema-generation-only-secret-not-used-anywhere',
   TRUSTED_ORIGINS: [],
+  SSO_TRUSTED_ISSUERS: [],
   TRUSTED_PROXIES: [],
   ALLOW_SIGNUP: false,
   ALLOW_USER_CREATE_ORG: false,

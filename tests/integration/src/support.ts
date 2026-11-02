@@ -1,3 +1,5 @@
+import net from 'node:net';
+import tls from 'node:tls';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
 
@@ -8,6 +10,7 @@ export const config = {
   smtpPort: Number(process.env.SMTP_PORT ?? 2525),
   submissionPort: Number(process.env.SUBMISSION_PORT ?? 5870),
   submissionsPort: Number(process.env.SUBMISSIONS_PORT ?? 4650),
+  sievePort: Number(process.env.SIEVE_PORT ?? 41900),
   imapsPort: Number(process.env.IMAPS_PORT ?? 9930),
   imapPort: Number(process.env.IMAP_PORT ?? 1430),
   davUrl: process.env.DAV_URL ?? 'http://localhost:8085',
@@ -141,3 +144,74 @@ export async function waitForMessage(
 }
 
 export const unique = (label: string) => `${label}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+/**
+ * Uploads and activates a Sieve script over ManageSieve (STARTTLS, PLAIN), as
+ * a mail app's filter editor does. Rejects with the server's answer on failure.
+ */
+export async function putSieveScript(user: string, pass: string, script: string, name = 'postarix-test'): Promise<void> {
+  let socket: net.Socket | tls.TLSSocket = net.connect(config.sievePort, config.host);
+  socket.setEncoding('utf8');
+  let buffer = '';
+  let waiter: ((response: string) => void) | null = null;
+  const complete = () => {
+    if (waiter && /(^|\r\n)(OK|NO|BYE)[^\r\n]*\r\n$/.test(buffer)) {
+      const response = buffer;
+      buffer = '';
+      const resolve = waiter;
+      waiter = null;
+      resolve(response);
+    }
+  };
+  const onData = (chunk: string) => {
+    buffer += chunk;
+    complete();
+  };
+  const next = () =>
+    new Promise<string>((resolve) => {
+      waiter = resolve;
+      complete();
+    });
+  const expectOk = async (command?: string) => {
+    if (command !== undefined) socket.write(`${command}\r\n`);
+    const response = await next();
+    if (!/(^|\r\n)OK/.test(response)) throw new Error(`ManageSieve: ${command ?? 'greeting'} → ${response.trim()}`);
+    return response;
+  };
+  socket.on('data', onData);
+  try {
+    await expectOk();
+    await expectOk('STARTTLS');
+    socket.removeListener('data', onData);
+    socket = await new Promise<tls.TLSSocket>((resolve, reject) => {
+      const secure = tls.connect({ socket: socket as net.Socket, rejectUnauthorized: false }, () => resolve(secure));
+      secure.once('error', reject);
+    });
+    socket.setEncoding('utf8');
+    socket.on('data', onData);
+    await expectOk(); // capabilities again after STARTTLS
+    await expectOk(`AUTHENTICATE "PLAIN" "${Buffer.from(`\0${user}\0${pass}`).toString('base64')}"`);
+    await expectOk(`PUTSCRIPT "${name}" {${Buffer.byteLength(script)}+}\r\n${script}`);
+    await expectOk(`SETACTIVE "${name}"`);
+    socket.write('LOGOUT\r\n');
+  } finally {
+    socket.end();
+  }
+}
+
+/** Waits a while and fails if a message with the subject arrives. */
+export async function expectNoMessage(user: string, pass: string, subject: string, waitMs = 12_000): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, waitMs));
+  const client = await imapLogin(user, pass);
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const uids = await client.search({ subject }, { uid: true });
+      if (uids && uids.length > 0) throw new Error(`Unexpected message "${subject}" reached ${user}`);
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
+}

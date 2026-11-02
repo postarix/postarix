@@ -27,6 +27,13 @@ const envSchema = z
     /** Browser origins allowed to call the API with credentials (admin, webmail). */
     TRUSTED_ORIGINS: commaList,
     /**
+     * Origins of identity providers on a private network that organizations
+     * may use for single sign-on (e.g. https://idp.corp.internal). Public https
+     * providers need no entry. These origins are trusted on the sign-in routes
+     * only, never as browser origins for the rest of the API.
+     */
+    SSO_TRUSTED_ISSUERS: commaList,
+    /**
      * Reverse proxies whose X-Forwarded-For header is trusted (IPs or CIDRs).
      * Empty means the API is reached directly and forwarded headers are ignored.
      */
@@ -83,6 +90,8 @@ const envSchema = z
     RSPAMD_CONTROLLER_PASSWORD: z.string().optional(),
     /** Public name of the mail server, used in the DNS records shown to admins (MX target). */
     MAIL_HOSTNAME: z.string().min(1).default('localhost'),
+    /** Sender of the server's own notices (e.g. "you were added to an organization"). Default no-reply@MAIL_HOSTNAME. */
+    SYSTEM_MAIL_FROM: z.preprocess((value) => (value === '' ? undefined : value), z.email().optional()),
     /**
      * Valkey URL (redis://:password@host:6379). DKIM keys are published there for
      * Rspamd. Without it keys are kept in memory and nothing is signed.

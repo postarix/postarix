@@ -87,7 +87,7 @@ postconf -e \
   "anvil_rate_time_unit = 60s" \
   "virtual_mailbox_domains = $(pg domains)" \
   "virtual_mailbox_maps = $(pg mailboxes)" \
-  "virtual_alias_maps = $(pg aliases)" \
+  "virtual_alias_maps = $(pg aliases), $(pg junk_aliases)" \
   "propagate_unmatched_extensions = canonical" \
   "virtual_alias_domains =" \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
@@ -134,35 +134,75 @@ for service in submission smtps; do
     "$service/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "$service/inet/milter_macro_daemon_name=ORIGINATING"
 done
-# --- master.cf: internal submission (10587) for the Postarix API ----------------
-# Webmail sending. Not published and not on the proxy network; the API logs in
-# with its own account and has already checked that the user owns the From
-# address (Rspamd then requires From = envelope sender, as on 587). Plain text
-# on the internal network; containers cannot sniff it (no NET_RAW).
+# --- master.cf: internal submission ports ---------------------------------------
+# 10587: webmail sending by the Postarix API. 10588: mail Cyrus sends by itself
+# (Sieve redirect and vacation replies). Neither is published or on the proxy
+# network. Each logs in with its own account; the passwords are derived from
+# INTERNAL_API_TOKEN for that purpose only (see
+# apps/api/src/config/internal-secrets.ts), so neither is the token itself.
 if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
+  internal_secret() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1; }
   rm -f /etc/postfix/sasl/sasldb2
-  printf '%s' "$INTERNAL_API_TOKEN" | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-api
+  internal_secret submission | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-api
+  internal_secret cyrus-smtp | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-cyrus
   chown root:postfix /etc/postfix/sasl/sasldb2
   chmod 0640 /etc/postfix/sasl/sasldb2
+
+  # Each port accepts only its own account.
+  postconf \
+    "postarix_api_sender_restrictions = check_sasl_access inline:{ { postarix-api = OK } { postarix-api@$MAIL_HOSTNAME = OK } }, reject" \
+    "postarix_cyrus_sender_restrictions = check_sasl_access inline:{ { postarix-cyrus = OK } { postarix-cyrus@$MAIL_HOSTNAME = OK } }, reject"
+
+  # The API has already checked that the user owns the From address (Rspamd
+  # then requires From = envelope sender, as on 587). It is sent over TLS
+  # (STARTTLS required) so the password never crosses the network in clear.
   postconf -M "10587/inet=10587 inet n - n - - smtpd"
   postconf -P \
     "10587/inet/syslog_name=postfix/api-submit" \
     "10587/inet/smtpd_sasl_auth_enable=yes" \
     "10587/inet/smtpd_sasl_path=postarix-api" \
     "10587/inet/smtpd_sasl_local_domain=$MAIL_HOSTNAME" \
-    "10587/inet/smtpd_tls_security_level=none" \
-    "10587/inet/smtpd_tls_auth_only=no" \
+    "10587/inet/smtpd_tls_security_level=encrypt" \
+    "10587/inet/smtpd_tls_auth_only=yes" \
     "10587/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
-    "10587/inet/smtpd_sender_restrictions=" \
+    "10587/inet/smtpd_sender_restrictions=\$postarix_api_sender_restrictions" \
     "10587/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
     "10587/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "10587/inet/smtpd_client_message_rate_limit=0" \
     "10587/inet/smtpd_client_connection_count_limit=0" \
     "10587/inet/milter_macro_daemon_name=ORIGINATING"
+
+  # Cyrus sends only vacation replies (null envelope sender) and redirects;
+  # Rspamd enforces that (POSTARIX_CYRUS_SENT in rspamd.local.lua, which
+  # recognizes this port by its daemon name). Redirected mail keeps its From
+  # header but gets an envelope sender on the server's own name (its own
+  # cleanup service), so SPF passes at the destination; bounces of forwarded
+  # mail are not accepted back.
+  postconf -M "10588/inet=10588 inet n - n - - smtpd"
+  postconf -P \
+    "10588/inet/syslog_name=postfix/cyrus-submit" \
+    "10588/inet/smtpd_sasl_auth_enable=yes" \
+    "10588/inet/smtpd_sasl_path=postarix-api" \
+    "10588/inet/smtpd_sasl_local_domain=$MAIL_HOSTNAME" \
+    "10588/inet/smtpd_tls_security_level=none" \
+    "10588/inet/smtpd_tls_auth_only=no" \
+    "10588/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
+    "10588/inet/smtpd_sender_restrictions=\$postarix_cyrus_sender_restrictions" \
+    "10588/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
+    "10588/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
+    "10588/inet/milter_macro_daemon_name=CYRUS" \
+    "10588/inet/cleanup_service_name=cyrus-cleanup"
+  postconf -M "cyrus-cleanup/unix=cyrus-cleanup unix n - n - 0 cleanup"
+  postconf -P \
+    "cyrus-cleanup/unix/sender_canonical_maps=regexp:/etc/postfix/cyrus_sender.regexp" \
+    "cyrus-cleanup/unix/sender_canonical_classes=envelope_sender"
+  # Only real addresses: a vacation reply's null sender must stay null.
+  printf '/^[^@]+@[^@]+$/ sieve-redirect@%s\n' "$MAIL_HOSTNAME" > /etc/postfix/cyrus_sender.regexp
   unset INTERNAL_API_TOKEN
 else
   postconf -MX "10587/inet" 2>/dev/null || true
-  log "INTERNAL_API_TOKEN not set: webmail sending (port 10587) is disabled"
+  postconf -MX "10588/inet" 2>/dev/null || true
+  log "INTERNAL_API_TOKEN not set: webmail sending (10587) and Sieve sending (10588) are disabled"
 fi
 
 postconf -P "submission/inet/smtpd_tls_security_level=encrypt"

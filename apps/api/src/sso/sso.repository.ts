@@ -71,6 +71,23 @@ export class SsoRepository {
     return rows.length;
   }
 
+  /**
+   * Instance maintenance (not tenant data access): rewrites every provider's
+   * stored config with `seal`, for providers saved before client secrets were
+   * encrypted. Returns how many rows changed.
+   */
+  async resealAll(seal: (stored: string) => string): Promise<number> {
+    let changed = 0;
+    for (const row of await this.db.select({ id: ssoProvider.id, oidcConfig: ssoProvider.oidcConfig }).from(ssoProvider)) {
+      if (!row.oidcConfig) continue;
+      const sealed = seal(row.oidcConfig);
+      if (sealed === row.oidcConfig) continue;
+      await this.db.update(ssoProvider).set({ oidcConfig: sealed }).where(eq(ssoProvider.id, row.id));
+      changed++;
+    }
+    return changed;
+  }
+
   private async ensureSystemUser(): Promise<void> {
     const now = new Date();
     await this.db

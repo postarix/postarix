@@ -11,15 +11,16 @@ import {
 } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
 import { sql } from 'drizzle-orm';
-import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
-import { DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
+import { DATABASE, ENV, MAIL_ENGINE, COUNTER_STORE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { findOwnMailbox } from '../jmap/my-mailbox.js';
 import { BlobTooLargeError, JmapMethodError, ServerJmap } from './jmap-client.js';
 import { stripBccHeader } from './raw-message.js';
 import { SendLimiter } from './send-limiter.js';
+import { createSubmissionTransport } from './submission-transport.js';
+import type { CounterStore } from '../core/counter-store.js';
 
 export const sendSchema = z.strictObject({
   emailId: z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/),
@@ -53,26 +54,19 @@ interface Draft {
 @Injectable()
 export class SendService {
   private readonly logger = new Logger(SendService.name);
-  private readonly messages = new SendLimiter(200, 60 * 60 * 1000);
-  private readonly recipients = new SendLimiter(2_000, 60 * 60 * 1000);
+  private readonly messages: SendLimiter;
+  private readonly recipients: SendLimiter;
   private readonly transport;
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(ENV) private readonly env: Env,
+    @Inject(COUNTER_STORE) counters: CounterStore,
   ) {
-    this.transport = env.INTERNAL_API_TOKEN
-      ? nodemailer.createTransport({
-          host: env.SUBMISSION_HOST,
-          port: env.SUBMISSION_PORT,
-          secure: false,
-          ignoreTLS: true, // internal network, see docker/postfix (port 10587)
-          auth: { user: 'postarix-api', pass: env.INTERNAL_API_TOKEN },
-          connectionTimeout: 10_000,
-          socketTimeout: 60_000,
-        })
-      : null;
+    this.messages = new SendLimiter(counters, 'messages', 200, 60 * 60 * 1000);
+    this.recipients = new SendLimiter(counters, 'recipients', 2_000, 60 * 60 * 1000);
+    this.transport = createSubmissionTransport(env);
   }
 
   async send(userId: string, emailId: string): Promise<{ sent: true; movedToSent: boolean }> {
@@ -111,7 +105,7 @@ export class SendService {
     const invalid = recipients.find((r) => !recipientSchema.safeParse(r).success);
     if (invalid !== undefined) throw new UnprocessableEntityException(`Invalid recipient: ${invalid || '(empty)'}`);
 
-    if (!this.messages.tryTake(userId, 1) || !this.recipients.tryTake(userId, recipients.length)) {
+    if (!(await this.messages.tryTake(userId, 1)) || !(await this.recipients.tryTake(userId, recipients.length))) {
       throw new HttpException('Sending limit reached; try again later', 429);
     }
 

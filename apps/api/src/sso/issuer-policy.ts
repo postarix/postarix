@@ -5,14 +5,14 @@ import { isPublicAddress } from '../mail/image-proxy.js';
 /**
  * Which identity-provider URLs the server may contact. Organizations type in
  * the issuer URL, so without this they could make the server reach internal
- * services. Origins in TRUSTED_ORIGINS are the operator's escape hatch for an
- * identity provider on a private network.
+ * services. Origins in SSO_TRUSTED_ISSUERS are the operator's escape hatch for
+ * an identity provider on a private network.
  */
 export class IssuerPolicy {
   private readonly trusted: Set<string>;
 
-  constructor(trustedOrigins: readonly string[]) {
-    this.trusted = new Set(trustedOrigins);
+  constructor(trustedIssuers: readonly string[]) {
+    this.trusted = new Set(trustedIssuers.map((origin) => origin.replace(/\/+$/, '')));
   }
 
   /** Synchronous check of the URL itself (no DNS): fine for URLs the server does not fetch right away. */

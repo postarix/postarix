@@ -6,9 +6,10 @@ import { AppPasswordsService } from '../app-passwords/app-passwords.service.js';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import { type AppPasswordScope, domains, mailboxes } from '../db/schema/index.js';
-import { DATABASE, ENV } from '../core/tokens.js';
+import { DATABASE, ENV, COUNTER_STORE } from '../core/tokens.js';
 import { looksLikeJmapToken, verifyJmapToken } from '../jmap/jmap-token.js';
 import { FailureLimiter } from './failure-limiter.js';
+import type { CounterStore } from '../core/counter-store.js';
 
 /** Maps the SASL service name reported by Cyrus/Postfix to an app password scope. */
 const SERVICE_SCOPES: Record<string, AppPasswordScope> = {
@@ -38,14 +39,17 @@ export type MailLoginAttempt = z.infer<typeof mailLoginSchema>;
 @Injectable()
 export class MailAuthService {
   private readonly logger = new Logger(MailAuthService.name);
-  private readonly limiter = new FailureLimiter(10, 15 * 60 * 1000);
+  private readonly limiter: FailureLimiter;
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(AppPasswordsService) private readonly appPasswords: AppPasswordsService,
     @Inject(ENV) private readonly env: Env,
-  ) {}
+    @Inject(COUNTER_STORE) counters: CounterStore,
+  ) {
+    this.limiter = new FailureLimiter(counters, 'mail-login', 10, 15 * 60 * 1000);
+  }
 
   /**
    * Validates a mail-protocol login. App passwords with the right scope always
@@ -75,15 +79,15 @@ export class MailAuthService {
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;
 
-    if (this.limiter.isBlocked(username)) {
+    if (await this.limiter.isBlocked(username)) {
       this.logger.warn(`Account password refused after repeated failures: ${username}`);
       return false;
     }
     // Counted before the (slow) hash check, so parallel attempts cannot slip
     // past the limit; cleared again on success.
-    this.limiter.recordFailure(username);
+    await this.limiter.recordFailure(username);
     const ok = await this.accounts.verifyAccountPassword(account.id, attempt.password);
-    if (ok) this.limiter.recordSuccess(username);
+    if (ok) await this.limiter.recordSuccess(username);
     return ok;
   }
 

@@ -38,6 +38,11 @@ api:
   trustedOrigins: []
   # Addresses of the ingress controller pods, allowed to set X-Forwarded-For.
   trustedProxies: []
+  # Identity providers (SSO) on a private network that organizations may use.
+  ssoTrustedIssuers: []
+  # Sender of the server's own notices (default: no-reply@<mailHostname>).
+  systemMailFrom: ""
+
   resources: {}
 
 admin:

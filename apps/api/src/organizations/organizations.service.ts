@@ -10,7 +10,9 @@ import {
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service.js';
-import { DATABASE } from '../core/tokens.js';
+import type { Env } from '../config/env.js';
+import { DATABASE, ENV, SYSTEM_MAILER } from '../core/tokens.js';
+import type { SystemMailer } from '../mail/system-mailer.js';
 import type { Database } from '../db/client.js';
 import { aliases, domains, mailboxes, member, organization, user } from '../db/schema/index.js';
 import { highestRole, type OrgRole, orgRoles, type TenantContext } from '../tenancy/tenant-context.js';
@@ -45,7 +47,27 @@ export class OrganizationsService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(SYSTEM_MAILER) private readonly mailer: SystemMailer,
+    @Inject(ENV) private readonly env: Env,
   ) {}
+
+  /** Tells a person they can now manage the organization (best effort). */
+  private async noticeMembership(ctx: TenantContext, email: string, role: OrgRole): Promise<void> {
+    const [org] = await this.db.select({ name: organization.name }).from(organization).where(eq(organization.id, ctx.organizationId)).limit(1);
+    const adminUrl = `${new URL(this.env.AUTH_URL).origin}/admin`;
+    const what = role === 'member' ? 'a member of' : `an ${role === 'owner' ? 'owner' : 'administrator'} of`;
+    await this.mailer.send({
+      to: email,
+      subject: `You are now ${what} ${org?.name ?? 'an organization'}`,
+      text: [
+        `${ctx.userEmail} made you ${what} ${org?.name ?? 'an organization'} on Postarix.`,
+        '',
+        role === 'member' ? 'Nothing changes for your mailbox.' : `Manage its domains, mailboxes and aliases at ${adminUrl}`,
+        '',
+        'If you did not expect this, tell your administrator.',
+      ].join('\n'),
+    });
+  }
 
   private async counts(organizationIds: string[]) {
     const result = new Map<string, OrganizationSummaryDto['counts']>();
@@ -193,6 +215,7 @@ export class OrganizationsService {
       return inserted!;
     });
     await this.audit.record(ctx, 'member.added', { type: 'member', id: row.id, label: account.email }, { role: input.role });
+    await this.noticeMembership(ctx, account.email, input.role);
     return { id: row.id, userId: account.id, email: account.email, name: account.name, role: input.role, createdAt: row.createdAt.toISOString() };
   }
 
@@ -209,6 +232,7 @@ export class OrganizationsService {
       return found;
     });
     await this.audit.record(ctx, 'member.role_changed', { type: 'member', id: memberId, label: current.email }, { from: current.role, to: role });
+    if (role !== current.role) await this.noticeMembership(ctx, current.email, role);
     return { ...current, role };
   }
 

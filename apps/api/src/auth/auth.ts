@@ -8,6 +8,8 @@ import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 import { hashPassword, verifyPassword } from './passwords.js';
+import { type CounterStore, MemoryCounterStore } from '../core/counter-store.js';
+import { openOidcConfig } from '../sso/sso-crypto.js';
 import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
 
@@ -15,6 +17,7 @@ import { hasInstanceAdminRole } from './roles.js';
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
 
 export const AUTH_BASE_PATH = '/api/auth';
+
 
 /**
  * Better Auth's organization endpoints that stay open. Everything else under
@@ -29,11 +32,41 @@ const OPEN_ORGANIZATION_ENDPOINTS = new Set(['/organization/create']);
  * our organization-scoped API (`orgs/:orgId/sso`), which ties each one to a
  * verified domain of the organization and writes the audit log.
  */
+function isSsoSignInPath(pathname: string): boolean {
+  if (!pathname.startsWith(AUTH_BASE_PATH)) return false;
+  return isOpenSsoEndpoint(pathname.slice(AUTH_BASE_PATH.length));
+}
+
 function isOpenSsoEndpoint(path: string): boolean {
   return path === '/sign-in/sso' || path === '/sso/callback' || path.startsWith('/sso/callback/');
 }
 
-export function createAuth(db: Database, env: Env) {
+type AdapterFactory = ReturnType<typeof drizzleAdapter>;
+
+/**
+ * SSO client secrets are stored encrypted (sso-crypto.ts). Better Auth's SSO
+ * plugin reads providers through the database adapter, so the adapter opens
+ * them on the way out; nothing else ever sees them decrypted.
+ */
+function withOpenedSsoSecrets(factory: AdapterFactory, secret: string): AdapterFactory {
+  const open = <T>(model: string, row: T): T => {
+    if (model !== 'ssoProvider' || !row || typeof row !== 'object') return row;
+    const record = row as Record<string, unknown>;
+    if (typeof record.oidcConfig !== 'string') return row;
+    return { ...record, oidcConfig: openOidcConfig(record.oidcConfig, secret) } as T;
+  };
+  const wrap = (adapter: ReturnType<AdapterFactory>): ReturnType<AdapterFactory> => ({
+    ...adapter,
+    findOne: (async (args) => open(args.model, await adapter.findOne(args))) as typeof adapter.findOne,
+    findMany: (async (args) => (await adapter.findMany(args)).map((row) => open(args.model, row))) as typeof adapter.findMany,
+    ...(adapter.transaction
+      ? { transaction: (callback) => adapter.transaction((tx) => callback(wrap(tx as ReturnType<AdapterFactory>))) }
+      : {}),
+  });
+  return ((options: Parameters<AdapterFactory>[0]) => wrap(factory(options))) as AdapterFactory;
+}
+
+export function createAuth(db: Database, env: Env, counters: CounterStore = new MemoryCounterStore()) {
   const authUrl = new URL(env.AUTH_URL);
 
   return betterAuth({
@@ -41,9 +74,15 @@ export function createAuth(db: Database, env: Env) {
     baseURL: env.AUTH_URL,
     basePath: AUTH_BASE_PATH,
     secret: env.AUTH_SECRET,
-    trustedOrigins: env.TRUSTED_ORIGINS,
+    // Identity providers on a private network (SSO_TRUSTED_ISSUERS) must be
+    // trusted by Better Auth to be contacted at sign-in, but only there: on any
+    // other route they are not browser origins the API accepts.
+    trustedOrigins: (request) =>
+      request && isSsoSignInPath(new URL(request.url).pathname)
+        ? [...env.TRUSTED_ORIGINS, ...env.SSO_TRUSTED_ISSUERS]
+        : env.TRUSTED_ORIGINS,
     // Transactions are required by SSO user resolution (and keep multi-step writes atomic).
-    database: drizzleAdapter(db, { provider: 'pg', schema, transaction: true }),
+    database: withOpenedSsoSecrets(drizzleAdapter(db, { provider: 'pg', schema, transaction: true }), env.AUTH_SECRET),
     emailAndPassword: {
       enabled: true,
       disableSignUp: !env.ALLOW_SIGNUP,
@@ -62,6 +101,14 @@ export function createAuth(db: Database, env: Env) {
       enabled: env.NODE_ENV !== 'test',
       window: 60,
       max: 100,
+      // Shared by every API instance (Valkey in production), checked and
+      // counted in one atomic step.
+      customStorage: {
+        consume: async (key, rule) => {
+          const allowed = await counters.tryAdd(`ratelimit:${key}`, 1, rule.max, rule.window * 1000);
+          return { allowed, retryAfter: allowed ? null : rule.window };
+        },
+      },
     },
     advanced: {
       // Explicit: Better Auth otherwise disables its origin/CSRF check whenever it
@@ -93,8 +140,8 @@ export function createAuth(db: Database, env: Env) {
       organization({
         allowUserToCreateOrganization: (user) =>
           env.ALLOW_USER_CREATE_ORG || hasInstanceAdminRole((user as { role?: string | null }).role),
-        // Accepting an invitation requires a verified email. Email delivery arrives in
-        // Phase 1; until then members are added by admins (auth.api.addMember).
+        // No invitations: members are people with a mailbox in the organization,
+        // added by its admins through our API, which tells them by mail.
         // Deleting an organization must deprovision its mailboxes (Cyrus), DKIM keys
         // (Valkey) and accounts first; Better Auth's endpoint would only drop rows.
         disableOrganizationDeletion: true,

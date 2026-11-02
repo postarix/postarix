@@ -1,3 +1,5 @@
+import { MemorySystemMailer, SmtpSystemMailer, type SystemMailer } from '../mail/system-mailer.js';
+import { type CounterStore, MemoryCounterStore, ValkeyCounterStore } from './counter-store.js';
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import type pg from 'pg';
 import { createAuth } from '../auth/auth.js';
@@ -7,7 +9,7 @@ import type { MailEngine } from '@postarix/mail-engine';
 import { createDnsResolver } from './dns.js';
 import { createMailEngine } from './mail-engine.js';
 import { type DkimPublisher, MemoryDkimPublisher, ValkeyDkimPublisher } from '../dkim/dkim-publisher.js';
-import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE } from './tokens.js';
+import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, SYSTEM_MAILER } from './tokens.js';
 
 const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
 
@@ -32,9 +34,21 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       useFactory: (handle: DatabaseHandle) => handle.pool,
     },
     {
+      provide: SYSTEM_MAILER,
+      inject: [ENV],
+      useFactory: (env: Env): SystemMailer =>
+        env.MAIL_ENGINE === 'memory' ? new MemorySystemMailer() : new SmtpSystemMailer(env),
+    },
+    {
+      provide: COUNTER_STORE,
+      inject: [ENV],
+      useFactory: (env: Env): CounterStore =>
+        env.VALKEY_URL ? new ValkeyCounterStore(env.VALKEY_URL) : new MemoryCounterStore(),
+    },
+    {
       provide: AUTH,
-      inject: [DATABASE, ENV],
-      useFactory: (db: Database, env: Env) => createAuth(db, env),
+      inject: [DATABASE, ENV, COUNTER_STORE],
+      useFactory: (db: Database, env: Env, counters: CounterStore) => createAuth(db, env, counters),
     },
     { provide: MAIL_ENGINE, inject: [ENV], useFactory: (env: Env) => createMailEngine(env) },
     {
@@ -49,18 +63,20 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
         env.VALKEY_URL ? new ValkeyDkimPublisher(env.VALKEY_URL) : new MemoryDkimPublisher(),
     },
   ],
-  exports: [ENV, DATABASE, DATABASE_POOL, AUTH, MAIL_ENGINE, DNS_RESOLVER, DKIM_PUBLISHER],
+  exports: [ENV, DATABASE, DATABASE_POOL, AUTH, MAIL_ENGINE, DNS_RESOLVER, DKIM_PUBLISHER, COUNTER_STORE, SYSTEM_MAILER],
 })
 export class CoreModule implements OnApplicationShutdown {
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: pg.Pool,
     @Inject(MAIL_ENGINE) private readonly mailEngine: MailEngine,
     @Inject(DKIM_PUBLISHER) private readonly dkimPublisher: DkimPublisher,
+    @Inject(COUNTER_STORE) private readonly counters: CounterStore,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
     await this.mailEngine.close();
     await this.dkimPublisher.close();
+    await this.counters.close();
     await this.pool.end();
   }
 }
