@@ -27,6 +27,11 @@ export const mailLoginSchema = z.object({
   username: z.string().min(1).max(320),
   password: z.string().min(1).max(1024),
   service: z.string().min(1).max(32),
+  /**
+   * Which saslauthd instance asks. "jmap" is the one behind Cyrus' internal
+   * JMAP service (the webmail), which accepts nothing but the API's tokens.
+   */
+  instance: z.enum(['', 'jmap']).default(''),
 });
 export type MailLoginAttempt = z.infer<typeof mailLoginSchema>;
 
@@ -58,11 +63,14 @@ export class MailAuthService {
     const account = await this.findAccount(username);
     if (!account) return false;
 
-    // The API's own short-lived token for Cyrus' JMAP service (the webmail),
-    // minted for a signed-in web session. HTTP only, never subject to lockout.
-    if (looksLikeJmapToken(attempt.password)) {
-      return scope === 'dav' && verifyJmapToken(this.env.AUTH_SECRET, username, attempt.password);
+    // Cyrus' internal JMAP service (the webmail) only accepts the API's own
+    // short-lived tokens, minted for a signed-in web session; and those tokens
+    // work nowhere else. So no app password or account password ever reaches
+    // mail through JMAP. Tokens are never subject to lockout.
+    if (attempt.instance === 'jmap') {
+      return scope === 'dav' && looksLikeJmapToken(attempt.password) && verifyJmapToken(this.env.AUTH_SECRET, username, attempt.password);
     }
+    if (looksLikeJmapToken(attempt.password)) return false;
 
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;

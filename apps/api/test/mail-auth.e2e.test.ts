@@ -146,14 +146,25 @@ describe('App passwords and the mail login bridge', () => {
   });
 
   describe('webmail login tokens', () => {
-    it('are accepted only for HTTP (the JMAP service) and only for their own address', async () => {
+    it('are accepted only by the JMAP service and only for their own address', async () => {
       const secret = process.env.AUTH_SECRET!;
       const token = mintJmapToken(secret, address);
-      await mailAuth({ username: address, password: token, service: 'http' }).expect(204);
+      const jmap = { service: 'http', instance: 'jmap' };
+      await mailAuth({ username: address, password: token, ...jmap }).expect(204);
+      // Not on CalDAV/CardDAV, IMAP or SMTP.
+      await mailAuth({ username: address, password: token, service: 'http' }).expect(401);
       await mailAuth({ username: address, password: token, service: 'imap' }).expect(401);
       await mailAuth({ username: address, password: token, service: 'smtp' }).expect(401);
-      await mailAuth({ username: address, password: mintJmapToken(secret, `other@${domain}`), service: 'http' }).expect(401);
-      await mailAuth({ username: address, password: mintJmapToken('x'.repeat(40), address), service: 'http' }).expect(401);
+      await mailAuth({ username: address, password: mintJmapToken(secret, `other@${domain}`), ...jmap }).expect(401);
+      await mailAuth({ username: address, password: mintJmapToken('x'.repeat(40), address), ...jmap }).expect(401);
+    });
+
+    it('are the only thing the JMAP service accepts', async () => {
+      const dav = await owner.post('/api/me/app-passwords').send({ name: 'Calendar', scopes: ['dav'] }).expect(201);
+      await mailAuth({ username: address, password: dav.body.password, service: 'http' }).expect(204);
+      await mailAuth({ username: address, password: dav.body.password, service: 'http', instance: 'jmap' }).expect(401);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'http', instance: 'jmap' }).expect(401);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'http', instance: 'other' }).expect(400);
     });
   });
 

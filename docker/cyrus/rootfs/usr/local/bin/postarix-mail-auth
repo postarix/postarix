@@ -7,12 +7,18 @@ set -u
 
 . /etc/postarix/mail-auth.env
 
+# Which saslauthd instance asks: the JMAP service's own runs with
+# POSTARIX_SASL_INSTANCE=jmap in its environment (pam_exec does not pass it on,
+# so read it from the parent process, the saslauthd worker).
+instance=$(tr '\000' '\n' <"/proc/$PPID/environ" 2>/dev/null | sed -n 's/^POSTARIX_SASL_INSTANCE=//p' | head -n 1)
+
 status=$(
   tr -d '\000' | curl --silent --show-error --max-time 10 \
     --output /dev/null --write-out '%{http_code}' \
     --header @/etc/postarix/mail-auth.headers \
     --data-urlencode "username=${PAM_USER:-}" \
     --data-urlencode "service=${PAM_SERVICE:-}" \
+    --data-urlencode "instance=${instance}" \
     --data-urlencode "password@-" \
     "${POSTARIX_API_URL}/api/internal/mail-auth"
 ) || exit 1
