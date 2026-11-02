@@ -342,3 +342,13 @@ postarix/
 | 2026-11-01 | **Registro público desactivado** y creación de organizaciones solo para super-admins, por defecto. La primera cuenta se crea con `create-admin`. |
 | 2026-11-01 | Acceso a una organización ajena devuelve **404** (no 403) para no revelar su existencia. |
 | 2026-11-01 | Pruebas end-to-end contra **PostgreSQL real** (servicio en CI), no contra mocks. |
+| 2026-11-01 | La propiedad de un dominio se demuestra con un **registro TXT** (`postarix-verification=…`). Mientras está `pending`, varias organizaciones pueden reclamar el mismo nombre: así nadie puede acaparar un dominio ajeno ni averiguar si otro cliente lo tiene. Solo puede existir un dominio verificado por nombre. |
+| 2026-11-01 | Todos los cuerpos de petición se analizan y limitan (1 MB, solo JSON o formularios) **antes** de cualquier ruta, incluidas las de Better Auth. |
+| 2026-11-01 | Las comprobaciones de origen/CSRF de Better Auth se fuerzan explícitamente; la librería las desactiva sola en entornos de prueba. |
+| 2026-11-01 | Una instalación con `AUTH_URL` en https se niega a arrancar si `NODE_ENV` no es `production`. |
+
+**Limitaciones conocidas de la Fase 0:**
+
+- Aceptar invitaciones a organizaciones requiere un email verificado, y el envío de correo llega en la Fase 1. Mientras tanto, los administradores añaden miembros directamente.
+- La verificación DNS de dominios (el registro TXT) se implementa en la Fase 1; hoy los dominios quedan en `pending`.
+- El límite de peticiones de Better Auth vive en memoria; pasará a Valkey para funcionar con varias instancias.

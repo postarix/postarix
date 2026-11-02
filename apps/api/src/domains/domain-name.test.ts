@@ -26,6 +26,12 @@ describe('normalizeDomainName', () => {
     'example.123',
     `${'a'.repeat(64)}.example`,
     `${'a.'.repeat(127)}com`,
+    'weird.example/../../etc',
+    'pct%2eexample',
+    'q.example?x=1',
+    'b.example\\c',
+    'user@example.com',
+    'example.com:25',
   ])('rejects %j', (input) => {
     expect(normalizeDomainName(input)).toBeNull();
   });

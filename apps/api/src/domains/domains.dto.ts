@@ -24,6 +24,9 @@ export interface DomainDto {
   id: string;
   name: string;
   status: DomainRow['status'];
+  /** Value to publish as a DNS TXT record to prove ownership. */
+  verificationRecord: string;
+  verifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +36,8 @@ export function toDomainDto(row: DomainRow): DomainDto {
     id: row.id,
     name: row.name,
     status: row.status,
+    verificationRecord: `postarix-verification=${row.verificationToken}`,
+    verifiedAt: row.verifiedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
