@@ -6,8 +6,17 @@ services:
     environment:
       NODE_ENV: development
       DOMAIN_VERIFICATION: skip
+      # The webmail is published on its own port in the tests.
+      TRUSTED_ORIGINS: http://localhost:3002
     ports:
       - "3000:3000"
   rspamd:
     environment:
       RSPAMD_GREYLIST: "false"
+  # The webmail on its own port, forwarding /api to the API (no reverse proxy in the tests).
+  webmail:
+    environment:
+      API_PROXY_URL: http://api:3000
+    networks: [default, proxy]
+    ports:
+      - "3002:3002"

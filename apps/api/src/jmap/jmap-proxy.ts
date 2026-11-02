@@ -56,7 +56,9 @@ export class JmapProxy {
     @Inject(ENV) private readonly env: Env,
   ) {
     this.checkOrigin = originCheck([env.AUTH_URL, ...env.TRUSTED_ORIGINS]);
-    this.publicRoot = new URL('/api/jmap/', env.AUTH_URL).href;
+    // Path-only, so the URLs work wherever the webmail is served from (behind
+    // the reverse proxy, or by the webmail server forwarding /api).
+    this.publicRoot = '/api/jmap/';
   }
 
   /** Express handler, to mount on /api/jmap. */

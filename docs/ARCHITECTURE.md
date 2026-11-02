@@ -352,9 +352,14 @@ out the account password after repeated failures (app passwords keep working).
 - Moved to Phase 5: MTA-STS (needs its policy host) and the Rspamd quarantine and logs view (needs per-organization filtering of Rspamd's history, which is instance-wide).
 
 ### Phase 3 — Webmail
-- JMAP client, inbox, threads, safe HTML rendering, composing, attachments.
-- Search, folders, labels, Sieve filters, vacation replies.
-- Real-time updates (JMAP push).
+- [x] `apps/webmail` (React + Vite, shadcn/ui) at the site root; `packages/jmap-client`.
+- [x] JMAP through the API (`/api/jmap/*`): Cyrus' internal JMAP service, logged in as the user with short-lived API-minted tokens.
+- [x] Folders, message list, full-text search (Xapian), reading, flags, moving, deleting, archiving.
+- [x] Safe rendering: server-side sanitizing, sandboxed iframe with CSP, remote images blocked by default and fetched through a signed, SSRF-safe proxy; inline images embedded.
+- [x] Composing, replying, forwarding, attachments, drafts; sending through the API with From ownership checks and Bcc removal.
+- [x] Real-time updates (JMAP push over server-sent events).
+- [x] Browser tests against the full stack in CI.
+- Later: threads view, rich-text composing, Sieve filters and vacation replies, labels.
 
 ### Phase 4 — Calendar and contacts
 - UIs on top of CalDAV/CardDAV (or JMAP Calendars/Contacts as Cyrus support matures).
@@ -379,6 +384,9 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-01 | MTA: **Postfix**. Spam filter: **Rspamd**. |
 | 2026-11-01 | Backend: **NestJS**. Identity: **Better Auth**. |
 | 2026-11-01 | Admin with **Next.js**; webmail as a **React + Vite SPA** over **JMAP**. |
+| 2026-11-02 | Webmail JMAP goes through the API, which logs in to an internal Cyrus JMAP service **as the user** with short-lived HMAC tokens checked by the normal login bridge (Cyrus only allows `Authorize-As` proxying on Murder backends). The client never chooses the account. |
+| 2026-11-02 | Webmail sending goes through the API (From must be in `mail.sender_logins`, Bcc removed) to an internal Postfix port with its own account; Rspamd still requires From = envelope and signs DKIM. |
+| 2026-11-02 | Email HTML is sanitized on the server and shown in a sandboxed iframe (no scripts, opaque origin) with a CSP; remote images are blocked by default and loaded through a signed proxy that only reaches public addresses. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |

@@ -102,3 +102,21 @@ export function textToHtml(text: string): string {
   );
   return `<div style="white-space: pre-wrap; font-family: inherit">${linked}</div>`;
 }
+
+/** Readable plain text from HTML (for quoting HTML-only messages in replies). */
+export function htmlToText(html: string): string {
+  const withBreaks = html
+    .replace(/<(br|\/p|\/div|\/li|\/tr|\/h[1-6]|\/blockquote)\b[^>]*>/gi, '$&\n')
+    .replace(/<li\b[^>]*>/gi, '$&- ');
+  const text = sanitizeHtml(withBreaks, { allowedTags: [], allowedAttributes: {}, nonTextTags: ['style', 'script', 'textarea', 'option', 'noscript', 'title', 'head'] });
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}

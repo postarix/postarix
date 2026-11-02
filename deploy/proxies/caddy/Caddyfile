@@ -28,7 +28,8 @@ mail.example.com {
 		reverse_proxy certs:80
 	}
 
+	# Everything else is the webmail.
 	handle {
-		respond "Postarix" 200
+		reverse_proxy webmail:3002
 	}
 }

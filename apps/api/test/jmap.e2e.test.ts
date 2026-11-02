@@ -68,10 +68,10 @@ describe('JMAP proxy for the webmail', () => {
   it('serves the session with URLs pointing at the proxy', async () => {
     const res = await ann.get('/api/jmap/').expect(200);
     expect(res.body).toMatchObject({
-      apiUrl: 'http://localhost:3000/api/jmap/',
-      downloadUrl: 'http://localhost:3000/api/jmap/download/{accountId}/{blobId}/{name}?accept={type}',
-      uploadUrl: 'http://localhost:3000/api/jmap/upload/{accountId}/',
-      eventSourceUrl: 'http://localhost:3000/api/jmap/eventsource/?types={types}&closeafter={closeafter}&ping={ping}',
+      apiUrl: '/api/jmap/',
+      downloadUrl: '/api/jmap/download/{accountId}/{blobId}/{name}?accept={type}',
+      uploadUrl: '/api/jmap/upload/{accountId}/',
+      eventSourceUrl: '/api/jmap/eventsource/?types={types}&closeafter={closeafter}&ping={ping}',
     });
     expect(calls[0]?.address).toBe(annAddress);
   });

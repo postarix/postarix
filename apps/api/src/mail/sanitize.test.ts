@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeCss, sanitizeEmailHtml, textToHtml } from './sanitize.js';
+import { htmlToText, sanitizeCss, sanitizeEmailHtml, textToHtml } from './sanitize.js';
 
 const noImages = { inlineImage: () => null, remoteImage: () => null };
 
@@ -69,6 +69,14 @@ describe('textToHtml', () => {
   it('escapes markup and links URLs', () => {
     expect(textToHtml('<b>hi</b> see https://example.com/a?b=1.')).toBe(
       '<div style="white-space: pre-wrap; font-family: inherit">&lt;b&gt;hi&lt;/b&gt; see <a href="https://example.com/a?b=1" target="_blank" rel="noopener noreferrer nofollow">https://example.com/a?b=1</a>.</div>',
+    );
+  });
+});
+
+describe('htmlToText', () => {
+  it('keeps the words and line structure, drops markup and styles', () => {
+    expect(htmlToText('<style>p{color:red}</style><h2>Hola</h2><p>Line &amp; one<br>two</p><ul><li>a</li><li>b</li></ul>')).toBe(
+      'Hola\nLine & one\ntwo\n- a\n- b',
     );
   });
 });

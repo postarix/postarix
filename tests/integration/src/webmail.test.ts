@@ -69,8 +69,8 @@ describe('Webmail access to mail (JMAP through the API)', () => {
   });
 
   it('serves a session whose URLs point at the API', () => {
-    expect(ann.session.apiUrl).toBe(`${config.apiUrl}/api/jmap/`);
-    expect(ann.session.downloadUrl.startsWith(`${config.apiUrl}/api/jmap/download/`)).toBe(true);
+    expect(ann.session.apiUrl).toBe('/api/jmap/');
+    expect(ann.session.downloadUrl.startsWith('/api/jmap/download/')).toBe(true);
     expect(ann.accountId).toBeTruthy();
   });
 
@@ -101,8 +101,7 @@ describe('Webmail access to mail (JMAP through the API)', () => {
       .replace('{accountId}', ann.accountId)
       .replace('{blobId}', email.blobId)
       .replace('{name}', 'message.eml')
-      .replace('{type}', 'message/rfc822')
-      .replace(config.apiUrl, '');
+      .replace('{type}', 'message/rfc822');
     const download = await ann.api.raw(url);
     expect(download.status).toBe(200);
     expect(download.text).toContain(`Subject: ${subject}`);
@@ -161,10 +160,10 @@ describe('Webmail access to mail (JMAP through the API)', () => {
     expect(received).not.toContain(cat);
     await waitForMessage(cat, PASSWORD, subject);
 
-    const [[, mailboxes], [, email]] = await ann.call([
+    const [[, mailboxes], [, email]] = (await ann.call([
       ['Mailbox/query', { accountId: ann.accountId, filter: { role: 'sent' } }, 'm'],
       ['Email/get', { accountId: ann.accountId, ids: [id], properties: ['mailboxIds', 'keywords'] }, 'e'],
-    ]);
+    ])) as [MethodResponse, MethodResponse];
     const sentId = (mailboxes.ids as string[])[0]!;
     const sent = (email.list as { mailboxIds: Record<string, boolean>; keywords: Record<string, boolean> }[])[0]!;
     expect(Object.keys(sent.mailboxIds)).toEqual([sentId]);

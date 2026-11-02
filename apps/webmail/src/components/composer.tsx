@@ -1,0 +1,227 @@
+import { Button } from '@postarix/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
+import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { Spinner } from '@postarix/ui/components/spinner';
+import { Textarea } from '@postarix/ui/components/textarea';
+import { useQueryClient } from '@tanstack/react-query';
+import { Paperclip, Send, X } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
+import { errorMessage } from '@/lib/api';
+import { type Attachment, type DraftInput, saveDraft, sendDraft } from '@/lib/compose';
+import { addressList, formatBytes, parseAddresses } from '@/lib/format';
+import { jmap } from '@/lib/jmap';
+import { keys } from '@/lib/mail';
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+export function Composer({
+  initial,
+  identities,
+  onClose,
+  onSent,
+}: {
+  initial: DraftInput;
+  identities: string[];
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const id = useId();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(addressList(initial.to));
+  const [cc, setCc] = useState(addressList(initial.cc));
+  const [bcc, setBcc] = useState(addressList(initial.bcc));
+  const [showCopies, setShowCopies] = useState(initial.cc.length > 0 || initial.bcc.length > 0);
+  const [subject, setSubject] = useState(initial.subject);
+  const [text, setText] = useState(initial.text);
+  const [attachments, setAttachments] = useState<Attachment[]>(initial.attachments);
+  const [uploading, setUploading] = useState(0);
+  const [busy, setBusy] = useState<'send' | 'save' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function collect(): DraftInput | null {
+    const parsed = { to: parseAddresses(to), cc: parseAddresses(cc), bcc: parseAddresses(bcc) };
+    const invalid = [...parsed.to.invalid, ...parsed.cc.invalid, ...parsed.bcc.invalid];
+    if (invalid.length) {
+      setError(`Not an email address: ${invalid.join(', ')}`);
+      return null;
+    }
+    return {
+      ...initial,
+      from,
+      to: parsed.to.addresses,
+      cc: parsed.cc.addresses,
+      bcc: parsed.bcc.addresses,
+      subject,
+      text,
+      attachments,
+    };
+  }
+
+  async function run(kind: 'send' | 'save') {
+    const draft = collect();
+    if (!draft) return;
+    if (kind === 'send' && draft.to.length + draft.cc.length + draft.bcc.length === 0) {
+      setError('Add at least one recipient.');
+      return;
+    }
+    setBusy(kind);
+    setError(null);
+    try {
+      if (kind === 'send') await sendDraft(draft);
+      else await saveDraft(draft);
+      void queryClient.invalidateQueries({ queryKey: keys.allEmails });
+      void queryClient.invalidateQueries({ queryKey: keys.mailboxes });
+      if (kind === 'send') onSent();
+      else onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function attach(files: FileList | null) {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setError(`${file.name} is larger than ${formatBytes(MAX_ATTACHMENT_BYTES)}.`);
+        continue;
+      }
+      setUploading((n) => n + 1);
+      try {
+        const blob = await jmap.upload(file);
+        setAttachments((list) => [...list, { blobId: blob.blobId, name: file.name, type: file.type || blob.type, size: file.size }]);
+      } catch (e) {
+        setError(`Could not attach ${file.name}: ${errorMessage(e)}`);
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
+      <DialogContent className="flex max-h-[95vh] flex-col sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle>{subject.trim() || 'New message'}</DialogTitle>
+          <DialogDescription className="sr-only">Write and send an email</DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run('send');
+          }}
+        >
+          <FieldGroup className="gap-3">
+            {identities.length > 1 ? (
+              <Field orientation="horizontal">
+                <FieldLabel htmlFor={`${id}-from`} className="w-14 shrink-0 text-muted-foreground">
+                  From
+                </FieldLabel>
+                <NativeSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)}>
+                  {identities.map((address) => (
+                    <NativeSelectOption key={address} value={address}>
+                      {address}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+            ) : null}
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor={`${id}-to`} className="w-14 shrink-0 text-muted-foreground">
+                To
+              </FieldLabel>
+              <Input id={`${id}-to`} value={to} onChange={(e) => setTo(e.target.value)} autoFocus={!to} placeholder="name@example.com, …" />
+              {!showCopies ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCopies(true)}>
+                  Cc/Bcc
+                </Button>
+              ) : null}
+            </Field>
+            {showCopies ? (
+              <>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor={`${id}-cc`} className="w-14 shrink-0 text-muted-foreground">
+                    Cc
+                  </FieldLabel>
+                  <Input id={`${id}-cc`} value={cc} onChange={(e) => setCc(e.target.value)} />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldLabel htmlFor={`${id}-bcc`} className="w-14 shrink-0 text-muted-foreground">
+                    Bcc
+                  </FieldLabel>
+                  <Input id={`${id}-bcc`} value={bcc} onChange={(e) => setBcc(e.target.value)} />
+                </Field>
+              </>
+            ) : null}
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor={`${id}-subject`} className="w-14 shrink-0 text-muted-foreground">
+                Subject
+              </FieldLabel>
+              <Input id={`${id}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} />
+            </Field>
+          </FieldGroup>
+          <Textarea
+            aria-label="Message"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            autoFocus={Boolean(to)}
+            className="min-h-64 flex-1 font-sans"
+          />
+          {attachments.length || uploading ? (
+            <ul className="flex flex-wrap gap-2" aria-label="Attachments">
+              {attachments.map((a) => (
+                <li key={a.blobId} className="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm">
+                  <Paperclip className="size-3.5 text-muted-foreground" aria-hidden />
+                  <span className="max-w-48 truncate">{a.name}</span>
+                  <span className="text-xs text-muted-foreground">{formatBytes(a.size)}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Remove ${a.name}`}
+                    onClick={() => setAttachments((list) => list.filter((x) => x.blobId !== a.blobId))}
+                  >
+                    <X aria-hidden />
+                  </Button>
+                </li>
+              ))}
+              {uploading ? (
+                <li className="inline-flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
+                  <Spinner /> Uploading…
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files).then(() => (e.target.value = ''))} />
+          <DialogFooter className="items-center gap-2 sm:justify-between">
+            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} disabled={uploading > 0}>
+              <Paperclip aria-hidden />
+              Attach
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => void run('save')} disabled={busy !== null || uploading > 0}>
+                {busy === 'save' ? <Spinner /> : null}
+                Save draft
+              </Button>
+              <Button type="submit" disabled={busy !== null || uploading > 0}>
+                {busy === 'send' ? <Spinner /> : <Send aria-hidden />}
+                Send
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
