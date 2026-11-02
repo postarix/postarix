@@ -3,7 +3,7 @@ import { type MemoryMailEngine } from '@postarix/mail-engine';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAIL_ENGINE } from '../src/core/tokens.js';
-import { createOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
+import { createOrg, mailboxInNewOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
 
 interface FakeDraft {
   from: { email: string }[];
@@ -25,6 +25,7 @@ describe('Webmail sending rules', () => {
   let annAddress: string;
   let domainName: string;
   let draft: FakeDraft;
+  let seenAddresses: string[];
   const saved = { host: process.env.SUBMISSION_HOST, port: process.env.SUBMISSION_PORT };
 
   beforeAll(async () => {
@@ -57,7 +58,9 @@ describe('Webmail sending rules', () => {
 
   beforeEach(() => {
     draft = { from: [{ email: annAddress }], to: [{ email: 'bob@outside.example' }], keywords: { $draft: true } };
-    engine.jmapHandler = async (_address, req) => {
+    seenAddresses = [];
+    engine.jmapHandler = async (address, req) => {
+      seenAddresses.push(address);
       if (req.method === 'GET' && req.path === '') {
         return Response.json({ primaryAccounts: { 'urn:ietf:params:jmap:mail': 'acct' } });
       }
@@ -120,6 +123,19 @@ describe('Webmail sending rules', () => {
     const res = await ann.get('/api/mail/identities').expect(200);
     expect(res.body).toEqual({ address: annAddress, addresses: [annAddress, `sales@${domainName}`] });
     await admin.agent.get('/api/mail/identities').expect(404);
+  });
+
+  it('keeps senders of another organization to their own addresses', async () => {
+    const other = await mailboxInNewOrg(app, 'send-other');
+    const identities = await other.agent.get('/api/mail/identities').expect(200);
+    expect(identities.body).toEqual({ address: other.address, addresses: [other.address] });
+    seenAddresses = [];
+    for (const email of [annAddress, `sales@${domainName}`]) {
+      draft.from = [{ email }];
+      await other.agent.post('/api/mail/send').send({ emailId: 'M1' }).expect(403);
+    }
+    // The draft is looked up in their own mailbox, never in Ann's.
+    expect(new Set(seenAddresses)).toEqual(new Set([other.address]));
   });
 
   it('refuses users without a mailbox and malformed ids', async () => {

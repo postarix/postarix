@@ -61,12 +61,20 @@ export function isInternalPath(rawPath) {
   return /^\/api\/internal(\/|$)/.test(normalized);
 }
 
+/**
+ * Where a request is forwarded: always the API's origin. (`new URL(path, base)`
+ * would treat "//host/x" as another host.)
+ */
+export function forwardUrl(path, target) {
+  return new URL(`${target.origin}/${path.replace(/^\/+/, '')}`);
+}
+
 async function proxy(req, res, target) {
   if (isInternalPath(req.url.split('?')[0])) {
     res.writeHead(404, { 'content-type': 'application/json' }).end('{"statusCode":404,"message":"Not found"}');
     return;
   }
-  const url = new URL(req.url, target);
+  const url = forwardUrl(req.url, target);
   const headers = { ...req.headers, host: target.host };
   // Do not pass on client-supplied forwarding headers.
   for (const name of ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'forwarded', 'x-real-ip']) delete headers[name];

@@ -23,8 +23,12 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
 # the calendar and contact stores behind JMAP), plain HTTP on the internal network. The API logs
 # in as the user with a short-lived token it mints itself (checked through
 # saslauthd like any other login).
+# It never sends mail itself: EmailSubmission is refused by the API (and the
+# smtp_backend settings inherited from imapd.conf make any attempt fail fast).
 sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
     -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf > /etc/imapd-jmap.conf
+# The JMAP service listens on the internal network address only.
+sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 
 # --- Login bridge to the API (read by pam_exec as root only) -----------------

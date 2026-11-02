@@ -90,5 +90,20 @@ describe('image proxy', () => {
         s.close();
       }
     });
+
+    it('gives up on a server that trickles the image, whatever the pace', async () => {
+      const s = await site((_req, res) => {
+        res.writeHead(200, { 'content-type': 'image/png' });
+        const timer = setInterval(() => res.write(Buffer.from([0])), 50);
+        res.on('close', () => clearInterval(timer));
+      });
+      try {
+        const started = Date.now();
+        await expect(fetchRemoteImage(`${s.url}/slow.png`, { ...policy, totalTimeoutMs: 400 })).rejects.toMatchObject({ status: 504 });
+        expect(Date.now() - started).toBeLessThan(2000);
+      } finally {
+        s.close();
+      }
+    });
   });
 });
