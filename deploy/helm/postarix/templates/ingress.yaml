@@ -1,0 +1,48 @@
+{{- if .Values.ingress.enabled }}
+{{- $host := (urlParse .Values.publicUrl).host }}
+{{- $api := include "postarix.name" (list . "api") }}
+{{- $dav := include "postarix.name" (list . "mail-internal") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "postarix.fullname" . }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $host | quote }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          # /api/internal/* is refused by the API itself to any request that
+          # carries forwarding headers; never route it anywhere else either.
+          {{- range list "/api" "/.well-known/autoconfig" "/mail/config-v1.1.xml" "/autodiscover/autodiscover.xml" "/.well-known/mta-sts.txt" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service: { name: {{ $api }}, port: { name: http } }
+          {{- end }}
+          {{- range list "/.well-known/caldav" "/.well-known/carddav" "/dav" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service: { name: {{ $dav }}, port: { name: dav } }
+          {{- end }}
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service: { name: {{ include "postarix.name" (list . "admin") }}, port: { name: http } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: {{ include "postarix.name" (list . "webmail") }}, port: { name: http } }
+{{- end }}

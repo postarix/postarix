@@ -1,0 +1,122 @@
+{{- if .Values.postgresql.enabled }}
+{{- $pg := include "postarix.name" (list . "postgres") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $pg }}-init
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+data:
+  10-postarix-mail-role.sh: |-
+{{ .Files.Get "files/10-postarix-mail-role.sh" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $pg }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ $pg }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "postgres") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "postgres") | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.image }}
+          env:
+            {{- include "postarix.secretEnv" (list . "POSTGRES_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTFIX_DB_PASSWORD") | nindent 12 }}
+            - { name: POSTGRES_USER, value: postarix }
+            - { name: POSTGRES_DB, value: postarix }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+          readinessProbe:
+            exec: { command: [pg_isready, -U, postarix] }
+            periodSeconds: 10
+      volumes:
+        - name: init
+          configMap:
+            name: {{ $pg }}-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.postgresql.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $pg }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "postgres") | nindent 4 }}
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+{{- end }}
+{{- if .Values.valkey.enabled }}
+{{- $vk := include "postarix.name" (list . "valkey") }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $vk }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: valkey
+spec:
+  serviceName: {{ $vk }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "valkey") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "valkey") | nindent 8 }}
+    spec:
+      containers:
+        - name: valkey
+          image: {{ .Values.valkey.image }}
+          command: ["sh", "-c", "exec valkey-server --appendonly yes --save 60 1 --requirepass \"$VALKEY_PASSWORD\""]
+          env:
+            {{- include "postarix.secretEnv" (list . "VALKEY_PASSWORD") | nindent 12 }}
+          ports:
+            - { name: valkey, containerPort: 6379 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            tcpSocket: { port: valkey }
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.valkey.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.valkey.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $vk }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "valkey") | nindent 4 }}
+  ports:
+    - { name: valkey, port: 6379, targetPort: valkey }
+{{- end }}

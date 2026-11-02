@@ -1,0 +1,109 @@
+{{- $name := include "postarix.name" (list . "rspamd") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rspamd
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "rspamd") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "rspamd") | nindent 8 }}
+    spec:
+      containers:
+        - name: rspamd
+          image: {{ include "postarix.image" (list . "rspamd") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: VALKEY_PASSWORD
+            - name: REDIS_SERVERS
+              value: "{{ include "postarix.valkeyHost" . }}:6379"
+            - name: DNS_RESOLVER
+              value: {{ include "postarix.name" (list . "unbound") }}
+            - name: RSPAMD_GREYLIST
+              value: {{ .Values.rspamd.greylist | quote }}
+          ports:
+            - { name: milter, containerPort: 11332 }
+            - { name: controller, containerPort: 11334 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/rspamd }
+          readinessProbe:
+            tcpSocket: { port: milter }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.rspamd.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $name }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.rspamd.storage.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.rspamd.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "rspamd") | nindent 4 }}
+  ports:
+    - { name: milter, port: 11332, targetPort: milter }
+    - { name: controller, port: 11334, targetPort: controller }
+---
+{{- $unbound := include "postarix.name" (list . "unbound") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $unbound }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: unbound
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "unbound") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "unbound") | nindent 8 }}
+    spec:
+      containers:
+        - name: unbound
+          image: {{ include "postarix.image" (list . "unbound") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          ports:
+            - { name: dns, containerPort: 53, protocol: UDP }
+            - { name: dns-tcp, containerPort: 53, protocol: TCP }
+          resources: {{- toYaml .Values.unbound.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $unbound }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "unbound") | nindent 4 }}
+  ports:
+    - { name: dns, port: 53, targetPort: dns, protocol: UDP }
+    - { name: dns-tcp, port: 53, targetPort: dns-tcp, protocol: TCP }
