@@ -3,11 +3,14 @@
 import { AtSign, Globe, Inbox, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useOrganization } from '@/lib/queries';
+import { DeleteOrganization } from '@/components/delete-organization';
+import { useSession } from '@/lib/auth-client';
+import { isSuperAdmin, useOrganization } from '@/lib/queries';
 
 export default function OverviewPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const { data: org } = useOrganization(orgId);
+  const { data: session } = useSession();
   if (!org) return null;
   const isAdmin = org.role === 'owner' || org.role === 'admin';
   const stats = [
@@ -18,7 +21,8 @@ export default function OverviewPage() {
   ] as const;
 
   return (
-    <div className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card lg:grid-cols-4">
+    <>
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card lg:grid-cols-4">
       {stats.map(({ key, label, icon: Icon }) => {
         const card = (
           <div className="flex h-full items-center gap-4 p-5 transition-colors hover:bg-accent/40">
@@ -41,6 +45,8 @@ export default function OverviewPage() {
           </div>
         );
       })}
-    </div>
+      </div>
+      {isSuperAdmin(session?.user.role) ? <DeleteOrganization org={org} /> : null}
+    </>
   );
 }

@@ -11,6 +11,6 @@ import { MailboxesService } from './mailboxes.service.js';
   imports: [AccountsModule, DomainsModule],
   controllers: [MailboxesController],
   providers: [MailboxesRepository, MailboxesService, AddressRegistry, OrgAccessGuard],
-  exports: [MailboxesRepository],
+  exports: [MailboxesRepository, MailboxesService],
 })
 export class MailboxesModule {}

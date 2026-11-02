@@ -9,6 +9,6 @@ import { DomainsService } from './domains.service.js';
   imports: [DkimModule],
   controllers: [DomainsController],
   providers: [DomainsRepository, DomainsService, OrgAccessGuard],
-  exports: [DomainsRepository],
+  exports: [DomainsRepository, DomainsService],
 })
 export class DomainsModule {}

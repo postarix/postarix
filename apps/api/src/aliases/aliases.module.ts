@@ -10,5 +10,6 @@ import { AliasesService } from './aliases.service.js';
   imports: [DomainsModule],
   controllers: [AliasesController],
   providers: [AliasesRepository, AliasesService, AddressRegistry, OrgAccessGuard],
+  exports: [AliasesService],
 })
 export class AliasesModule {}
