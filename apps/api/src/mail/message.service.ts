@@ -6,7 +6,7 @@ import type { Database } from '../db/client.js';
 import { findOwnMailbox } from '../jmap/my-mailbox.js';
 import { proxiedImageUrl } from './image-proxy.js';
 import { JmapMethodError, ServerJmap } from './jmap-client.js';
-import { sanitizeEmailHtml, textToHtml } from './sanitize.js';
+import { htmlToText, sanitizeEmailHtml, textToHtml } from './sanitize.js';
 
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_INLINE_IMAGE_BYTES = 2 * 1024 * 1024;
@@ -118,7 +118,8 @@ export class MessageService {
     const rawHtml = hasHtml
       ? email.htmlBody.map((p) => (p.type === 'text/html' ? value(p) : p.type === 'text/plain' ? textToHtml(value(p)) : '')).join('\n')
       : email.textBody.map((p) => textToHtml(value(p))).join('\n');
-    const text = email.textBody.filter((p) => p.type === 'text/plain').map(value).join('\n');
+    const plain = email.textBody.filter((p) => p.type === 'text/plain').map(value).join('\n');
+    const text = plain.trim() || !hasHtml ? plain : htmlToText(rawHtml);
 
     // Inline images referenced as cid: become data: URIs, within size limits.
     const referenced = new Set([...rawHtml.matchAll(/cid:([^"'\s)>]+)/gi)].map((m) => m[1]!.replace(/^<|>$/g, '').toLowerCase()));

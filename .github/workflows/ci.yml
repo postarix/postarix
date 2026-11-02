@@ -154,5 +154,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium (webmail browser tests)
+        run: pnpm --filter @postarix/integration-tests exec playwright install --with-deps chromium
+
       - name: Build images, start the stack and run the integration tests
         run: tests/integration/run.sh
+
+      - name: Upload traces of failed browser tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webmail-traces
+          path: tests/integration/test-results
+          retention-days: 7

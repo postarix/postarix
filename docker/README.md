@@ -5,12 +5,15 @@ PostgreSQL and Valkey use their official images.
 
 | Directory | Image | Role |
 |---|---|---|
-| `cyrus/` | `postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, JMAP, CalDAV, CardDAV. Also runs saslauthd, the login bridge to the API. |
-| `postfix/` | `postarix/postfix` | SMTP: inbound mail (25) and submission (587, 465). |
+| `cyrus/` | `postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, CalDAV, CardDAV, and JMAP for the API (webmail). Also runs saslauthd, the login bridge to the API. |
+| `postfix/` | `postarix/postfix` | SMTP: inbound mail (25), submission (587, 465) and an internal port (10587) for webmail sending. |
 | `rspamd/` | `postarix/rspamd` | Spam filtering and DKIM, as a Postfix milter. |
 | `unbound/` | `postarix/unbound` | DNSSEC-validating resolver for Rspamd. |
 | `postgres/` | — | Init script that creates the read-only role Postfix uses. |
+| `certs/` | `postarix/certs` | TLS certificates (self-signed, ACME or external) shared with Postfix and Cyrus. |
 | `../apps/api/Dockerfile` | `postarix/api` | The Postarix API. Applies database migrations on start. |
+| `../apps/admin/Dockerfile` | `postarix/admin` | The admin panel, served under `/admin`. |
+| `../apps/webmail/Dockerfile` | `postarix/webmail` | The webmail, served at the site root. |
 
 ## Running the stack
 

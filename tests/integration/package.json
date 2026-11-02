@@ -7,9 +7,10 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
-    "test:integration": "vitest run"
+    "test:integration": "vitest run && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@postarix/config": "workspace:*",
     "@types/node": "^22.19.0",
     "@types/nodemailer": "^8.0.2",

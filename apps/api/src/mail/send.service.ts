@@ -137,6 +137,16 @@ export class SendService {
     return { sent: true, movedToSent: await this.moveToSent(jmap, emailId) };
   }
 
+  /** Addresses the user may put in From: their mailbox and their organization's aliases that deliver to it. */
+  async identities(userId: string): Promise<{ address: string; addresses: string[] }> {
+    const address = await findOwnMailbox(this.db, userId);
+    if (!address) throw new NotFoundException('You have no mailbox');
+    const result = await this.db.execute<{ sender: string }>(
+      sql`SELECT sender FROM mail.sender_logins WHERE login = ${address} ORDER BY sender <> ${address}, sender`,
+    );
+    return { address, addresses: result.rows.map((r) => r.sender) };
+  }
+
   private singleAddress(list: DraftAddress[] | null, header: string): string {
     if (!list || list.length !== 1 || !list[0]?.email) {
       throw new UnprocessableEntityException(`${header} must contain exactly one address`);

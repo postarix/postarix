@@ -1,0 +1,20 @@
+{
+  "name": "@postarix/jmap-client",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@postarix/config": "workspace:*",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

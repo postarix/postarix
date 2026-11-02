@@ -1,0 +1,53 @@
+import type { EmailAddress } from '@postarix/jmap-client';
+
+export function displayName(address: EmailAddress | undefined | null): string {
+  if (!address) return '';
+  return address.name?.trim() || address.email;
+}
+
+export function addressList(list: EmailAddress[] | null | undefined): string {
+  return (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
+}
+
+/** Today: time; this year: day and month; older: full date. */
+export function shortDate(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  if (date.toDateString() === now.toDateString()) {
+    return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
+  }
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+
+export function longDate(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso));
+}
+
+export function formatBytes(bytes: number): string {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
+}
+
+/** "a@x, Bob <b@y>; c@z" → addresses. Returns the invalid parts separately. */
+export function parseAddresses(input: string): { addresses: EmailAddress[]; invalid: string[] } {
+  const addresses: EmailAddress[] = [];
+  const invalid: string[] = [];
+  for (const raw of input.split(/[,;\n]/)) {
+    const part = raw.trim();
+    if (!part) continue;
+    const match = /^(?:"?([^"<]*)"?\s*)?<([^<>\s]+@[^<>\s]+)>$/.exec(part);
+    const email = match ? match[2]! : part;
+    const name = match?.[1]?.trim() || null;
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) addresses.push(name ? { name, email } : { email });
+    else invalid.push(part);
+  }
+  return { addresses, invalid };
+}

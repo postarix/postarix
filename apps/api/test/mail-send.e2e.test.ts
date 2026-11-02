@@ -116,6 +116,12 @@ describe('Webmail sending rules', () => {
     await send().expect(422);
   });
 
+  it('lists the addresses the user may send as, own address first', async () => {
+    const res = await ann.get('/api/mail/identities').expect(200);
+    expect(res.body).toEqual({ address: annAddress, addresses: [annAddress, `sales@${domainName}`] });
+    await admin.agent.get('/api/mail/identities').expect(404);
+  });
+
   it('refuses users without a mailbox and malformed ids', async () => {
     await admin.agent.post('/api/mail/send').send({ emailId: 'M1' }).expect(404);
     await send('../etc').expect(400);

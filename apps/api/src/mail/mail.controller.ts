@@ -31,6 +31,12 @@ export class MailController {
     return this.sender.send(session.user.id, body.emailId);
   }
 
+  /** The addresses the user may send as (for the From field). */
+  @Get('identities')
+  identities(@CurrentSession() session: AuthSession): Promise<{ address: string; addresses: string[] }> {
+    return this.sender.identities(session.user.id);
+  }
+
   /** A message rendered for display: sanitized HTML, remote images blocked unless asked for. */
   @Get('messages/:emailId')
   render(

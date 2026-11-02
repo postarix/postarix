@@ -14,7 +14,7 @@ they see real client IPs.
 | `/dav/*` | `cyrus:8080` | CalDAV / CardDAV. |
 | `/admin`, `/admin/*` | `admin:3001` | Admin panel. |
 | `/.well-known/acme-challenge/*` | `certs:80` | Only with `CERTS_MODE=acme` and `ACME_CHALLENGE=http`. |
-| `/` | webmail | Arrives in Phase 3. |
+| `/` (everything else) | `webmail:3002` | Webmail. |
 
 Route `/api` to the API from the proxy itself, as these templates do. The admin
 server can also forward `/api` (handy in development), but it passes on any
