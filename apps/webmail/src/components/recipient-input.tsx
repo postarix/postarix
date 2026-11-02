@@ -14,12 +14,15 @@ export function RecipientInput({
   onChange,
   autoFocus,
   placeholder,
+  className,
 }: {
   id: string;
   value: string;
   onChange: (value: string) => void;
   autoFocus?: boolean;
   placeholder?: string;
+  /** Classes for the text field. */
+  className?: string;
 }) {
   const contacts = useContacts();
   const listId = useId();
@@ -54,6 +57,7 @@ export function RecipientInput({
     <div className="relative flex-1">
       <Input
         id={id}
+        className={className}
         value={value}
         autoFocus={autoFocus}
         placeholder={placeholder}

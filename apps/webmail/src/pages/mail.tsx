@@ -64,9 +64,9 @@ export function useComposer(email: string) {
       {notice ? (
         <div
           role="status"
-          className="fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-sidebar px-4 py-2.5 text-sm font-medium text-white shadow-xl"
+          className="fixed right-5 bottom-5 z-50 flex items-center gap-2 rounded-lg border bg-popover px-4 py-3 text-sm font-medium text-popover-foreground shadow-lg"
         >
-          <CircleCheck className="size-4 text-stamp" aria-hidden />
+          <CircleCheck className="size-4 text-success" aria-hidden />
           {notice}
         </div>
       ) : null}
@@ -107,7 +107,7 @@ export function MailPage({
       nav={<Sidebar mailboxes={list} loading={mailboxes.isLoading} currentId={current?.id ?? null} onCompose={() => composer.open(emptyDraft(composer.defaultFrom))} />}
     >
       <div className="flex h-full min-h-0">
-        <section className={cn('min-h-0 w-full border-r lg:w-[23rem] lg:shrink-0', emailId && 'max-lg:hidden')} aria-label="Message list">
+        <section className={cn('min-h-0 w-full border-r lg:w-[24rem] lg:shrink-0', emailId && 'max-lg:hidden')} aria-label="Message list">
           <MessageList key={`${current?.id}:${search}`} mailbox={current} search={search} selectedId={emailId} />
         </section>
 
@@ -125,7 +125,7 @@ export function MailPage({
           ) : (
             <div className="grid h-full place-items-center p-8">
               <div className="text-center text-muted-foreground">
-                <MailOpen className="mx-auto mb-3 size-10 stroke-[1.25] text-primary/30" aria-hidden />
+                <MailOpen className="mx-auto mb-3 size-10 stroke-[1.25] text-muted-foreground/40" aria-hidden />
                 <p className="text-sm">Pick a message to read it here.</p>
               </div>
             </div>

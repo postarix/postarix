@@ -86,7 +86,7 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
               value={input.title}
               onChange={(e) => set({ title: e.target.value })}
               autoFocus
-              className="h-11 font-display text-lg"
+              className="h-11 text-lg font-medium"
             />
             <Field orientation="horizontal">
               <Checkbox id="event-all-day" checked={input.allDay} disabled={Boolean(seriesId)} onCheckedChange={(v) => set({ allDay: v === true })} />
