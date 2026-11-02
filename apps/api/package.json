@@ -1,0 +1,51 @@
+{
+  "name": "@postarix/api",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=../../.env --import @swc-node/register/esm-register src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=../../.env --import @swc-node/register/esm-register src/db/migrate.ts",
+    "create-admin": "node --env-file-if-exists=../../.env --import @swc-node/register/esm-register scripts/create-admin.ts",
+    "auth:schema": "auth generate --config scripts/auth-schema.config.ts --output src/db/schema/auth.ts --yes"
+  },
+  "dependencies": {
+    "@better-auth/passkey": "1.7.15",
+    "@nestjs/common": "^12.3.2",
+    "@nestjs/core": "^12.3.2",
+    "@nestjs/platform-express": "^12.3.2",
+    "@node-rs/argon2": "^2.2.2",
+    "better-auth": "1.7.15",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^12.3.2",
+    "@postarix/config": "workspace:*",
+    "@swc-node/register": "^1.12.1",
+    "@swc/core": "^1.16.21",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.0",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "drizzle-kit": "^0.31.11",
+    "supertest": "^7.3.1",
+    "typescript": "~6.0.3",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^4.1.12",
+    "auth": "1.7.15"
+  }
+}

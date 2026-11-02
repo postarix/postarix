@@ -286,10 +286,12 @@ postarix/
 ## 14. Fases de desarrollo
 
 ### Fase 0 — Cimientos
-- Monorepo (pnpm + Turborepo), CI, linters, convenciones.
-- Docker Compose de desarrollo: PostgreSQL, Valkey.
-- `apps/api` con Better Auth, organizaciones y roles.
-- Esquema de base de datos inicial y migraciones.
+- [x] Monorepo (pnpm + Turborepo), CI, linters, convenciones.
+- [x] Docker Compose de desarrollo: PostgreSQL, Valkey.
+- [x] `apps/api` con Better Auth, organizaciones y roles.
+- [x] Esquema de base de datos inicial y migraciones.
+- [x] Primer recurso multi-organización (dominios) con pruebas de aislamiento.
+- [ ] Límite de peticiones y sesiones en Valkey (hoy en memoria).
 
 ### Fase 1 — Correo funcionando
 - Contenedores de Postfix, Cyrus, Rspamd y Unbound.
@@ -334,3 +336,9 @@ postarix/
 | 2026-11-01 | Monorepo con **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy agnóstico; puertos de correo fuera del reverse proxy. |
 | 2026-11-01 | Licencia **AGPL-3.0**. |
+| 2026-11-01 | ORM: **Drizzle** (SQL explícito, tipado fuerte, migraciones versionadas; adaptador oficial de Better Auth). |
+| 2026-11-01 | Runtime **Node.js 22+**, **ESM** en todo el monorepo, **TypeScript 6** (typescript-eslint aún no soporta TS 7). |
+| 2026-11-01 | Contraseñas de usuario con **argon2id** (parámetros OWASP), igual que las contraseñas de aplicación. |
+| 2026-11-01 | **Registro público desactivado** y creación de organizaciones solo para super-admins, por defecto. La primera cuenta se crea con `create-admin`. |
+| 2026-11-01 | Acceso a una organización ajena devuelve **404** (no 403) para no revelar su existencia. |
+| 2026-11-01 | Pruebas end-to-end contra **PostgreSQL real** (servicio en CI), no contra mocks. |

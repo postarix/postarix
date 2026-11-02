@@ -1,0 +1,19 @@
+{
+  "extends": "@postarix/config/tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": [
+      "node"
+    ],
+    "declaration": false
+  },
+  "include": [
+    "src",
+    "test",
+    "scripts",
+    "*.config.ts"
+  ]
+}

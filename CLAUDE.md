@@ -5,9 +5,10 @@ Plataforma de correo autoalojada (alternativa moderna a mailcow). Lee `docs/ARCH
 ## Decisiones fijas
 
 - Núcleo: Postfix + Cyrus IMAP + Rspamd + Unbound + CrowdSec (ClamAV opcional). No se modifica su código; se configuran.
-- Backend: NestJS + Better Auth (plugins organization, twoFactor, passkey, sso, admin).
+- Backend: NestJS + Better Auth (plugins organization, twoFactor, passkey, admin; sso llega en la Fase 5).
 - Admin: Next.js. Webmail: SPA React + Vite sobre JMAP.
-- Datos: PostgreSQL + Valkey. Colas: BullMQ.
+- Datos: PostgreSQL (Drizzle ORM, migraciones versionadas en `apps/api/drizzle/`) + Valkey. Colas: BullMQ.
+- Runtime: Node.js 22+, ESM en todo el monorepo. TypeScript 6.
 - Monorepo: pnpm workspaces + Turborepo. Licencia AGPL-3.0-only.
 
 ## Reglas
@@ -18,6 +19,14 @@ Plataforma de correo autoalojada (alternativa moderna a mailcow). Lee `docs/ARCH
 - El HTML de los correos se sanitiza en servidor y se muestra en iframe sandbox con CSP.
 - Ningún contenedor accede al socket de Docker.
 - Los puertos de correo no pasan por el reverse proxy.
+- En NestJS, inyección siempre explícita con `@Inject(Token)` en constructores.
+- Rutas de organización: `orgs/:orgId/...` + `OrgAccessGuard`; no miembro → 404. Repositorios reciben `TenantContext` primero.
+- `apps/api/src/db/schema/auth.ts` es generado (`pnpm --filter @postarix/api auth:schema`); no se edita a mano.
+- Tras cambiar el esquema: `pnpm --filter @postarix/api db:generate` y versionar la migración (CI lo verifica).
+
+## Comandos
+
+`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` desde la raíz. Las pruebas de la API necesitan PostgreSQL (`TEST_DATABASE_URL`, base terminada en `_test`).
 
 ## Idioma
 
