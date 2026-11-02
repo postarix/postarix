@@ -20,7 +20,7 @@ export function Sidebar({
 }) {
   return (
     <div className="flex h-full flex-col gap-4">
-      <Button variant="stamp" size="lg" onClick={onCompose} className="w-full justify-start">
+      <Button variant="stamp" onClick={onCompose} className="h-9 w-full justify-start">
         <PenLine aria-hidden />
         Compose
       </Button>
@@ -33,20 +33,22 @@ export function Sidebar({
           </div>
         ) : (
           <ul className="space-y-0.5">
-            {mailboxes.map((mailbox) => {
+            {mailboxes.map((mailbox, index) => {
               const Icon = (mailbox.role && ICONS[mailbox.role as keyof typeof ICONS]) || Folder;
               const active = mailbox.id === currentId;
               const showUnread = mailbox.unreadEmails > 0 && mailbox.role !== 'sent' && mailbox.role !== 'drafts' && mailbox.role !== 'trash';
+              const firstCustom = !mailbox.role && (index === 0 || Boolean(mailboxes[index - 1]!.role));
               return (
                 <li key={mailbox.id}>
+                  {firstCustom ? <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">Folders</p> : null}
                   <a
                     data-nav
                     href={mailboxPath(mailbox.id)}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'group flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                      active ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white',
+                      active ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
                     )}
                   >
                     <Icon className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted group-hover:text-sidebar-foreground')} aria-hidden />
@@ -54,8 +56,8 @@ export function Sidebar({
                     {showUnread ? (
                       <span
                         className={cn(
-                          'min-w-6 rounded-full px-1.5 text-center text-xs font-semibold tabular-nums',
-                          mailbox.role === 'inbox' ? 'bg-stamp text-stamp-foreground' : 'text-sidebar-foreground',
+                          'min-w-5 rounded-md px-1.5 text-center text-[0.7rem] leading-5 font-semibold tabular-nums',
+                          mailbox.role === 'inbox' ? 'bg-stamp text-stamp-foreground' : 'text-sidebar-muted',
                         )}
                         aria-label={`${mailbox.unreadEmails} unread`}
                       >

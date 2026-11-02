@@ -48,19 +48,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   };
 
   const brand = (
-    <Link href="/" className="flex items-center gap-2.5">
-      <BrandMark />
+    <Link href="/" className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
+      <BrandMark className="size-8" />
       <span className="leading-tight">
-        <span className="block font-display text-[1.3rem] leading-none font-semibold tracking-tight">Postarix</span>
-        <span className="block text-xs text-sidebar-muted md:text-sidebar-muted">{superAdmin ? 'Instance administration' : 'Administration'}</span>
+        <span className="block text-[0.95rem] font-semibold tracking-tight">Postarix</span>
+        <span className="block text-xs text-sidebar-muted">{superAdmin ? 'Instance administration' : 'Administration'}</span>
       </span>
     </Link>
   );
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <div className="px-5 py-5 text-white">{brand}</div>
+    <div className="flex h-screen bg-sidebar">
+      <aside className="hidden h-screen w-60 shrink-0 flex-col text-sidebar-foreground md:flex">
+        <div className="px-5 pt-5 pb-4 text-white">{brand}</div>
 
         <nav aria-label="Organizations" className="flex-1 overflow-y-auto px-3">
           <p className="px-2 pt-2 pb-1.5 text-xs font-medium text-sidebar-muted">Organizations</p>
@@ -73,11 +73,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     href={`/o/${org.id}`}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
                       active
                         ? 'bg-sidebar-accent font-medium text-white'
-                        : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white',
+                        : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
                     )}
                   >
                     <Building2 className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted')} aria-hidden />
@@ -92,12 +92,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </ul>
         </nav>
 
-        <div className="border-t border-sidebar-border p-3">
+        <div className="p-3">
           <Link
             href="/account"
             aria-current={pathname === '/account' ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-sidebar-accent/50 hover:text-white',
+              'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 hover:text-white',
               pathname === '/account' && 'bg-sidebar-accent font-medium text-white',
             )}
           >
@@ -111,7 +111,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:py-2 md:pr-2">
         {/* Small screens: the sidebar becomes a menu. */}
         <header className="sticky top-0 z-10 flex items-center justify-between bg-sidebar px-4 py-3 text-white md:hidden">
           {brand}
@@ -146,7 +146,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        <main className="min-w-0 flex-1 px-4 py-8 md:px-10">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-background px-4 py-8 md:rounded-xl md:px-10 md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>

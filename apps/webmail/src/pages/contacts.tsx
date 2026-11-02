@@ -33,9 +33,9 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
         All contacts
       </Button>
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-        <Avatar name={name} email={email ?? contact.id} className="size-20 text-2xl" />
+        <Avatar name={name} email={email ?? contact.id} className="size-16 text-xl" />
         <div className="min-w-0 flex-1">
-          <h2 className="text-3xl leading-tight font-semibold break-words">{name}</h2>
+          <h2 className="text-2xl leading-tight font-semibold break-words">{name}</h2>
           {contact.jobTitle || contact.company ? (
             <p className="mt-1 text-muted-foreground">{[contact.jobTitle, contact.company].filter(Boolean).join(', ')}</p>
           ) : null}
@@ -43,7 +43,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
         {email ? (
-          <Button variant="stamp" onClick={() => onWrite(email)}>
+          <Button onClick={() => onWrite(email)}>
             <Mail aria-hidden />
             Write to {contact.firstName || name}
           </Button>
@@ -71,7 +71,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
       </div>
       {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
 
-      <dl className="mt-8 divide-y rounded-xl border bg-card">
+      <dl className="mt-8 divide-y rounded-xl border bg-card shadow-xs">
         {contact.emails.map((e) => (
           <div key={`e-${e.value}`} className="flex items-center gap-4 px-4 py-3">
             <dt className="w-20 shrink-0 text-sm text-muted-foreground capitalize">{e.label || e.type || 'Email'}</dt>
@@ -115,14 +115,14 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
 
   const nav = (
     <div className="flex flex-col gap-4">
-      <Button variant="stamp" size="lg" className="w-full justify-start" onClick={() => setEditing('new')}>
+      <Button variant="stamp" className="h-9 w-full justify-start" onClick={() => setEditing('new')}>
         <UserPlus aria-hidden />
         New contact
       </Button>
-      <p className="px-1 text-sm text-sidebar-muted">
+      <p className="px-1.5 text-sm text-sidebar-foreground">
         {contacts.data ? `${contacts.data.length} ${contacts.data.length === 1 ? 'contact' : 'contacts'}` : ' '}
       </p>
-      <p className="px-1 text-xs leading-relaxed text-sidebar-muted">
+      <p className="px-1.5 text-xs leading-relaxed text-sidebar-muted">
         Your contacts also sync to phones and desktop apps over CardDAV, with an app password.
       </p>
     </div>
@@ -132,17 +132,19 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
     <AppShell email={email} name={name} nav={nav}>
       <div className="flex h-full min-h-0">
         <section className={cn('flex min-h-0 w-full flex-col border-r lg:w-80 lg:shrink-0', selected && 'max-lg:hidden')} aria-label="Contact list">
-          <div className="px-4 pt-4 pb-3">
-            <h1 className="mb-3 text-2xl font-semibold">Contacts</h1>
+          <div className="flex h-14 shrink-0 items-center border-b px-4">
+            <h1 className="text-lg font-semibold">Contacts</h1>
+          </div>
+          <div className="px-4 pt-3 pb-2">
             <div className="relative" role="search">
-              <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
               <Input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search contacts"
                 aria-label="Search contacts"
-                className="h-10 rounded-full border-transparent bg-card pl-9 shadow-[0_1px_2px_rgb(22_33_61/0.06)]"
+                className="h-9 bg-background pl-9 shadow-none"
               />
             </div>
           </div>
@@ -158,7 +160,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
             ) : list.length === 0 ? (
               <div className="px-6 py-16 text-center">
                 <UsersRound className="mx-auto mb-3 size-10 stroke-[1.25] text-primary/30" aria-hidden />
-                <p className="font-display text-lg font-semibold">{query ? 'No one matches' : 'No contacts yet'}</p>
+                <p className="font-medium">{query ? 'No one matches' : 'No contacts yet'}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{query ? 'Try a name, a company or part of an address.' : 'Add the people you write to most.'}</p>
               </div>
             ) : (
@@ -170,18 +172,17 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
                   const cName = contactName(contact);
                   return (
                     <li key={contact.id}>
-                      {showLetter ? <div className="px-4 pt-3 pb-1 font-display text-sm font-semibold text-muted-foreground">{letter}</div> : null}
+                      {showLetter ? <div className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground">{letter}</div> : null}
                       <a
                         data-nav
                         href={contactPath(contact.id, query)}
                         aria-current={active ? 'true' : undefined}
                         className={cn(
-                          'relative mx-2 flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
+                          'mx-2 flex items-center gap-3 rounded-lg px-2.5 py-2 transition-colors',
                           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                          active ? 'bg-stamp-soft' : 'hover:bg-card',
+                          active ? 'bg-accent' : 'hover:bg-muted/60',
                         )}
                       >
-                        {active ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-stamp" aria-hidden /> : null}
                         <Avatar name={cName} email={primaryEmail(contact) ?? contact.id} className="size-8" />
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium">{cName}</span>
@@ -199,7 +200,12 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
           {selected ? (
             <ContactDetail contact={selected} onEdit={() => setEditing(selected)} onWrite={write} onDeleted={() => navigate(contactPath(null, query))} />
           ) : (
-            <div className="grid h-full place-items-center p-8 text-sm text-muted-foreground">Pick a contact to see their details.</div>
+            <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground">
+              <div>
+                <UsersRound className="mx-auto mb-3 size-10 stroke-[1.25] text-muted-foreground/40" aria-hidden />
+                Pick a contact to see their details.
+              </div>
+            </div>
           )}
         </section>
       </div>

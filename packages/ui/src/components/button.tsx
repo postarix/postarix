@@ -12,7 +12,7 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border bg-card shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost:
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // Postarix addition: postal yellow, for the one main action of a screen (e.g. Compose).
         stamp:
-          "bg-stamp font-semibold text-stamp-foreground shadow-[inset_0_-2px_0_rgb(0_0_0/0.12)] hover:brightness-[0.97] active:shadow-none",
+          "bg-stamp font-semibold text-stamp-foreground shadow-xs hover:bg-[#f5bb17] active:bg-[#ebb20f]",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
