@@ -73,6 +73,8 @@ services:
       REDIS_SERVERS: valkey:6379
       REDIS_PASSWORD: ${VALKEY_PASSWORD}
       DNS_RESOLVER: unbound
+      # "clamav:3310" with the clamav profile (virus scanning).
+      CLAMAV_SERVERS: ${CLAMAV_SERVERS:-}
     volumes:
       - rspamd-data:/var/lib/rspamd
     depends_on:
@@ -287,6 +289,19 @@ services:
       - mail-logs:/var/log/postarix:ro
       - crowdsec-data:/var/lib/crowdsec/data
 
+  # Optional virus scanning (about 1.5 GB of memory). Start with
+  # --profile clamav and set CLAMAV_SERVERS=clamav:3310.
+  clamav:
+    <<: *restart
+    profiles: [clamav]
+    image: postarix/clamav:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../clamav
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    volumes:
+      - clamav-data:/var/lib/clamav
+
 networks:
   default:
     ipam:
@@ -303,6 +318,7 @@ volumes:
   lmtp-socket:
   mail-logs:
   crowdsec-data:
+  clamav-data:
   postgres-data:
   valkey-data:
   rspamd-data:

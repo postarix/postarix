@@ -1,0 +1,6 @@
+#!/bin/bash
+# Healthy when clamd answers PING with PONG.
+exec 3<>/dev/tcp/127.0.0.1/3310 || exit 1
+printf 'zPING\0' >&3
+reply=$(timeout 3 head -c 4 <&3)
+[ "$reply" = "PONG" ]

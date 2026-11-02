@@ -148,6 +148,31 @@ describe('Mail flow through the full stack', () => {
       ).rejects.toThrow(/5\d\d/);
     });
 
+    it('rejects a virus in an attachment (ClamAV)', async () => {
+      // The EICAR test file: every antivirus treats it as a virus.
+      const eicar = 'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
+      await expect(
+        smtp(config.smtpPort).sendMail({
+          from: 'friend@outside.example',
+          to: bob.address,
+          subject: unique('virus'),
+          text: 'Look at this invoice',
+          attachments: [{ filename: 'invoice.com', content: eicar }],
+        }),
+      ).rejects.toThrow(/virus found/i);
+    });
+
+    it('delivers clean attachments', async () => {
+      const subject = unique('clean');
+      await smtp(config.smtpPort).sendMail({
+        from: 'friend@outside.example',
+        to: bob.address,
+        subject,
+        text: 'The report',
+        attachments: [{ filename: 'report.txt', content: 'Quarterly numbers' }],
+      });
+      await waitForMessage(bob.address, PASSWORD, subject);
+    });
   });
 
   describe('abuse protection', () => {

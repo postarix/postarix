@@ -1,0 +1,54 @@
+{{- if .Values.clamav.enabled }}
+{{- $name := include "postarix.name" (list . "clamav") }}
+# ClamAV for Rspamd: clamd on TCP 3310, signatures kept current by freshclam.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clamav
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "clamav") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "clamav") | nindent 8 }}
+    spec:
+      containers:
+        - name: clamav
+          image: {{ include "postarix.image" (list . "clamav") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          ports:
+            - { name: clamd, containerPort: 3310 }
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck] }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          volumeMounts:
+            - { name: signatures, mountPath: /var/lib/clamav }
+          resources: {{- toYaml .Values.clamav.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: signatures
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.clamav.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.clamav.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "clamav") | nindent 4 }}
+  ports:
+    - { name: clamd, port: 3310, targetPort: clamd }
+{{- end }}
