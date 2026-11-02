@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { MemoryMailEngine } from '@postarix/mail-engine';
+import { type MemoryMailEngine } from '@postarix/mail-engine';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAIL_ENGINE } from '../src/core/tokens.js';
