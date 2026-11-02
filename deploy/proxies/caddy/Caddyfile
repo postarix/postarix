@@ -2,6 +2,7 @@
 # Caddy must share the Docker network with the stack (postarix_proxy).
 mail.example.com {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
 	# Internal endpoints never leave the Docker network. This must be a handle
 	# block listed first: Caddy runs handle blocks before a bare respond.
@@ -26,8 +27,12 @@ mail.example.com {
 		reverse_proxy admin:3001
 	}
 
+	# Calendars and contacts share the webmail's origin: nothing Cyrus serves
+	# there may run, be framed, or be sniffed into HTML.
 	@cyrus path /.well-known/caldav /.well-known/carddav /dav/*
 	handle @cyrus {
+		header Content-Security-Policy "default-src 'none'; sandbox; frame-ancestors 'none'"
+		header X-Content-Type-Options nosniff
 		reverse_proxy cyrus:8080
 	}
 

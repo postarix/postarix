@@ -91,4 +91,43 @@ describe('iCalendar messages', () => {
     expect(calAddress('urn:uuid:123')).toBeNull();
     expect(calAddress(undefined)).toBeNull();
   });
+
+  it('never expands time zone rules of untrusted calendars (they can be made endless)', () => {
+    const hostile = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'METHOD:REQUEST',
+      'BEGIN:VTIMEZONE',
+      'TZID:Evil',
+      'BEGIN:STANDARD',
+      'DTSTART:16010101T000000',
+      'RRULE:FREQ=SECONDLY',
+      'TZOFFSETFROM:+0000',
+      'TZOFFSETTO:+0300',
+      'END:STANDARD',
+      'END:VTIMEZONE',
+      'BEGIN:VEVENT',
+      'UID:evil',
+      'DTSTAMP:20261102T100000Z',
+      'DTSTART;TZID=Evil:20261120T090000',
+      'DTEND;TZID=Evil:20261120T100000',
+      'SUMMARY:Hostile',
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ].join('\r\n');
+    const started = Date.now();
+    expect(() => readItip(hostile)).toThrow(/unusual rules/);
+    expect(Date.now() - started).toBeLessThan(1000);
+    // A zone the runtime does not know uses the fixed offset it declares, without expanding anything.
+    const windows = hostile.replace('RRULE:FREQ=SECONDLY', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU');
+    expect(readItip(windows)).toMatchObject({ start: '2026-11-20T06:00:00.000Z', end: '2026-11-20T07:00:00.000Z' });
+    expect(() => buildReply(hostile, 'x@example.org', 'accepted')).not.toThrow();
+    expect(() => readItip(windows.replace('SUMMARY:Hostile', 'RRULE:FREQ=MINUTELY'))).toThrow(/more often than daily/);
+  });
+
+  it('converts IANA zones across daylight saving time', () => {
+    const summer = withMethod(EVENT, 'REQUEST').replace('DTSTART;TZID=Europe/Madrid:20261120T090000', 'DTSTART;TZID=Europe/Madrid:20260720T090000');
+    expect(readItip(summer)).toMatchObject({ start: '2026-07-20T07:00:00.000Z', end: '2026-07-20T07:30:00.000Z' });
+  });
 });

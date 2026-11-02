@@ -1,0 +1,27 @@
+# Prometheus configuration for a Compose install (docker/compose/monitoring.yml).
+# On Kubernetes, use the chart's ServiceMonitor or pod annotations instead and
+# load alerts.yml into your own Prometheus.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Point this at your Alertmanager to receive the alerts.
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager.example.net:9093']
+
+scrape_configs:
+  # The API: HTTP traffic, sign-ins, mail-app logins, Node.js process.
+  - job_name: postarix-api
+    static_configs:
+      - targets: ['api:9464']
+  # Rspamd's metrics (scanned messages, actions, Bayes), relayed by the API
+  # so Prometheus needs no Rspamd password.
+  - job_name: postarix-rspamd
+    metrics_path: /metrics/rspamd
+    static_configs:
+      - targets: ['api:9464']

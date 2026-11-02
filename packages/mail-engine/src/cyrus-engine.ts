@@ -322,6 +322,23 @@ export class CyrusEngine implements MailEngine {
     });
   }
 
+  async removeGrantee(address: string, grantee: string): Promise<void> {
+    if (!ADDRESS.test(grantee)) throw new MailEngineError(`Invalid address: ${grantee}`, 'rejected');
+    await this.withAdmin(async (imap) => {
+      for (const name of await this.collections(imap, address)) {
+        const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+        if (acl.has(grantee)) await imap.expectOk(`DELETEACL ${quote(name)} ${quote(grantee)}`);
+      }
+    });
+  }
+
+  /** The mailbox's calendar and address book folders (Cyrus names). */
+  private async collections(imap: ImapConnection, address: string): Promise<string[]> {
+    const at = address.lastIndexOf('@');
+    const pattern = `user/${address.slice(0, at)}/*${address.slice(at)}`;
+    return parseList((await imap.expectOk(`LIST "" ${quote(pattern)}`)).untagged).filter((n) => /\/#(?:calendars|addressbooks)(?:\/|@)/.test(n));
+  }
+
   async restrictCollections(address: string): Promise<void> {
     // Cyrus creates the default calendar and address book on first use.
     if (this.options.jmap) {
@@ -342,13 +359,8 @@ export class CyrusEngine implements MailEngine {
       });
       await res.body?.cancel();
     }
-    const at = address.lastIndexOf('@');
-    const pattern = `user/${address.slice(0, at)}/*${address.slice(at)}`;
     await this.withAdmin(async (imap) => {
-      const names = parseList((await imap.expectOk(`LIST "" ${quote(pattern)}`)).untagged).filter((n) =>
-        /\/#(?:calendars|addressbooks)(?:\/|@)/.test(n),
-      );
-      for (const name of names) {
+      for (const name of await this.collections(imap, address)) {
         const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
         for (const identifier of acl.keys()) {
           if (identifier === 'anyone' || identifier === 'anonymous') await imap.expectOk(`DELETEACL ${quote(name)} ${quote(identifier)}`);

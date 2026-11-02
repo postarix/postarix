@@ -12,6 +12,8 @@ import { type CounterStore, MemoryCounterStore } from '../core/counter-store.js'
 import { mapOidcConfigSecret, openOidcConfig } from '../sso/sso-crypto.js';
 import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
+import { FailureLimiter } from '../mail-auth/failure-limiter.js';
+import { webSignIns } from '../metrics/metrics.js';
 
 /** Header the API sets with the client IP resolved by Express (honours TRUSTED_PROXIES). */
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
@@ -79,8 +81,22 @@ function withOpenedSsoSecrets(factory: AdapterFactory, secret: string): AdapterF
   return ((options: Parameters<AdapterFactory>[0]) => wrap(factory(options))) as AdapterFactory;
 }
 
+/** Sign-ins that prove more than a password. */
+function strongSignInMethod(path: string): 'passkey' | 'two_factor' | 'sso' | null {
+  if (path === '/passkey/verify-authentication') return 'passkey';
+  if (path.startsWith('/two-factor/verify-')) return 'two_factor';
+  if (path === '/sso/callback' || path.startsWith('/sso/callback/') || path.startsWith('/sso/saml2/sp/acs/')) return 'sso';
+  return null;
+}
+
+function accountKey(email: unknown): string | null {
+  return typeof email === 'string' && email.length <= 320 ? email.trim().toLowerCase() : null;
+}
+
 export function createAuth(db: Database, env: Env, counters: CounterStore = new MemoryCounterStore()) {
   const localCounters = new MemoryCounterStore();
+  // 10 failed sign-ins per account per 15 minutes, like mail logins.
+  const signInFailures = new FailureLimiter(counters, 'web-sign-in', 10, 15 * 60 * 1000);
   const authUrl = new URL(env.AUTH_URL);
 
   return betterAuth({
@@ -152,6 +168,35 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
         }
         if ((ctx.path.startsWith('/sso/') || ctx.path === '/sign-in/sso') && !isOpenSsoEndpoint(ctx.path)) {
           throw new APIError('NOT_FOUND');
+        }
+        // Password guessing against one account from many addresses: the
+        // per-address limit does not see it, this one does.
+        if (ctx.path === '/sign-in/email') {
+          const email = accountKey((ctx.body as { email?: unknown } | undefined)?.email);
+          if (email && (await signInFailures.isBlocked(email))) {
+            webSignIns.inc({ result: 'blocked' });
+            throw new APIError('TOO_MANY_REQUESTS', { message: 'Too many failed sign-ins for this account; try again in a few minutes' });
+          }
+        }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/sign-in/email') {
+          const email = accountKey((ctx.body as { email?: unknown } | undefined)?.email);
+          if (email) {
+            if (ctx.context.returned instanceof APIError) {
+              webSignIns.inc({ result: 'failure' });
+              await signInFailures.recordFailure(email);
+            } else {
+              webSignIns.inc({ result: 'success' });
+              await signInFailures.recordSuccess(email);
+            }
+          }
+        }
+        // Remember how strong a new session is (see SecondFactorPolicy).
+        const method = strongSignInMethod(ctx.path);
+        const created = ctx.context.newSession?.session.id;
+        if (method && created) {
+          await db.insert(schema.sessionFactors).values({ sessionId: created, method }).onConflictDoNothing();
         }
       }),
     },

@@ -101,6 +101,10 @@ export class MurderEngine implements MailEngine {
     await (await this.backendOf(address)).setShares(address, kind, collectionId, shares);
   }
 
+  async removeGrantee(address: string, grantee: string): Promise<void> {
+    await (await this.backendOf(address)).removeGrantee(address, grantee);
+  }
+
   async restrictCollections(address: string): Promise<void> {
     await (await this.backendOf(address)).restrictCollections(address);
   }

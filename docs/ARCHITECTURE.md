@@ -157,7 +157,7 @@ interface MailEngine {
 
 ### 7.1 Webmail
 
-- Email HTML is **sanitized on the server** (DOMPurify on jsdom) and rendered inside an `<iframe sandbox>` with a strict CSP.
+- Email HTML is **sanitized on the server** (sanitize-html with an allow-list; stylesheets filtered so they can neither load anything nor produce markup) and rendered inside an `<iframe sandbox>` with a strict CSP.
 - **Remote images** are blocked by default and, when allowed, go through our own **image proxy** so they don't leak the user's IP or act as trackers.
 - Attachments are served with `Content-Disposition: attachment` and a forced MIME type.
 
@@ -181,7 +181,7 @@ interface MailEngine {
 - **No container has access to the Docker socket.** Each service is controlled through its own API.
 - Non-root containers where the component allows it, minimal capabilities.
 - Secrets live outside images (environment variables or Docker/Kubernetes secrets).
-- Encrypted backups.
+- Encrypted backups (age public-key encryption, so the server cannot read its own backups; `docs/BACKUP.md`).
 - Audit log of every administrative action.
 
 ### 7.5 Process
@@ -205,7 +205,9 @@ interface MailEngine {
 - The certs service, which may hold DNS provider credentials, is on the `proxy` network only.
 - LMTP is pre-authenticated, so Cyrus serves it on a Unix socket in a volume shared with Postfix, never on a TCP port.
 - The API verifies Cyrus' certificate on the admin connection: against the public hostname, with the shared certificate file pinned so self-signed certificates work too.
-- Every container drops `NET_RAW`.
+- Every container drops `NET_RAW` and runs with `no-new-privileges`. On Kubernetes, network policies also limit PostgreSQL to the API and the mail pod, Valkey to the API and Rspamd, ClamAV to Rspamd, Rspamd's milter to the mail pod and its controller to the API; the Node.js apps drop every capability and all containers use the runtime's default seccomp profile.
+- Rspamd's controller password given to the API is read-only (the filtering history); changes need `RSPAMD_CONTROLLER_ENABLE_PASSWORD`, and are disabled when it is unset.
+- Spam for an alias is filed in the Junk folder of its hosted destinations and never forwarded to outside ones; spam for an SRS forwarding address is refused.
 
 ### 8.2 Supported proxies
 
@@ -243,7 +245,7 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 
 Sieve `redirect` and vacation replies are sent by Cyrus' `lmtpd` (its own configuration, `imapd-lmtp.conf`; every other Cyrus service keeps a closed `smtp_host`) to a Postfix port kept for it (10588), where only Cyrus' account can log in. Cyrus names the mailbox whose script is sending in the `AUTH=` parameter of `MAIL FROM`; a Postfix policy service (`postarix-sieve-owner`) adds it as the topmost header, `X-Postarix-Sieve-Owner`, which Rspamd reads (it recognizes the port by its milter daemon name) and removes. Rspamd lets through only:
 
-- vacation replies (null envelope sender, `Auto-Submitted: auto-replied`) whose From is the sending mailbox's own address; they are DKIM-signed with its domain. Sieve lets a user choose the From address; this keeps it to their own.
+- vacation replies (null envelope sender, `Auto-Submitted: auto-replied`) whose From is the sending mailbox's own address, at most 200 an hour per mailbox (so forged senders cannot turn it into a backscatter source); they are DKIM-signed with its domain. Sieve lets a user choose the From address; this keeps it to their own.
 - redirects, never DKIM-signed (the original signature still verifies), at most 100 an hour per mailbox. A redirect of spam is refused, and so is one whose From is on a hosted domain unless that domain DKIM-signed it or one of our users sent that very message (Rspamd remembers Message-ID and From of mail our users send, for two days). Postfix gives redirects an SRS envelope sender on the server's own name (`SRS0=<hash>=<day>=<domain>=<local>@<MAIL_HOSTNAME>`, computed in PostgreSQL by `mail.srs_forward` with a key that never leaves the database), so SPF passes at the destination. Bounces and automatic replies to such an address (null sender only, signature checked, at most 21 days old) go back to the original sender (`mail.srs_reverse`); anything else sent to it is refused.
 
 Port 10588 is capped at 1200 messages a minute for the whole instance.
@@ -264,9 +266,9 @@ Examples: DKIM key rotation, periodic DNS checks for every domain, quarantine cl
 ## 11. Observability
 
 - Health checks in every container.
-- Prometheus metrics (Postfix exporter, Rspamd, Cyrus, API).
-- Optional Grafana dashboards.
-- Structured JSON logs.
+- Prometheus metrics on the API's internal port 9464: HTTP traffic and latency by route pattern, web sign-ins and mail-app logins by result, the Node.js process, and Rspamd's metrics relayed at `/metrics/rspamd` (so Prometheus holds no Rspamd password). Alert rules in `deploy/monitoring/alerts.yml`; an optional Prometheus for Compose; ServiceMonitor and PrometheusRule in the chart. See `docs/MONITORING.md`.
+- Structured JSON logs from the API (`LOG_FORMAT=json`).
+- Not yet: exporters for Postfix, Cyrus, PostgreSQL and Valkey internals; Grafana dashboards.
 
 ## 12. Deployment and scaling
 
@@ -445,5 +447,8 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | On Kubernetes the mail pod resolves through an Unbound container of its own (DNSSEC-validating, forwarding the cluster domain to the cluster DNS), so DANE works as with Compose. CI installs the chart on kind and runs the mail tests against it. |
 
 ## Known limitations
+
+- Aliases that forward to outside addresses keep the original envelope sender (no SRS, unlike Sieve redirects), so the destination may see an SPF failure for senders with strict SPF/DMARC. Use a mailbox with a Sieve redirect for those.
+- On Compose, the internal services share one network; Rspamd's milter port is reachable from the other internal containers (not from the proxy network or the outside). Kubernetes network policies narrow this further (§8.1.1).
 
 - Cyrus' own submission port (10588) is plain SMTP: Cyrus' SMTP client has no STARTTLS. It never leaves the mail pod on Kubernetes (loopback), and on Compose it stays on the internal network, where containers cannot sniff traffic (no NET_RAW). Its password is good for that port only, and Rspamd bounds what can be sent through it (§9.2.1).

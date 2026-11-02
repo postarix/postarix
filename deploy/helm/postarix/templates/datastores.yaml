@@ -27,6 +27,7 @@ spec:
       containers:
         - name: postgres
           image: {{ .Values.postgresql.image }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "POSTGRES_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTFIX_DB_PASSWORD") | nindent 12 }}
@@ -88,6 +89,7 @@ spec:
       containers:
         - name: valkey
           image: {{ .Values.valkey.image }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           command: ["sh", "-c", "exec valkey-server --appendonly yes --save 60 1 --requirepass \"$VALKEY_PASSWORD\""]
           env:
             {{- include "postarix.secretEnv" (list . "VALKEY_PASSWORD") | nindent 12 }}

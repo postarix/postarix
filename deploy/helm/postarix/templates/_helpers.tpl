@@ -49,8 +49,19 @@ app.kubernetes.io/component: {{ index . 1 }}
 {{/* Pod security defaults shared by every container. */}}
 {{- define "postarix.containerSecurity" -}}
 allowPrivilegeEscalation: false
+seccompProfile:
+  type: RuntimeDefault
 capabilities:
   drop: [NET_RAW]
+{{- end -}}
+
+{{/* The Node.js apps run unprivileged and need no capability at all. */}}
+{{- define "postarix.appSecurity" -}}
+allowPrivilegeEscalation: false
+seccompProfile:
+  type: RuntimeDefault
+capabilities:
+  drop: [ALL]
 {{- end -}}
 
 {{/* Murder backends: "<pod>.<service>" names, space-separated (frontend) or as name=host pairs (API). */}}

@@ -34,7 +34,7 @@ export const ALLOWED_CAPABILITIES = new Set([
   'https://cyrusimap.org/ns/jmap/contacts',
 ]);
 const ALLOWED_METHODS =
-  /^(?:Core\/echo|Mailbox\/(?:get|changes|query|queryChanges|set)|Email\/(?:get|changes|query|queryChanges|set|copy|import|parse)|Thread\/(?:get|changes)|SearchSnippet\/get|Blob\/(?:copy|get|lookup)|Calendar\/(?:get|changes)|CalendarEvent\/(?:get|changes|query|queryChanges|set)|AddressBook\/(?:get|changes)|Contact\/(?:get|changes|query|queryChanges|set))$/;
+  /^(?:Mailbox\/(?:get|changes|query|queryChanges|set)|Email\/(?:get|changes|query|queryChanges|set|copy|import|parse)|Thread\/(?:get|changes)|SearchSnippet\/get|Blob\/(?:copy|get|lookup)|Calendar\/(?:get|changes)|CalendarEvent\/(?:get|changes|query|queryChanges|set)|AddressBook\/(?:get|changes)|Contact\/(?:get|changes|query|queryChanges|set))$/;
 
 /** Download types a browser may render inline; everything else is an attachment. */
 const INLINE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
@@ -92,7 +92,7 @@ export class JmapProxy {
 
     const session = await this.auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!session) throw new ProxyError(401, 'Sign in first');
-    if (!(await this.secondFactor.satisfied(session.user.id))) {
+    if (!(await this.secondFactor.satisfied(session.user.id, session.session.id))) {
       throw new ProxyError(403, 'Your organization requires a second sign-in step. Set it up in your account settings.', SECOND_FACTOR_REQUIRED);
     }
     const address = await findOwnMailbox(this.db, session.user.id);
@@ -230,34 +230,55 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> 
   return Buffer.concat(chunks);
 }
 
-/** Event properties that schedule (invite people) or repeat too often to expand safely. */
-const SCHEDULING_PROPERTIES = /^(participants|replyTo|sendSchedulingMessages|organizerCalendarAddress)(\/|$)/;
+/** Event properties that schedule (invite people), anywhere in an event or a patch path. */
+const SCHEDULING_PROPERTIES = new Set(['participants', 'replyTo', 'sendSchedulingMessages', 'organizerCalendarAddress']);
+const RULE_PROPERTIES = new Set(['recurrenceRules', 'excludedRecurrenceRules']);
 const ALLOWED_FREQUENCIES = new Set(['daily', 'weekly', 'monthly', 'yearly']);
+
+function checkRules(value: unknown): void {
+  const rules = (Array.isArray(value) ? value : value ? [value] : []) as unknown[];
+  for (const rule of rules) {
+    const frequency = typeof rule === 'object' && rule ? (rule as { frequency?: unknown }).frequency : rule;
+    if (frequency !== undefined && frequency !== null && !ALLOWED_FREQUENCIES.has(String(frequency))) {
+      throw new ProxyError(403, 'Events may repeat at most daily');
+    }
+  }
+}
+
+/** Walks an event (or a patch) and its overrides, in object form and in patch paths ("a/b/c"). */
+function checkEventObject(object: unknown, depth = 0): void {
+  if (!object || typeof object !== 'object' || depth > 6) return;
+  for (const [key, value] of Object.entries(object as Record<string, unknown>)) {
+    const path = key.split('/').filter(Boolean);
+    if (path.some((segment) => SCHEDULING_PROPERTIES.has(segment))) throw new ProxyError(403, 'Inviting people to events is not available');
+    const ruleAt = path.findIndex((segment) => RULE_PROPERTIES.has(segment));
+    if (ruleAt !== -1) {
+      // "recurrenceRules" (a list), "recurrenceRules/0" (a rule) or "recurrenceRules/0/frequency" (a value).
+      if (ruleAt === path.length - 1) checkRules(value);
+      else if (ruleAt === path.length - 2) checkRules([value]);
+      else checkRules([{ frequency: value }]);
+    }
+    if (value && typeof value === 'object') checkEventObject(value, depth + 1);
+  }
+}
 
 /**
  * Calendar events may not invite people (scheduling is off in Cyrus: invitations
  * would bypass the mail pipeline) nor repeat more often than daily (expanding
- * them would be expensive for the shared mail server).
+ * them would be expensive for the shared mail server). The arguments must be
+ * given directly: a result reference ("#create") would bring in objects that
+ * were never checked.
  */
 function checkCalendarEventSet(args: Record<string, unknown>): void {
-  const objects = [
+  for (const key of Object.keys(args)) {
+    if (key.startsWith('#')) throw new ProxyError(403, 'Result references are not available here');
+    if (SCHEDULING_PROPERTIES.has(key)) throw new ProxyError(403, 'Inviting people to events is not available');
+  }
+  for (const object of [
     ...Object.values((args.create ?? {}) as Record<string, unknown>),
     ...Object.values((args.update ?? {}) as Record<string, unknown>),
-  ];
-  for (const object of objects) {
-    if (!object || typeof object !== 'object') continue;
-    for (const [key, value] of Object.entries(object)) {
-      if (SCHEDULING_PROPERTIES.test(key)) throw new ProxyError(403, 'Inviting people to events is not available');
-      if (key === 'recurrenceRules' || key.startsWith('recurrenceRules/') || key === 'excludedRecurrenceRules') {
-        const rules = (Array.isArray(value) ? value : value ? [value] : []) as { frequency?: unknown }[];
-        for (const rule of rules) {
-          const frequency = typeof rule === 'object' && rule ? rule.frequency : rule;
-          if (frequency !== undefined && !ALLOWED_FREQUENCIES.has(String(frequency))) {
-            throw new ProxyError(403, 'Events may repeat at most daily');
-          }
-        }
-      }
-    }
+  ]) {
+    checkEventObject(object);
   }
 }
 

@@ -81,8 +81,10 @@ export class MailAuthService {
 
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;
-    // Under an organization rule requiring a second factor, mail apps use app passwords only.
-    if ((await this.secondFactor.status(account.id)).required) return false;
+    // With a passkey, or under an organization rule requiring a second factor,
+    // mail apps use app passwords only.
+    const factor = await this.secondFactor.status(account.id);
+    if (factor.required || factor.enrolled) return false;
 
     if (await this.limiter.isBlocked(username)) {
       this.logger.warn(`Account password refused after repeated failures: ${username}`);

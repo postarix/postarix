@@ -47,6 +47,8 @@ function securityHeaders(res) {
   res.setHeader('referrer-policy', 'same-origin');
   res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('cross-origin-opener-policy', 'same-origin');
+  // Browsers only honour it over HTTPS (the reverse proxy's side).
+  res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
 }
 
 /** True for /api/internal in any spelling (case, repeated slashes, percent-encoding, dot segments). */

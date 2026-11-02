@@ -175,6 +175,12 @@ export class InvitationService {
     if (existing && (existing.sequence ?? 0) > summary.sequence) {
       throw new ConflictException('Your calendar has a newer version of this event');
     }
+    // An update must come from the organizer of the event the person has: a
+    // message from someone else that reuses its UID cannot take it over.
+    const currentOrganizer = existing ? organizerOf(existing) : null;
+    if (existing && currentOrganizer && currentOrganizer !== organizer) {
+      throw new ConflictException('This invitation does not come from the organizer of the event in your calendar');
+    }
 
     if (response === 'declined') {
       if (existing) await jmapCall(jmap, 'CalendarEvent/set', { destroy: [existing.id] });

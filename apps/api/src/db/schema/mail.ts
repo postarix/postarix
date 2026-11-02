@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { organization, user } from './auth.js';
+import { organization, session, user } from './auth.js';
 import { domains } from './domains.js';
 
 export const mailboxStatuses = ['active', 'disabled'] as const;
@@ -172,4 +172,18 @@ export const organizationSecurity = pgTable('organization_security', {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+});
+
+/**
+ * Web sessions opened with more than a password: a passkey, a second factor
+ * (authenticator app, backup code) or the organization's identity provider.
+ * Organizations that require a second factor accept only these (and sessions
+ * of accounts whose password sign-in always asks for one).
+ */
+export const sessionFactors = pgTable('session_factors', {
+  sessionId: text()
+    .primaryKey()
+    .references(() => session.id, { onDelete: 'cascade' }),
+  method: text({ enum: ['passkey', 'two_factor', 'sso'] }).notNull(),
+  createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });

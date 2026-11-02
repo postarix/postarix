@@ -29,7 +29,7 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
-            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_MUPDATE") | nindent 12 }}
             - { name: CYRUS_ROLE, value: mupdate }
             - { name: CYRUS_SERVERNAME, value: {{ $mupdate | quote }} }
             - { name: MAIL_HOSTNAME, value: {{ .Values.mailHostname | quote }} }
@@ -99,7 +99,10 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
-            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MAIL_AUTH") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_CYRUS_SMTP") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_MUPDATE") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_PROXY") | nindent 12 }}
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - { name: CYRUS_ROLE, value: backend }

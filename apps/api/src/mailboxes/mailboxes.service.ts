@@ -135,7 +135,7 @@ export class MailboxesService {
 
   async update(ctx: TenantContext, id: string, input: UpdateMailboxInput): Promise<MailboxDto> {
     const current = await this.require(ctx, id);
-    if (current.userId) await this.assertNotInstanceAdmin(ctx, current.userId);
+    if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: input.status === 'disabled' });
 
     if (input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes) {
       try {
@@ -162,7 +162,7 @@ export class MailboxesService {
   async setPassword(ctx: TenantContext, id: string, password: string): Promise<void> {
     const mailbox = await this.require(ctx, id);
     if (!mailbox.userId) throw new NotFoundException('This mailbox has no account');
-    await this.assertNotInstanceAdmin(ctx, mailbox.userId);
+    await this.assertMayManage(ctx, mailbox.userId, { removing: false });
     await this.accounts.setPassword(mailbox.userId, password);
     await this.audit.record(ctx, 'mailbox.password_reset', {
       type: 'mailbox',
@@ -183,7 +183,7 @@ export class MailboxesService {
   /** Deletes the engine mailbox (and all its mail), the row and the user account. */
   async remove(ctx: TenantContext, id: string): Promise<void> {
     const mailbox = await this.require(ctx, id);
-    if (mailbox.userId) await this.assertNotInstanceAdmin(ctx, mailbox.userId);
+    if (mailbox.userId) await this.assertMayManage(ctx, mailbox.userId, { removing: true });
     try {
       await this.engine.deleteMailbox(mailbox.address);
     } catch (error) {
@@ -198,18 +198,43 @@ export class MailboxesService {
     if (mailbox.userId) await this.accounts.delete(mailbox.userId);
     await this.repository.delete(ctx, id);
     await this.audit.record(ctx, 'mailbox.deleted', { type: 'mailbox', id: mailbox.id, label: mailbox.address });
+    // Colleagues' calendars and contacts shared with it are no longer shared
+    // with the address (someone given it later must not inherit them).
+    void this.forgetShares(ctx, mailbox.address);
+  }
+
+  private async forgetShares(ctx: TenantContext, address: string): Promise<void> {
+    for (const other of await this.repository.list(ctx)) {
+      try {
+        await this.engine.removeGrantee(other.address, address);
+      } catch (error) {
+        this.logger.warn(`Could not stop sharing ${other.address}'s calendars with ${address}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   /**
-   * An organization manages its mailboxes' accounts, but an account that also
-   * administers the instance is out of its reach: resetting its password or
-   * deleting it would hand over (or remove) the whole instance.
+   * An organization manages its mailboxes' accounts, within limits:
+   * - an account that also administers the instance is out of its reach
+   *   (resetting its password or deleting it would hand over, or remove, the
+   *   whole instance);
+   * - only owners may change the account of an admin or an owner (otherwise an
+   *   admin could reset an owner's password, sign in as them and promote
+   *   themselves);
+   * - the last owner's mailbox cannot be disabled or deleted.
    */
-  private async assertNotInstanceAdmin(ctx: TenantContext, userId: string): Promise<void> {
+  private async assertMayManage(ctx: TenantContext, userId: string, { removing }: { removing: boolean }): Promise<void> {
     if (ctx.viaSuperAdmin) return;
     const account = await this.accounts.find(userId);
     if (account?.instanceAdmin) {
       throw new ForbiddenException('This account administers the instance; only an instance administrator can change it');
+    }
+    const role = await this.repository.roleOf(ctx, userId);
+    if ((role === 'owner' || role === 'admin') && ctx.role !== 'owner') {
+      throw new ForbiddenException('Only an owner can change the account of an administrator or owner');
+    }
+    if (removing && role === 'owner' && (await this.repository.ownerCount(ctx)) <= 1) {
+      throw new ConflictException('This is the organization’s only owner; make someone else owner first');
     }
   }
 

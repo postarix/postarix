@@ -16,7 +16,10 @@ export class SsoController {
     return { data: await this.sso.list(ctx) };
   }
 
+  // Only owners connect or remove a provider: it decides who can sign in as
+  // anyone in the organization, owners included.
   @Post()
+  @RequireOrgRole('owner')
   create(
     @Tenant() ctx: TenantContext,
     @Body(new ZodValidationPipe(createSsoProviderSchema)) body: CreateSsoProviderInput,
@@ -25,6 +28,7 @@ export class SsoController {
   }
 
   @Delete(':id')
+  @RequireOrgRole('owner')
   @HttpCode(204)
   async remove(@Tenant() ctx: TenantContext, @Param('id', new ZodValidationPipe(ssoProviderIdSchema)) id: string): Promise<void> {
     await this.sso.remove(ctx, id);

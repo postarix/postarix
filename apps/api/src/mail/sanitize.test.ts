@@ -76,6 +76,18 @@ describe('sanitizeCss', () => {
 
   it('cannot be broken out of a style element', () => {
     expect(sanitizeCss('p{}</style><script>alert(1)</script>')).not.toMatch(/<\/?style/i);
+    // Fragments that the filter itself would join into a closing tag.
+    for (const css of ['</sty</st\\ylele>', '</st\\yle>', '<<//style>>', '</s<tyle>']) expect(sanitizeCss(css), css).not.toContain('<');
+  });
+
+  it('keeps hostile markup inside a style element out of the message', () => {
+    const { html } = sanitizeEmailHtml(
+      '<style></sty</st\\ylele><img src=https://evil.example/x.png><form action=https://evil.example><input name=pw></form><a href="javascript:alert(1)">x</a></style><p>Hi</p>',
+      { inlineImage: () => null, remoteImage: () => null },
+    );
+    // What was inside stays inert text of the stylesheet: no element comes out of it.
+    expect(html).not.toMatch(/<img|<form|<input|<a /i);
+    expect(html).toContain('<p>Hi</p>');
   });
 });
 

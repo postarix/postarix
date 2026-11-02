@@ -52,6 +52,13 @@ services:
       traefik.http.routers.postarix-dav.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-dav.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       traefik.http.services.postarix-dav.loadbalancer.server.port: "8080"
+      # Calendars and contacts share the webmail's origin: nothing Cyrus serves
+      # there may run, be framed, or be sniffed into HTML.
+      traefik.http.routers.postarix-dav.middlewares: postarix-dav-headers
+      traefik.http.middlewares.postarix-dav-headers.headers.contentSecurityPolicy: "default-src 'none'; sandbox; frame-ancestors 'none'"
+      traefik.http.middlewares.postarix-dav-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.postarix-dav-headers.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.postarix-dav-headers.headers.stsIncludeSubdomains: "true"
 
 networks:
   traefik:

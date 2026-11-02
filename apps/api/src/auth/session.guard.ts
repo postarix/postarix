@@ -41,9 +41,9 @@ export class SessionGuard implements CanActivate {
 
     request.auth = session;
     const exempt = this.reflector.getAllAndOverride<boolean>(ALLOW_WITHOUT_SECOND_FACTOR, [context.getHandler(), context.getClass()]);
-    if (!exempt && !(await this.secondFactor.satisfied(session.user.id))) {
+    if (!exempt && !(await this.secondFactor.satisfied(session.user.id, session.session.id))) {
       throw new ForbiddenException({
-        message: 'Your organization requires a second sign-in step. Set up an authenticator app or a passkey in your account settings.',
+        message: 'Your organization requires a second sign-in step: sign in with your passkey or authenticator app, or set one up in your account settings.',
         code: SECOND_FACTOR_REQUIRED,
       });
     }
