@@ -108,3 +108,17 @@ test('records every change in the activity log', async ({ page }) => {
   }
   await expect(page.getByRole('cell', { name: superAdmin.email }).first()).toBeVisible();
 });
+
+test('deletes the organization only after its name is typed', async ({ page }) => {
+  await page.goto(orgPath);
+  await page.getByRole('button', { name: 'Delete organization' }).click();
+  const dialog = page.getByRole('dialog');
+  const confirm = dialog.getByRole('button', { name: 'Delete organization' });
+  await expect(confirm).toBeDisabled();
+  await dialog.getByLabel(`Type “${orgName}” to confirm`).fill(orgName.toLowerCase());
+  await expect(confirm).toBeDisabled();
+  await dialog.getByLabel(`Type “${orgName}” to confirm`).fill(orgName);
+  await confirm.click();
+  await expect(page).toHaveURL(/\/admin\/?$/);
+  await expect(page.getByText(orgName)).toHaveCount(0);
+});
