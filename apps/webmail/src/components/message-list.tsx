@@ -48,7 +48,7 @@ export function MessageList({
               onClick={() => setUnreadOnly(option.value)}
               className={cn(
                 'rounded-md px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                unreadOnly === option.value ? 'depth-soft bg-card text-foreground' : 'text-muted-foreground hover:text-foreground',
+                unreadOnly === option.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {option.label}
