@@ -78,3 +78,12 @@ export interface AppPassword {
   lastUsedAt: string | null;
   createdAt: string;
 }
+
+export interface SsoProvider {
+  id: string;
+  providerId: string;
+  domain: string;
+  issuer: string;
+  clientId: string;
+  callbackUrl: string;
+}

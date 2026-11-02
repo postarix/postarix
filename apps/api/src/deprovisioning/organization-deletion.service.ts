@@ -9,6 +9,7 @@ import type { Database } from '../db/client.js';
 import { organization } from '../db/schema/index.js';
 import { DomainsService } from '../domains/domains.service.js';
 import { MailboxesService } from '../mailboxes/mailboxes.service.js';
+import { SsoService } from '../sso/sso.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 
 export const confirmDeletionSchema = z.strictObject({ confirm: z.string().min(1).max(200) });
@@ -20,7 +21,8 @@ export interface DeletionReport {
 }
 
 /**
- * Deletes an organization and everything it provisioned: aliases, mailboxes
+ * Deletes an organization and everything it provisioned: sign-in providers,
+ * aliases, mailboxes
  * (their mail on the mail server and their accounts), domains (and their DKIM
  * keys), then the organization itself. Each step goes through the same
  * services as a manual deletion, so nothing is left behind on the mail server
@@ -36,6 +38,7 @@ export class OrganizationDeletionService {
     @Inject(AliasesService) private readonly aliases: AliasesService,
     @Inject(MailboxesService) private readonly mailboxes: MailboxesService,
     @Inject(DomainsService) private readonly domains: DomainsService,
+    @Inject(SsoService) private readonly sso: SsoService,
     @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
@@ -59,6 +62,8 @@ export class OrganizationDeletionService {
       viaSuperAdmin: true,
     };
     const report: DeletionReport = { aliases: 0, mailboxes: 0, domains: 0 };
+    // Sign-in providers first, so nobody signs in while the rest is removed.
+    await this.sso.removeAll(ctx);
     for (const alias of await this.aliases.list(ctx)) {
       await this.aliases.remove(ctx, alias.id);
       report.aliases++;

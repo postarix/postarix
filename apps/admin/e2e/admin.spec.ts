@@ -109,6 +109,25 @@ test('records every change in the activity log', async ({ page }) => {
   await expect(page.getByRole('cell', { name: superAdmin.email }).first()).toBeVisible();
 });
 
+test('refuses an identity provider on a private address', async ({ page }) => {
+  await page.goto(`${orgPath}/sso`);
+  await page.getByRole('button', { name: 'Connect provider' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Issuer URL').fill('http://10.1.2.3/realms/acme');
+  await dialog.getByLabel('Client ID').fill('postarix');
+  await dialog.getByLabel('Client secret').fill('secret');
+  await dialog.getByRole('button', { name: 'Connect provider' }).click();
+  await expect(dialog.getByText(/must be a public https address/)).toBeVisible();
+});
+
+test('explains when a domain has no single sign-on', async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto('/admin/login');
+  await page.getByLabel('Email').fill(`someone@${domain}`);
+  await page.getByRole('button', { name: 'Sign in with your company account' }).click();
+  await expect(page.getByText('Single sign-on is not set up for this domain.')).toBeVisible();
+});
+
 test('deletes the organization only after its name is typed', async ({ page }) => {
   await page.goto(orgPath);
   await page.getByRole('button', { name: 'Delete organization' }).click();

@@ -5,15 +5,18 @@ import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Postmark } from '@postarix/ui/components/postmark';
-import { CircleAlert, KeyRound } from 'lucide-react';
+import { Building2, CircleAlert, KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { navigate } from '@/lib/router';
+import { ssoErrorMessage, startSso } from '@/lib/sso';
 
 export function LoginPage() {
   const [step, setStep] = useState<'password' | '2fa'>('password');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => ssoErrorMessage(new URLSearchParams(window.location.search).get('error')));
   const [pending, setPending] = useState(false);
+  const [email, setEmail] = useState('');
+  const [ssoPending, setSsoPending] = useState(false);
 
   const done = () => navigate('/', true);
 
@@ -47,6 +50,14 @@ export function LoginPage() {
     done();
   }
 
+  async function sso() {
+    setError(null);
+    if (!email.includes('@')) return setError('Enter your email address first.');
+    setSsoPending(true);
+    setError(await startSso(email, '/', '/login'));
+    setSsoPending(false);
+  }
+
   return (
     <main className="grid min-h-full place-items-center bg-sidebar p-4">
       <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
@@ -70,7 +81,16 @@ export function LoginPage() {
                 <>
                   <Field>
                     <FieldLabel htmlFor="email">Email</FieldLabel>
-                    <Input id="email" name="email" type="email" autoComplete="username" required autoFocus />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="username"
+                      required
+                      autoFocus
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="password">Password</FieldLabel>
@@ -83,6 +103,10 @@ export function LoginPage() {
                   <Button type="button" variant="outline" onClick={() => void passkey()}>
                     <KeyRound aria-hidden />
                     Sign in with a passkey
+                  </Button>
+                  <Button type="button" variant="outline" disabled={ssoPending} onClick={() => void sso()}>
+                    {ssoPending ? <Spinner /> : <Building2 aria-hidden />}
+                    Sign in with your company account
                   </Button>
                 </>
               ) : (
