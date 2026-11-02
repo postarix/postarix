@@ -382,7 +382,8 @@ out the account password after repeated failures (app passwords keep working).
 - [x] Invitations by email (iTIP over iMIP, RFC 5546/6047): guests on events, invitations and updates sent from the organizer's address, answers (going, maybe, not going) from the message, replies and cancellations applied to the calendar. Cyrus' own scheduling stays off; the API sends, under the person's sending limits. See `docs/CALENDAR.md`.
 - [x] Free/busy of colleagues (same organization only, times without details) while inviting.
 - [x] Calendars and contacts shared with colleagues (same organization), to see or to edit; shared calendars and contacts appear in the webmail and over CalDAV/CardDAV. Calendars are no longer readable by "anyone" (Cyrus' default free/busy right).
-- Later: rooms and other shared resources.
+- [x] Rooms and equipment: mailboxes of their own kind, booked by inviting them; they accept when free (first occurrence of a repeating event) and decline otherwise, keep the event in their calendar, and get no email.
+- [x] Importing calendars (.ics) and contacts (.vcf) exported from other services.
 
 ### Phase 5 — Enterprise and scale
 - [x] SSO with OpenID Connect and SAML 2.0.
@@ -390,11 +391,14 @@ out the account password after repeated failures (app passwords keep working).
 - [x] CrowdSec (optional `crowdsec` profile) reading the Postfix and Cyrus logs, with the firewall bouncer on the host (see `docs/CROWDSEC.md`).
 - [x] Cyrus Murder: mailboxes spread over several Cyrus backends behind a frontend, with a mupdate server; the API places new mailboxes and talks to each one's backend (Compose overlay, Helm `mail.murder`, CI runs the integration tests on a two-backend Murder). See `docs/SCALING.md`.
 - [x] Helm chart.
-- Replication (Cyrus `sync_client`/`sync_server`) and moving mailboxes between backends.
-- Migration from Google Workspace and Microsoft 365.
-- Legal hold and archiving.
+- [x] Moving mailboxes between Murder backends (`move-mailboxes` command, Cyrus XFER).
+- Replication (Cyrus `sync_client`/`sync_server`) for standby backends.
+- [x] Migration from other providers: built-in mail import from any IMAP account (Gmail with app passwords, resumable, incremental), plus calendar and contact files (`docs/MIGRATION.md`). Microsoft 365 needs OAuth, not supported yet.
+- [x] Archiving (journaling to an archive mailbox through Postfix) and legal hold (no deletion of mailboxes or the organization) (`docs/ARCHIVING.md`).
 - [x] Filtering history per organization (from Rspamd's history, filtered to the organization's domains); MTA-STS policy host.
 - [x] Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
+- [x] Production tooling: signed multi-arch release images and Helm chart, install guide with a bundled Caddy, Prometheus metrics and alerts, encrypted backups (`docs/INSTALL.md`, `docs/MONITORING.md`, `docs/BACKUP.md`).
+- [x] Internal security review before release (calendar parsing, account takeover between admins, second-factor sessions, JMAP request checks, sanitizer, per-container secrets, mail relay and backscatter limits, network policies).
 - External security audit → **1.0**.
 
 ## Decision log

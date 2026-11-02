@@ -130,6 +130,13 @@ const envSchema = z
      * domain's mta-sts host serves a valid certificate.
      */
     MTA_STS_MODE: z.enum(['enforce', 'testing', 'none']).default('testing'),
+    /**
+     * Mail import from other servers: hosts on a private network that may be
+     * imported from (an old server next to this one). Public servers need no entry.
+     */
+    MAIL_IMPORT_ALLOWED_HOSTS: commaList,
+    /** PEM file of extra certificates trusted for mail import (a private CA). */
+    MAIL_IMPORT_CA_FILE: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
     /** Rspamd's controller (e.g. http://rspamd:11334), for the filtering history. Unset hides it. */
     RSPAMD_CONTROLLER_URL: z.url({ protocol: /^https?$/ }).optional(),
     RSPAMD_CONTROLLER_PASSWORD: z.string().optional(),

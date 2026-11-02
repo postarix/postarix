@@ -1,0 +1,7 @@
+# Generated at container start.
+# Archiving: the organization's archive mailbox gets a copy (see mail.archive_copies).
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT archive FROM mail.archive_copies WHERE address = lower('%s') LIMIT 1

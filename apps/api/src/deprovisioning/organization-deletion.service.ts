@@ -6,8 +6,9 @@ import { AuditService } from '../audit/audit.service.js';
 import type { AuthSession } from '../auth/session.js';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { member, organization } from '../db/schema/index.js';
+import { member, organization, organizationArchiving } from '../db/schema/index.js';
 import { DomainsService } from '../domains/domains.service.js';
+import { ArchivingService } from '../mailboxes/archiving.js';
 import { MailboxesService } from '../mailboxes/mailboxes.service.js';
 import { SsoService } from '../sso/sso.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
@@ -40,6 +41,7 @@ export class OrganizationDeletionService {
     @Inject(DomainsService) private readonly domains: DomainsService,
     @Inject(SsoService) private readonly sso: SsoService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(ArchivingService) private readonly archiving: ArchivingService,
   ) {}
 
   async delete(actor: AuthSession, organizationId: string, confirmName: string, ipAddress: string | null): Promise<DeletionReport> {
@@ -69,6 +71,11 @@ export class OrganizationDeletionService {
         `These mailboxes belong to instance administrators; remove their administrator role or move them first: ${admins.join(', ')}`,
       );
     }
+    if (await this.archiving.onHold(org.id)) {
+      throw new ConflictException('The organization is under legal hold; its owners must lift it before it can be deleted');
+    }
+    // Archiving stops first: the archive mailbox is deleted with the others.
+    await this.db.delete(organizationArchiving).where(eq(organizationArchiving.organizationId, org.id));
     const report: DeletionReport = { aliases: 0, mailboxes: 0, domains: 0 };
     // Members first, so the organization's admins cannot provision anything
     // while it is being taken apart, then sign-in providers, so nobody signs in.

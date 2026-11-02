@@ -16,6 +16,8 @@ export const config = {
   davUrl: process.env.DAV_URL ?? 'http://localhost:8085',
   adminEmail: process.env.ADMIN_EMAIL ?? 'admin@postarix.test',
   adminPassword: process.env.ADMIN_PASSWORD ?? 'integration admin password',
+  /** The mail server's own name, as the API reaches it (test.yml allows importing from it). */
+  importHost: process.env.IMPORT_HOST ?? 'mail.postarix.test',
 };
 
 /** Minimal API client that keeps the session cookie between calls. */
@@ -150,6 +152,19 @@ export const unique = (label: string) => `${label}-${Date.now()}-${Math.floor(Ma
  * a mail app's filter editor does. Rejects with the server's answer on failure.
  */
 export async function putSieveScript(user: string, pass: string, script: string, name = 'postarix-test'): Promise<void> {
+  // On a Murder, the frontend learns a brand-new mailbox from the mupdate
+  // server within seconds; until then its ManageSieve login fails.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await putSieveScriptOnce(user, pass, script, name);
+    } catch (error) {
+      if (attempt >= 5 || !/Authentication Error/.test(String(error))) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+  }
+}
+
+async function putSieveScriptOnce(user: string, pass: string, script: string, name: string): Promise<void> {
   let socket: net.Socket | tls.TLSSocket = net.connect(config.sievePort, config.host);
   socket.setEncoding('utf8');
   let buffer = '';

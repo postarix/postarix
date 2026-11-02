@@ -69,6 +69,8 @@ spec:
               value: {{ join "," .Values.api.trustedProxies | quote }}
             - name: SSO_TRUSTED_ISSUERS
               value: {{ join "," .Values.api.ssoTrustedIssuers | quote }}
+            - name: MAIL_IMPORT_ALLOWED_HOSTS
+              value: {{ join "," .Values.api.mailImportAllowedHosts | quote }}
             {{- with .Values.api.systemMailFrom }}
             - name: SYSTEM_MAIL_FROM
               value: {{ . | quote }}

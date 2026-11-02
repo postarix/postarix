@@ -22,6 +22,7 @@ import {
   useCancelEvent,
   useDeleteEvent,
   useSaveEvent,
+  useResources,
   useSetGuests,
   zonedToDate,
 } from '@/lib/calendar';
@@ -100,6 +101,7 @@ export function EventDialog({
   const remove = useDeleteEvent();
   const cancel = useCancelEvent();
   const setGuests = useSetGuests();
+  const resources = useResources(canInvite);
   const set = (patch: Partial<EventInput>) => setInput((current) => ({ ...current, ...patch }));
 
   const parsedGuests = useMemo(() => parseAddresses(guestText), [guestText]);
@@ -270,6 +272,24 @@ export function EventDialog({
               <Field>
                 <FieldLabel htmlFor="event-guests">Guests</FieldLabel>
                 <RecipientInput id="event-guests" value={guestText} onChange={setGuestText} placeholder="Add people by email" />
+                {resources.data?.some((r) => !guestEmails.includes(r.email)) ? (
+                  <div className="flex flex-wrap items-center gap-1.5" aria-label="Rooms and equipment">
+                    <span className="text-xs text-muted-foreground">Book:</span>
+                    {resources.data
+                      .filter((r) => !guestEmails.includes(r.email))
+                      .map((r) => (
+                        <Button
+                          key={r.email}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setGuestText((text) => (text.trim() ? `${text.trim().replace(/,$/, '')}, ${r.email}` : r.email))}
+                        >
+                          {r.name}
+                        </Button>
+                      ))}
+                  </div>
+                ) : null}
                 <GuestList guests={currentGuests} />
                 {conflicts && guestEmails.length ? (
                   <p className="text-xs text-muted-foreground" role="status">

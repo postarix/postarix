@@ -8,6 +8,12 @@ services:
       DOMAIN_VERIFICATION: skip
       # The webmail is published on its own port in the tests.
       TRUSTED_ORIGINS: http://localhost:3002
+      # Mail import tests copy mail from this same server, by its public name
+      # (its certificate is self-signed here).
+      MAIL_IMPORT_ALLOWED_HOSTS: ${MAIL_HOSTNAME}
+      MAIL_IMPORT_CA_FILE: /certs/fullchain.pem
+    extra_hosts:
+      - "${MAIL_HOSTNAME}:${CYRUS_IP:-172.30.53.10}"
     ports:
       - "3000:3000"
   rspamd:

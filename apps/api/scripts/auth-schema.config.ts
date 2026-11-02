@@ -13,6 +13,7 @@ export const auth = createAuth({} as Database, {
   AUTH_SECRET: 'schema-generation-only-secret-not-used-anywhere',
   TRUSTED_ORIGINS: [],
   SSO_TRUSTED_ISSUERS: [],
+  MAIL_IMPORT_ALLOWED_HOSTS: [],
   CYRUS_BACKENDS: [],
   TRUSTED_PROXIES: [],
   ALLOW_SIGNUP: false,

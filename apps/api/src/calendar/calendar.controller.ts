@@ -14,6 +14,7 @@ import {
   type SharedCollection,
   sharesSchema,
 } from './calendar.service.js';
+import type { Resource } from './colleagues.repository.js';
 import { type ImportResult, importQuerySchema, ImportService } from './import.service.js';
 import { type Invitation, InvitationService, respondSchema } from './invitation.service.js';
 
@@ -49,6 +50,12 @@ export class CalendarController {
     @Query(new ZodValidationPipe(availabilityQuerySchema)) query: z.infer<typeof availabilityQuerySchema>,
   ): Promise<{ data: Availability[]; unavailable: string[] }> {
     return this.calendar.availability(session.user.id, query.emails, new Date(query.from), new Date(query.to));
+  }
+
+  /** Rooms and equipment of the person's organization: invite them to book them. */
+  @Get('resources')
+  async resources(@CurrentSession() session: AuthSession): Promise<{ data: Resource[] }> {
+    return { data: await this.calendar.listResources(session.user.id) };
   }
 
   @Get('sharing')
