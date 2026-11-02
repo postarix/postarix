@@ -3,10 +3,11 @@ import { type INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
-import express, { type NextFunction, type Request, type Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { type Auth, AUTH_BASE_PATH, CLIENT_IP_HEADER } from './auth/auth.js';
+import { bodyLimits } from './common/body-limits.middleware.js';
 import { originCheck } from './common/origin-check.middleware.js';
 import type { Env } from './config/env.js';
 import { AUTH, ENV } from './core/tokens.js';
@@ -41,11 +42,15 @@ export async function createApp(): Promise<INestApplication> {
     next();
   });
 
-  // Better Auth performs its own origin/CSRF validation on its routes.
-  app.use(`${AUTH_BASE_PATH}/{*path}`, toNodeHandler(auth));
+  // Parse and size-limit bodies before anything else, Better Auth included.
+  app.use(...bodyLimits());
+
+  // Mounted on the bare prefix so Express keeps the query string intact
+  // (a `/{*path}` pattern makes better-call drop it). Better Auth performs
+  // its own origin/CSRF validation on these routes.
+  app.use(AUTH_BASE_PATH, toNodeHandler(auth));
 
   app.use(originCheck([env.AUTH_URL, ...env.TRUSTED_ORIGINS]));
-  app.use(express.json({ limit: '1mb' }));
 
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();

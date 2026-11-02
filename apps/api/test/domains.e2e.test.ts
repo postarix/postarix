@@ -1,8 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
+import { and, eq } from 'drizzle-orm';
 import request from 'supertest';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSuperAdmin } from '../src/auth/create-super-admin.js';
+import { DATABASE } from '../src/core/tokens.js';
+import type { Database } from '../src/db/client.js';
+import { member, user as userTable } from '../src/db/schema/index.js';
 import {
   addMember,
   authOf,
@@ -20,6 +24,7 @@ describe('Domains API', () => {
   let bob: TestUser; // owner of org B
   let carol: TestUser; // plain member of org A
   let superAdmin: TestAgent;
+  let superAdminId: string;
   let orgA: string;
   let orgB: string;
 
@@ -35,7 +40,8 @@ describe('Domains API', () => {
     await addMember(app, orgA, carol.id, 'member');
 
     const adminEmail = `root-${Date.now()}@example.test`;
-    await createSuperAdmin(authOf(app), { email: adminEmail, password: PASSWORD, name: 'Root' });
+    const root = await createSuperAdmin(authOf(app), { email: adminEmail, password: PASSWORD, name: 'Root' });
+    superAdminId = root.id;
     superAdmin = await signIn(app, adminEmail);
   });
 
@@ -94,8 +100,20 @@ describe('Domains API', () => {
         .expect(400);
     });
 
-    it('refuses a domain already registered by another organization', async () => {
-      await bob.agent.post(domainsOf(orgB)).send({ name: 'example.com' }).expect(409);
+    it('returns the DNS TXT record that proves ownership', async () => {
+      const res = await alice.agent.post(domainsOf(orgA)).send({ name: 'verify.example' }).expect(201);
+      expect(res.body.verificationRecord).toMatch(/^postarix-verification=[\w-]{32}$/);
+      expect(res.body.verifiedAt).toBeNull();
+    });
+
+    it('rejects a duplicate inside the same organization', async () => {
+      await alice.agent.post(domainsOf(orgA)).send({ name: 'EXAMPLE.com' }).expect(409);
+    });
+
+    it('does not reveal or block a pending domain held by another organization', async () => {
+      // Ownership is decided by DNS verification, not by who claims the name first.
+      const res = await bob.agent.post(domainsOf(orgB)).send({ name: 'example.com' }).expect(201);
+      expect(res.body.status).toBe('pending');
     });
   });
 
@@ -123,7 +141,10 @@ describe('Domains API', () => {
 
     it('never lists another organization’s domains', async () => {
       const res = await bob.agent.get(domainsOf(orgB)).expect(200);
-      expect(res.body.data).toEqual([]);
+      const ids = res.body.data.map((d: { id: string }) => d.id);
+      const names = res.body.data.map((d: { name: string }) => d.name);
+      expect(ids).not.toContain(aliceDomainId);
+      expect(names).not.toContain('private.example');
     });
 
     it('returns 404 for an organization that does not exist', async () => {
@@ -141,9 +162,45 @@ describe('Domains API', () => {
       await carol.agent.delete(`${domainsOf(orgA)}/${someId}`).expect(403);
     });
 
-    it('gives the instance super-admin access to any organization', async () => {
+    it('lets an organization admin write', async () => {
+      const dave = await signUp(app, 'dave');
+      await addMember(app, orgA, dave.id, 'admin');
+      const res = await dave.agent.post(domainsOf(orgA)).send({ name: 'admin.example' }).expect(201);
+      await dave.agent.delete(`${domainsOf(orgA)}/${res.body.id}`).expect(204);
+    });
+
+    it('honours the highest of several comma-separated member roles', async () => {
+      const erin = await signUp(app, 'erin');
+      await addMember(app, orgA, erin.id, 'member');
+      await app
+        .get<Database>(DATABASE)
+        .update(member)
+        .set({ role: 'member,admin' })
+        .where(and(eq(member.organizationId, orgA), eq(member.userId, erin.id)));
+      await erin.agent.post(domainsOf(orgA)).send({ name: 'multi-role.example' }).expect(201);
+    });
+
+    it('gives the instance super-admin owner-level access to any organization', async () => {
       const res = await superAdmin.get(domainsOf(orgA)).expect(200);
       expect(res.body.data.map((d: { name: string }) => d.name)).toContain('example.com');
+      await superAdmin.post(domainsOf(orgA)).send({ name: 'root.example' }).expect(201);
+    });
+
+    it('does not downgrade a super-admin who is also a plain member', async () => {
+      await addMember(app, orgB, superAdminId, 'member');
+      await superAdmin.post(domainsOf(orgB)).send({ name: 'root-member.example' }).expect(201);
+    });
+
+    it('recognises the super-admin role among several comma-separated roles', async () => {
+      const email = `multi-root-${Date.now()}@example.test`;
+      const user = await createSuperAdmin(authOf(app), { email, password: PASSWORD, name: 'Multi' });
+      await app
+        .get<Database>(DATABASE)
+        .update(userTable)
+        .set({ role: 'user,admin' })
+        .where(eq(userTable.id, user.id));
+      const agent = await signIn(app, email);
+      await agent.get(domainsOf(orgA)).expect(200);
     });
   });
 

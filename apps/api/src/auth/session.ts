@@ -1,6 +1,7 @@
 import { createParamDecorator, type ExecutionContext, SetMetadata } from '@nestjs/common';
 import type { Request } from 'express';
 import type { Auth } from './auth.js';
+import { hasInstanceAdminRole } from './roles.js';
 
 export type AuthSession = NonNullable<Awaited<ReturnType<Auth['api']['getSession']>>>;
 
@@ -20,5 +21,5 @@ export const CurrentSession = createParamDecorator((_data: unknown, ctx: Executi
 });
 
 export function isSuperAdmin(session: AuthSession): boolean {
-  return session.user.role === 'admin';
+  return hasInstanceAdminRole(session.user.role);
 }

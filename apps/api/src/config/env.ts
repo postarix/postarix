@@ -33,6 +33,11 @@ const envSchema = z.object({
   ALLOW_SIGNUP: booleanFromString,
   /** Whether regular users may create organizations. Off by default. */
   ALLOW_USER_CREATE_ORG: booleanFromString,
+}).refine((env) => env.NODE_ENV === 'production' || !env.AUTH_URL.startsWith('https:'), {
+  // An unset NODE_ENV means "development", which relaxes library fallbacks.
+  // A public HTTPS deployment must say so explicitly.
+  path: ['NODE_ENV'],
+  message: 'must be "production" when AUTH_URL uses https',
 });
 
 export type Env = z.infer<typeof envSchema>;
