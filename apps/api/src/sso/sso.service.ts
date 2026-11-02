@@ -1,4 +1,4 @@
-import { sealOidcConfig } from './sso-crypto.js';
+import { sealNewOidcConfig, sealOidcConfig } from './sso-crypto.js';
 import {
   ConflictException,
   Inject,
@@ -102,7 +102,7 @@ export class SsoService implements OnApplicationBootstrap {
       domain: domain.name,
       // The client secret is stored encrypted; Better Auth reads it through
       // the adapter in auth.ts, which opens it.
-      oidcConfig: sealOidcConfig(oidcConfig, this.env.AUTH_SECRET),
+      oidcConfig: sealNewOidcConfig(oidcConfig, this.env.AUTH_SECRET),
     });
     await this.audit.record(ctx, 'sign_in_provider.added', { type: 'sign_in_provider', id: row.id, label: domain.name }, { issuer: row.issuer });
     return this.toDto(row);

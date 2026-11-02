@@ -8,6 +8,8 @@ image:
   pullPolicy: Never
 api:
   replicas: 1
+  # Development mode allows skipping DNS verification of the test domains.
+  nodeEnv: development
   domainVerification: skip
   trustedOrigins: [http://localhost:3000]
 admin:

@@ -215,7 +215,8 @@ export class OrganizationsService {
       return inserted!;
     });
     await this.audit.record(ctx, 'member.added', { type: 'member', id: row.id, label: account.email }, { role: input.role });
-    await this.noticeMembership(ctx, account.email, input.role);
+    // Not awaited: the notice must never slow down or fail the change.
+    void this.noticeMembership(ctx, account.email, input.role).catch(() => undefined);
     return { id: row.id, userId: account.id, email: account.email, name: account.name, role: input.role, createdAt: row.createdAt.toISOString() };
   }
 
@@ -232,7 +233,7 @@ export class OrganizationsService {
       return found;
     });
     await this.audit.record(ctx, 'member.role_changed', { type: 'member', id: memberId, label: current.email }, { from: current.role, to: role });
-    if (role !== current.role) await this.noticeMembership(ctx, current.email, role);
+    if (role !== current.role) void this.noticeMembership(ctx, current.email, role).catch(() => undefined);
     return { ...current, role };
   }
 

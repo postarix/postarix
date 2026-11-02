@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { openOidcConfig, sealOidcConfig } from './sso-crypto.js';
+import { openOidcConfig, sealNewOidcConfig, sealOidcConfig } from './sso-crypto.js';
 
 const SECRET = 'an instance secret that is long enough';
 
@@ -21,5 +21,11 @@ describe('SSO client secret encryption', () => {
     expect(() => openOidcConfig(sealed, 'another secret that is long enough')).toThrow();
     expect(openOidcConfig(plain, SECRET)).toBe(plain);
     expect(openOidcConfig(null, SECRET)).toBeNull();
+  });
+  it('encrypts a new secret even when it looks encrypted already', () => {
+    const tricky = JSON.stringify({ clientId: 'app', clientSecret: 'enc:v1:not-really' });
+    const sealed = sealNewOidcConfig(tricky, SECRET);
+    expect(JSON.parse(sealed).clientSecret).not.toBe('enc:v1:not-really');
+    expect(openOidcConfig(sealed, SECRET)).toBe(tricky);
   });
 });

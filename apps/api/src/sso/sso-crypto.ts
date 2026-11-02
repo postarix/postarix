@@ -43,6 +43,11 @@ export function mapOidcConfigSecret(stored: string | null, transform: (secret: s
   return JSON.stringify({ ...config, clientSecret: transform(config.clientSecret) });
 }
 
+/** For a new provider: the secret is always encrypted, whatever it looks like. */
+export const sealNewOidcConfig = (stored: string, secret: string): string =>
+  mapOidcConfigSecret(stored, (value) => encryptClientSecret(value, secret))!;
+
+/** For rows saved before secrets were encrypted: encrypts what is not yet. */
 export const sealOidcConfig = (stored: string, secret: string): string =>
   mapOidcConfigSecret(stored, (value) => (isEncrypted(value) ? value : encryptClientSecret(value, secret)))!;
 

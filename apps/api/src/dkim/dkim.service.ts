@@ -57,6 +57,7 @@ export class DkimService implements OnApplicationBootstrap, OnApplicationShutdow
 
   /** Makes Rspamd sign mail for this (active) domain with its active key. */
   async publish(domain: { id: string; name: string }): Promise<void> {
+    await this.publisher.markHosted(domain.name);
     const key = await this.activeKey(domain.id);
     if (!key) {
       this.logger.warn(`Domain ${domain.name} has no active DKIM key; mail will not be signed`);
@@ -70,6 +71,7 @@ export class DkimService implements OnApplicationBootstrap, OnApplicationShutdow
   }
 
   async unpublish(domainName: string): Promise<void> {
+    await this.publisher.unmarkHosted(domainName);
     await this.publisher.unpublish(domainName);
   }
 
@@ -106,6 +108,11 @@ export class DkimService implements OnApplicationBootstrap, OnApplicationShutdow
       } catch (error) {
         this.logger.error(`Cannot publish the DKIM key of ${domain.name}: ${(error as Error).message}`);
       }
+    }
+    try {
+      await this.publisher.replaceHosted(active.map((d) => d.name));
+    } catch (error) {
+      this.logger.error(`Cannot publish the hosted domains: ${(error as Error).message}`);
     }
     try {
       const activeNames = new Set(active.map((d) => d.name));

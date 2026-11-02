@@ -17,6 +17,9 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # The images run as "node"; Kubernetes needs its numeric id to check it is not root.
+        runAsUser: 1000
+        runAsGroup: 1000
       containers:
         - name: api
           image: {{ include "postarix.image" (list . "api") }}
@@ -33,7 +36,7 @@ spec:
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
             - name: NODE_ENV
-              value: production
+              value: {{ .Values.api.nodeEnv | quote }}
             - name: DATABASE_URL
               value: "postgresql://postarix:$(POSTGRES_PASSWORD)@{{ include "postarix.postgresHost" . }}:5432/postarix"
             - name: VALKEY_URL
