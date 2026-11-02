@@ -12,7 +12,6 @@ they see real client IPs.
 | `/api/*` | `api:3000` | Postarix API (auth, admin operations). |
 | `/.well-known/caldav`, `/.well-known/carddav` | `cyrus:8080` | DAV discovery for calendar/contact clients. |
 | `/dav/*` | `cyrus:8080` | CalDAV / CardDAV. |
-| `/.well-known/jmap`, `/jmap/*` | `cyrus:8080` | JMAP for clients that speak it directly. |
 | `/.well-known/acme-challenge/*` | `certs:80` | Only with `CERTS_MODE=acme` and `ACME_CHALLENGE=http`. |
 | `/` | webmail | Arrives in Phase 3. |
 
@@ -24,7 +23,7 @@ otherwise it ignores the header and every request seems to come from the proxy.
 
 | Proxy | File | How to use |
 |---|---|---|
-| Caddy | [`caddy/Caddyfile`](caddy/Caddyfile) | Run Caddy on the `postarix_default` network; it obtains its own HTTPS certificate. |
+| Caddy | [`caddy/Caddyfile`](caddy/Caddyfile) | Run Caddy on the `postarix_proxy` network; it obtains its own HTTPS certificate. |
 | nginx | [`nginx/postarix.conf`](nginx/postarix.conf) | Include in `http {}`; adjust the certificate paths. |
 | Traefik | [`traefik/compose.traefik.yml`](traefik/compose.traefik.yml) | Extra compose file with labels for an existing Traefik. |
 | HAProxy | [`haproxy/haproxy.cfg`](haproxy/haproxy.cfg) | Standalone config; adjust the certificate path. |

@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import net from 'node:net';
+import tls from 'node:tls';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CyrusEngine } from './cyrus-engine.js';
 import { ImapConnection, quote } from './imap-connection.js';
@@ -83,6 +85,50 @@ describe('ImapConnection', () => {
   });
 });
 
+describe('ImapConnection TLS verification', () => {
+  // Test-only self-signed certificate for mail.example.test.
+  const cert = readFileSync(new URL('./fixtures/test-cert.pem', import.meta.url), 'utf8');
+  const key = readFileSync(new URL('./fixtures/test-key.pem', import.meta.url), 'utf8');
+  let server: tls.Server | undefined;
+  afterEach(async () => {
+    await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+    server = undefined;
+  });
+
+  async function tlsServer(): Promise<number> {
+    server = tls.createServer({ cert, key }, (socket) => {
+      socket.on('error', () => undefined);
+      socket.write('* OK fake IMAPS ready\r\n');
+    });
+    server.on('tlsClientError', () => undefined);
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    return (server.address() as net.AddressInfo).port;
+  }
+
+  it('rejects an untrusted certificate by default', async () => {
+    const port = await tlsServer();
+    await expect(
+      ImapConnection.connect({ host: '127.0.0.1', port, security: 'tls', servername: 'mail.example.test' }),
+    ).rejects.toThrow(/self[- ]signed|certificate/i);
+  });
+
+  it('accepts a pinned certificate for the expected name only', async () => {
+    const port = await tlsServer();
+    const imap = await ImapConnection.connect({
+      host: '127.0.0.1',
+      port,
+      security: 'tls',
+      servername: 'mail.example.test',
+      ca: () => cert,
+    });
+    imap.destroy();
+
+    await expect(
+      ImapConnection.connect({ host: '127.0.0.1', port, security: 'tls', servername: 'other.example', ca: () => cert }),
+    ).rejects.toThrow(/other\.example|altnames|Hostname/i);
+  });
+});
+
 describe('CyrusEngine', () => {
   let server: Awaited<ReturnType<typeof fakeServer>>;
   afterEach(async () => server?.close());
@@ -110,6 +156,16 @@ describe('CyrusEngine', () => {
       'SETQUOTA "user/alice@example.com" (STORAGE 1024)',
       'LOGOUT',
     ]);
+  });
+
+  it('removes a partly created mailbox when a later step fails', async () => {
+    server = await fakeServer((command, tag) =>
+      command.startsWith('CREATE "user/alice/Trash') ? `${tag} NO disk full` : `${tag} OK done`,
+    );
+    await expect(
+      engineFor(server.port).createMailbox('alice@example.com', { quotaBytes: null }),
+    ).rejects.toBeInstanceOf(MailEngineError);
+    expect(server.received).toContain('DELETE "user/alice@example.com"');
   });
 
   it('skips SETQUOTA for unlimited mailboxes', async () => {

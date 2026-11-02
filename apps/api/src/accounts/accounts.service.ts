@@ -28,7 +28,7 @@ export class AccountsService {
       .from(user)
       .where(eq(user.email, input.email))
       .limit(1);
-    if (existing) throw new ConflictException('An account with this address already exists');
+    if (existing) throw new ConflictException('This address is already in use');
 
     const { user: created } = await this.auth.api.createUser({
       body: { email: input.email, password: input.password, name: input.name, role: 'user' },

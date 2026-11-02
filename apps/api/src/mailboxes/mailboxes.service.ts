@@ -88,7 +88,7 @@ export class MailboxesService {
         quotaBytes: input.quotaBytes,
       });
     } catch (error) {
-      await this.accounts.delete(userId);
+      await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
       if (isUniqueViolation(error)) throw new ConflictException('This address is already in use');
       throw error;
     }
@@ -96,8 +96,16 @@ export class MailboxesService {
     try {
       await this.engine.createMailbox(address, { quotaBytes: input.quotaBytes });
     } catch (error) {
-      await this.repository.delete(ctx, row.id);
-      await this.accounts.delete(userId);
+      // The engine removes a mailbox it created only partly; undo our side.
+      await this.undo(`mailbox row of ${address}`, () => this.repository.delete(ctx, row.id));
+      await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
+      if (error instanceof MailEngineError && error.code === 'already_exists') {
+        this.logger.error(`The mail server already has a mailbox for ${address} with no matching record`);
+        throw new ConflictException({
+          message: 'The mail server already has a mailbox for this address. An instance administrator must remove it.',
+          code: 'ENGINE_MAILBOX_EXISTS',
+        });
+      }
       throw engineErrorToHttp(error);
     }
 
@@ -167,9 +175,20 @@ export class MailboxesService {
       }
       this.logger.warn(`Mailbox ${mailbox.address} was missing on the mail server during deletion`);
     }
-    await this.repository.delete(ctx, id);
+    // The account goes before the row: if a step fails, the row is still there
+    // (and visible) so the deletion can simply be retried.
     if (mailbox.userId) await this.accounts.delete(mailbox.userId);
+    await this.repository.delete(ctx, id);
     await this.audit.record(ctx, 'mailbox.deleted', { type: 'mailbox', id: mailbox.id, label: mailbox.address });
+  }
+
+  /** Runs one rollback step; a failure is logged so the remaining steps still run. */
+  private async undo(what: string, step: () => Promise<unknown>): Promise<void> {
+    try {
+      await step();
+    } catch (error) {
+      this.logger.error(`Rollback failed for ${what}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private async require(ctx: TenantContext, id: string): Promise<MailboxRow> {

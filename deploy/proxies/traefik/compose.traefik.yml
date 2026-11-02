@@ -20,7 +20,7 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: traefik
-      traefik.http.routers.postarix-dav.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/.well-known/caldav`) || Path(`/.well-known/carddav`) || Path(`/.well-known/jmap`) || PathPrefix(`/dav/`) || PathPrefix(`/jmap/`))
+      traefik.http.routers.postarix-dav.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/.well-known/caldav`) || Path(`/.well-known/carddav`) || PathPrefix(`/dav/`))
       traefik.http.routers.postarix-dav.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-dav.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       traefik.http.services.postarix-dav.loadbalancer.server.port: "8080"

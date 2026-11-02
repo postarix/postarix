@@ -2,6 +2,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
@@ -18,6 +19,8 @@ import { DomainsRepository } from './domains.repository.js';
 
 @Injectable()
 export class DomainsService {
+  private readonly logger = new Logger(DomainsService.name);
+
   constructor(
     @Inject(DomainsRepository) private readonly repository: DomainsRepository,
     @Inject(DNS_RESOLVER) private readonly dns: DnsResolver,
@@ -101,6 +104,11 @@ export class DomainsService {
   async verify(ctx: TenantContext, id: string): Promise<DomainDto> {
     const domain = await this.repository.findById(ctx, id);
     if (!domain) throw new NotFoundException('Domain not found');
+    if (domain.status === 'active') {
+      // Verifying again re-publishes the signing key, in case that failed before.
+      await this.dkim.publish(domain);
+      return toDomainDto(domain);
+    }
     if (domain.status !== 'pending') return toDomainDto(domain);
 
     if (this.env.DOMAIN_VERIFICATION === 'dns') {
@@ -117,7 +125,12 @@ export class DomainsService {
     try {
       const row = await this.repository.activate(ctx, id);
       if (!row) throw new NotFoundException('Domain not found');
-      await this.dkim.publish(row);
+      try {
+        await this.dkim.publish(row);
+      } catch (error) {
+        // The domain is verified either way; the periodic sync publishes the key.
+        this.logger.error(`Cannot publish the DKIM key of ${row.name}: ${(error as Error).message}`);
+      }
       await this.audit.record(ctx, 'domain.verified', { type: 'domain', id: row.id, label: row.name });
       return toDomainDto(row);
     } catch (error) {
