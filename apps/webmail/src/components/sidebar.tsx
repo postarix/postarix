@@ -1,8 +1,9 @@
 import type { Mailbox } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
 import { cn } from '@postarix/ui/lib/utils';
-import { Archive, File, Folder, Inbox, PenLine, Send, ShieldAlert, Trash2 } from 'lucide-react';
-import { mailboxPath } from '@/lib/router';
+import { Archive, File, Folder, Inbox, PenLine, Send, ShieldAlert, Tag, Trash2, X } from 'lucide-react';
+import type { Label } from '@/lib/mail';
+import { labelPath, mailboxPath } from '@/lib/router';
 
 const ICONS = { inbox: Inbox, drafts: File, sent: Send, archive: Archive, junk: ShieldAlert, trash: Trash2 } as const;
 
@@ -11,11 +12,17 @@ export function Sidebar({
   mailboxes,
   loading,
   currentId,
+  labels = [],
+  currentLabel = null,
+  onDeleteLabel,
   onCompose,
 }: {
   mailboxes: Mailbox[];
   loading: boolean;
   currentId: string | null;
+  labels?: Label[];
+  currentLabel?: string | null;
+  onDeleteLabel?: (label: Label) => void;
   onCompose: () => void;
 }) {
   return (
@@ -70,6 +77,43 @@ export function Sidebar({
             })}
           </ul>
         )}
+        {labels.length ? (
+          <>
+            <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">Labels</p>
+            <ul className="space-y-0.5" aria-label="Labels">
+              {labels.map((label) => {
+                const active = label.keyword === currentLabel;
+                return (
+                  <li key={label.id} className="group/label relative">
+                    <a
+                      data-nav
+                      href={labelPath(label.keyword)}
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'group flex h-8 items-center gap-2.5 rounded-md px-2.5 pr-8 text-sm transition-colors',
+                        'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
+                        active ? 'bg-sidebar-accent font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07),0_1px_2px_rgb(0_0_0/0.35)]' : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
+                      )}
+                    >
+                      <Tag className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted group-hover:text-sidebar-foreground')} aria-hidden />
+                      <span className="flex-1 truncate">{label.name}</span>
+                    </a>
+                    {onDeleteLabel ? (
+                      <button
+                        type="button"
+                        aria-label={`Remove label ${label.name}`}
+                        onClick={() => onDeleteLabel(label)}
+                        className="absolute top-1/2 right-1.5 grid size-6 -translate-y-1/2 place-items-center rounded text-sidebar-muted opacity-0 group-hover/label:opacity-100 hover:bg-sidebar-accent hover:text-white focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+                      >
+                        <X className="size-3.5" aria-hidden />
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        ) : null}
       </nav>
     </div>
   );

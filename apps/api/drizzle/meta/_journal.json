@@ -71,6 +71,13 @@
       "when": 1793617512218,
       "tag": "0009_sieve_srs",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793629763029,
+      "tag": "0010_glossy_winter_soldier",
+      "breakpoints": true
     }
   ]
 }

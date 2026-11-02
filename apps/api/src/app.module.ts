@@ -6,6 +6,7 @@ import { AliasesModule } from './aliases/aliases.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AppPasswordsModule } from './app-passwords/app-passwords.module.js';
 import { MailSettingsModule } from './mail-settings/mail-settings.module.js';
+import { LabelsModule } from './labels/labels.module.js';
 import { DomainsModule } from './domains/domains.module.js';
 import { DeprovisioningModule } from './deprovisioning/deprovisioning.module.js';
 import { DiscoveryModule } from './discovery/discovery.module.js';
@@ -28,6 +29,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     AliasesModule,
     AppPasswordsModule,
     MailSettingsModule,
+    LabelsModule,
     MailAuthModule,
     JmapModule,
     MailModule,

@@ -134,3 +134,22 @@ export const auditEvents = pgTable(
 );
 
 export type AuditEventRow = typeof auditEvents.$inferSelect;
+
+/**
+ * A person's mail labels. Applied to messages as JMAP keywords (IMAP flags),
+ * so they live on the messages themselves; this table only names them.
+ */
+export const mailLabels = pgTable(
+  'mail_labels',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    /** The keyword set on labelled messages ("label-" + a slug of the name). */
+    keyword: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('mail_labels_user_keyword_unique').on(table.userId, table.keyword)],
+);

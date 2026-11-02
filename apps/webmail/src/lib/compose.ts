@@ -17,14 +17,17 @@ export interface DraftInput {
   cc: EmailAddress[];
   bcc: EmailAddress[];
   subject: string;
+  /** Plain-text body (always sent, for clients that do not show HTML). */
   text: string;
+  /** Formatted body (sanitized HTML), or '' for a plain-text message. */
+  html: string;
   attachments: Attachment[];
   inReplyTo: string[];
   references: string[];
 }
 
 export function emptyDraft(from: string): DraftInput {
-  return { from, to: [], cc: [], bcc: [], subject: '', text: '', attachments: [], inReplyTo: [], references: [] };
+  return { from, to: [], cc: [], bcc: [], subject: '', text: '', html: '', attachments: [], inReplyTo: [], references: [] };
 }
 
 function prefixed(subject: string, prefix: 'Re' | 'Fwd'): string {
@@ -39,6 +42,24 @@ function quote(message: RenderedMessage): string {
   return `\n\nOn ${longDate(when)}, ${who} wrote:\n${body}`;
 }
 
+export function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Plain text as HTML paragraphs (line breaks kept). */
+export function textToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function quoteHtml(message: RenderedMessage): string {
+  const who = escapeHtml(displayName(message.from[0]) || 'someone');
+  const when = escapeHtml(longDate(message.sentAt ?? message.receivedAt));
+  return `<p><br></p><p>On ${when}, ${who} wrote:</p><blockquote>${textToHtml(message.text)}</blockquote>`;
+}
+
 /** A reply (or reply to all) to `message`, sent from `from`. */
 export function replyDraft(message: RenderedMessage, from: string, all: boolean, own: string[]): DraftInput {
   const mine = new Set(own.map((a) => a.toLowerCase()));
@@ -51,6 +72,7 @@ export function replyDraft(message: RenderedMessage, from: string, all: boolean,
     cc,
     subject: prefixed(message.subject, 'Re'),
     text: quote(message),
+    html: quoteHtml(message),
     inReplyTo: message.messageId,
     references: [...message.references, ...message.messageId],
   };
@@ -68,9 +90,15 @@ export function forwardDraft(message: RenderedMessage, from: string): DraftInput
     ...emptyDraft(from),
     subject: prefixed(message.subject, 'Fwd'),
     text: `\n\n${header}\n\n${message.text}`,
+    html: `<p><br></p>${textToHtml(header)}${textToHtml(message.text)}`,
     attachments: message.attachments,
     references: [...message.references, ...message.messageId],
   };
+}
+
+/** A complete HTML document for the formatted body, with readable defaults. */
+function wrapHtml(fragment: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.5">${fragment}</body></html>`;
 }
 
 async function mailboxIdByRole(role: string): Promise<string> {
@@ -101,8 +129,16 @@ export async function saveDraft(input: DraftInput, replaces?: string | null): Pr
           subject: input.subject,
           ...(input.inReplyTo.length ? { inReplyTo: input.inReplyTo } : {}),
           ...(input.references.length ? { references: input.references } : {}),
-          bodyValues: { body: { value: input.text } },
-          textBody: [{ partId: 'body', type: 'text/plain' }],
+          ...(input.html
+            ? {
+                bodyValues: { text: { value: input.text }, html: { value: wrapHtml(input.html) } },
+                textBody: [{ partId: 'text', type: 'text/plain' }],
+                htmlBody: [{ partId: 'html', type: 'text/html' }],
+              }
+            : {
+                bodyValues: { body: { value: input.text } },
+                textBody: [{ partId: 'body', type: 'text/plain' }],
+              }),
           attachments: input.attachments.map((a) => ({ blobId: a.blobId, type: a.type, name: a.name, disposition: 'attachment' })),
         },
       },

@@ -1,7 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
+export interface MailFilter {
+  field: 'from' | 'to' | 'subject';
+  contains: string;
+  action: 'move' | 'markRead' | 'label' | 'delete';
+  folder?: string;
+  keyword?: string;
+}
+
 export interface MailSettings {
+  filters: MailFilter[];
   vacation: { enabled: boolean; subject: string; message: string; until: string | null };
   forwarding: { enabled: boolean; address: string; keepCopy: boolean };
 }

@@ -3,16 +3,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@postarix/ui/components/input';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Spinner } from '@postarix/ui/components/spinner';
-import { Textarea } from '@postarix/ui/components/textarea';
 import { useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/api';
-import { type Attachment, type DraftInput, saveDraft, sendDraft } from '@/lib/compose';
+import { type Attachment, type DraftInput, saveDraft, sendDraft, textToHtml } from '@/lib/compose';
+import { htmlToText } from '@/lib/rich-text';
 import { addressList, formatBytes, parseAddresses } from '@/lib/format';
 import { jmap } from '@/lib/jmap';
 import { keys } from '@/lib/mail';
 import { RecipientInput } from './recipient-input';
+import { RichEditor, type RichEditorHandle } from './rich-editor';
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -40,7 +41,7 @@ export function Composer({
   const [bcc, setBcc] = useState(addressList(initial.bcc));
   const [showCopies, setShowCopies] = useState(initial.cc.length > 0 || initial.bcc.length > 0);
   const [subject, setSubject] = useState(initial.subject);
-  const [text, setText] = useState(initial.text);
+  const body = useRef<RichEditorHandle>(null);
   const [attachments, setAttachments] = useState<Attachment[]>(initial.attachments);
   const [uploading, setUploading] = useState(0);
   const [busy, setBusy] = useState<'send' | 'save' | null>(null);
@@ -53,6 +54,7 @@ export function Composer({
       setError(`Not an email address: ${invalid.join(', ')}`);
       return null;
     }
+    const html = body.current?.html() ?? '';
     return {
       ...initial,
       from,
@@ -60,7 +62,8 @@ export function Composer({
       cc: parsed.cc.addresses,
       bcc: parsed.bcc.addresses,
       subject,
-      text,
+      html,
+      text: htmlToText(html),
       attachments,
     };
   }
@@ -168,14 +171,7 @@ export function Composer({
             </label>
             <Input id={`${id}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} className={BARE} />
           </div>
-          <Textarea
-            aria-label="Message"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            autoFocus={Boolean(to)}
-            placeholder="Write your message…"
-            className={`${BARE} min-h-72 flex-1 resize-none px-5 py-4 text-[0.95rem] leading-relaxed`}
-          />
+          <RichEditor ref={body} initialHtml={initial.html || textToHtml(initial.text)} autoFocus={Boolean(to)} />
           {attachments.length || uploading ? (
             <ul className="flex flex-wrap gap-2 px-5 pb-3" aria-label="Attachments">
               {attachments.map((a) => (

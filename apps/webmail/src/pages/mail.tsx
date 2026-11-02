@@ -8,8 +8,8 @@ import { MessageView } from '@/components/message-view';
 import { Sidebar } from '@/components/sidebar';
 import { type DraftInput, emptyDraft, forwardDraft, replyDraft } from '@/lib/compose';
 import { jmap } from '@/lib/jmap';
-import { keys, useIdentities, useMailboxes } from '@/lib/mail';
-import { mailboxPath, navigate } from '@/lib/router';
+import { keys, useDeleteLabel, useIdentities, useLabels, useMailboxes } from '@/lib/mail';
+import { labelPath, mailboxPath, navigate } from '@/lib/router';
 import { cn } from '@postarix/ui/lib/utils';
 
 /** Refreshes lists when the server reports changes (JMAP push over server-sent events). */
@@ -79,36 +79,66 @@ export function MailPage({
   mailboxId,
   emailId,
   search,
+  label: labelKeyword = null,
   email,
   name,
 }: {
   mailboxId: string | null;
   emailId: string | null;
   search: string;
+  label?: string | null;
   email: string;
   name: string;
 }) {
   const mailboxes = useMailboxes();
+  const labels = useLabels();
+  const deleteLabel = useDeleteLabel();
   const composer = useComposer(email);
   usePush();
 
   const list = mailboxes.data ?? [];
   const inbox = list.find((m) => m.role === 'inbox');
-  const current = list.find((m) => m.id === mailboxId) ?? (mailboxId === null ? inbox : undefined);
+  const label = labelKeyword ? (labels.data ?? []).find((l) => l.keyword === labelKeyword) ?? null : null;
+  const current = label ? inbox : (list.find((m) => m.id === mailboxId) ?? (mailboxId === null ? inbox : undefined));
+  const exclude = list.filter((m) => m.role === 'trash' || m.role === 'junk').map((m) => m.id);
+  const listPath = (id: string | null) => (label ? labelPath(label.keyword, id, search) : mailboxPath(current?.id ?? '', id, search));
 
   useEffect(() => {
-    if (mailboxId === null && inbox) navigate(mailboxPath(inbox.id), true);
-  }, [mailboxId, inbox]);
+    if (mailboxId === null && !labelKeyword && inbox) navigate(mailboxPath(inbox.id), true);
+  }, [mailboxId, labelKeyword, inbox]);
 
   return (
     <AppShell
       email={email}
       name={name}
-      nav={<Sidebar mailboxes={list} loading={mailboxes.isLoading} currentId={current?.id ?? null} onCompose={() => composer.open(emptyDraft(composer.defaultFrom))} />}
+      nav={
+        <Sidebar
+          mailboxes={list}
+          loading={mailboxes.isLoading}
+          currentId={label ? null : (current?.id ?? null)}
+          labels={labels.data ?? []}
+          currentLabel={label?.keyword ?? null}
+          onDeleteLabel={(l) => {
+            if (window.confirm(`Remove the label “${l.name}”? Messages keep their folders.`)) {
+              deleteLabel.mutate(l.id);
+              if (l.keyword === label?.keyword && inbox) navigate(mailboxPath(inbox.id));
+            }
+          }}
+          onCompose={() => composer.open(emptyDraft(composer.defaultFrom))}
+        />
+      }
     >
       <div className="flex h-full min-h-0">
         <section className={cn('min-h-0 w-full border-r lg:w-[24rem] lg:shrink-0', emailId && 'max-lg:hidden')} aria-label="Message list">
-          <MessageList key={`${current?.id}:${search}`} mailbox={current} search={search} selectedId={emailId} />
+          <MessageList
+            key={`${label?.keyword ?? current?.id}:${search}`}
+            mailbox={label ? undefined : current}
+            label={label}
+            labels={labels.data ?? []}
+            exclude={exclude}
+            search={search}
+            selectedId={emailId}
+          />
         </section>
 
         <section className={cn('min-h-0 min-w-0 flex-1', !emailId && 'max-lg:hidden')} aria-label="Reading pane">
@@ -118,7 +148,10 @@ export function MailPage({
               emailId={emailId}
               mailbox={current}
               mailboxes={list}
+              labels={labels.data ?? []}
               search={search}
+              backPath={listPath(null)}
+              pathFor={(id) => listPath(id)}
               onReply={(message, all) => composer.open(replyDraft(message, composer.defaultFrom, all, composer.own))}
               onForward={(message) => composer.open(forwardDraft(message, composer.defaultFrom))}
             />

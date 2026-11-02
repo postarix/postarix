@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ApiClient, config, expectNoMessage, putSieveScript, smtp, unique, waitForMessage } from './support.js';
+import { ApiClient, config, expectNoMessage, imapLogin, putSieveScript, smtp, unique, waitForMessage } from './support.js';
 
 const PASSWORD = 'integration mailbox password';
 const SPAM_MARKER = 'POSTARIX-TEST-SPAM-MARKER';
@@ -155,6 +155,42 @@ describe('Mail Cyrus sends by itself', () => {
     // And read back as saved.
     const read = await user.ok<{ forwarding: { address: string } }>('GET', '/api/me/mail-settings');
     expect(read.forwarding.address).toBe(target.address);
+  });
+
+  it('applies filters from the webmail settings: move, label and mark as read', async () => {
+    const owner = await mailbox(orgId, domain.id, 'filtered');
+    const user = new ApiClient();
+    await user.signIn(owner.address, PASSWORD);
+    const label = await user.ok<{ keyword: string }>('POST', '/api/me/labels', { name: 'Invoices' });
+    await user.ok('PUT', '/api/me/mail-settings', {
+      filters: [
+        { field: 'from', contains: 'newsletter@', action: 'move', folder: 'Archive' },
+        { field: 'subject', contains: '[invoice]', action: 'label', keyword: label.keyword },
+        { field: 'subject', contains: '[invoice]', action: 'markRead' },
+      ],
+      vacation: { enabled: false, subject: 'Out of office', message: '', until: null },
+      forwarding: { enabled: false, address: '', keepCopy: true },
+    });
+    const news = unique('news');
+    await smtp(config.smtpPort).sendMail({ from: 'newsletter@shop.example', to: owner.address, subject: news, text: 'Deals' });
+    await waitForMessage(owner.address, PASSWORD, news, 45_000, 'Archive');
+
+    const invoice = `[invoice] ${unique('inv')}`;
+    await smtp(config.smtpPort).sendMail({ from: 'billing@vendor.example', to: owner.address, subject: invoice, text: 'Pay' });
+    await waitForMessage(owner.address, PASSWORD, invoice);
+    const client = await imapLogin(owner.address, PASSWORD);
+    try {
+      const lock = await client.getMailboxLock('INBOX');
+      try {
+        const [uid] = (await client.search({ subject: invoice }, { uid: true })) || [];
+        const message = await client.fetchOne(String(uid), { flags: true }, { uid: true });
+        expect(message && [...(message.flags ?? [])]).toEqual(expect.arrayContaining([label.keyword, '\\Seen']));
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
   });
 
   it('files spam sent to an alias in the Junk folder of its hosted destinations', async () => {
