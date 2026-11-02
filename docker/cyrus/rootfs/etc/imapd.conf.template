@@ -45,6 +45,16 @@ conversations: yes
 conversations_db: twoskip
 specialusealways: yes
 
+# Full-text search (IMAP SEARCH and JMAP Email/query) with Xapian. New mail is
+# indexed by the rolling squatter (cyrus.conf), fed through the sync log.
+search_engine: xapian
+search_index_headers: yes
+search_batchsize: 8192
+defaultsearchtier: t1
+t1searchpartition-default: /var/lib/cyrus/search
+sync_log: yes
+sync_log_channels: squatter
+
 # Quotas, Sieve
 quota_db: quotalegacy
 sieve_maxscriptsize: 64

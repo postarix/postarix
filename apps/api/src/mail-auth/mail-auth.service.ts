@@ -3,9 +3,11 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { AccountsService } from '../accounts/accounts.service.js';
 import { AppPasswordsService } from '../app-passwords/app-passwords.service.js';
-import { DATABASE } from '../core/tokens.js';
+import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import { type AppPasswordScope, domains, mailboxes } from '../db/schema/index.js';
+import { DATABASE, ENV } from '../core/tokens.js';
+import { looksLikeJmapToken, verifyJmapToken } from '../jmap/jmap-token.js';
 import { FailureLimiter } from './failure-limiter.js';
 
 /** Maps the SASL service name reported by Cyrus/Postfix to an app password scope. */
@@ -37,6 +39,7 @@ export class MailAuthService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(AppPasswordsService) private readonly appPasswords: AppPasswordsService,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   /**
@@ -54,6 +57,12 @@ export class MailAuthService {
 
     const account = await this.findAccount(username);
     if (!account) return false;
+
+    // The API's own short-lived token for Cyrus' JMAP service (the webmail),
+    // minted for a signed-in web session. HTTP only, never subject to lockout.
+    if (looksLikeJmapToken(attempt.password)) {
+      return scope === 'dav' && verifyJmapToken(this.env.AUTH_SECRET, username, attempt.password);
+    }
 
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;

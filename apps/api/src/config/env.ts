@@ -51,6 +51,10 @@ const envSchema = z
      * self-signed certificate; publicly trusted ones validate either way.
      */
     CYRUS_TLS_CA_FILE: z.string().optional(),
+    /** Cyrus' internal JMAP service (for the webmail), e.g. http://cyrus:8008. Unset disables the webmail API. */
+    CYRUS_JMAP_URL: z.url({ protocol: /^https?$/ }).optional(),
+    /** Largest attachment or message accepted through the webmail, in bytes (default 50 MiB, like Postfix). */
+    MAIL_UPLOAD_LIMIT: z.coerce.number().int().positive().default(50 * 1024 * 1024),
     CYRUS_ADMIN_USER: z.string().default('cyrus'),
     CYRUS_ADMIN_PASSWORD: z.string().optional(),
 

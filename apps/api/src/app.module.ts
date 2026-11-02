@@ -7,6 +7,7 @@ import { AuditModule } from './audit/audit.module.js';
 import { AppPasswordsModule } from './app-passwords/app-passwords.module.js';
 import { DomainsModule } from './domains/domains.module.js';
 import { HealthController } from './health/health.controller.js';
+import { JmapModule } from './jmap/jmap.module.js';
 import { MailAuthModule } from './mail-auth/mail-auth.module.js';
 import { MailboxesModule } from './mailboxes/mailboxes.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
@@ -21,6 +22,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     AliasesModule,
     AppPasswordsModule,
     MailAuthModule,
+    JmapModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

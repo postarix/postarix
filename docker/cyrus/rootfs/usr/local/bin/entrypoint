@@ -19,7 +19,12 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
   sed 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' /etc/imapd.conf
   echo "admins: cyrus"
 } > /etc/imapd-admin.conf
-chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf
+# The JMAP service: JMAP only, plain HTTP on the internal network. The API logs
+# in as the user with a short-lived token it mints itself (checked through
+# saslauthd like any other login).
+sed -e 's/^httpmodules:.*/httpmodules: jmap/' \
+    -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf > /etc/imapd-jmap.conf
+chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 
 # --- Login bridge to the API (read by pam_exec as root only) -----------------
 umask 077
@@ -61,7 +66,7 @@ install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /
 # Shared with Postfix (a volume): Postfix must be able to traverse it.
 install -d -o cyrus -g mail -m 0755 /run/cyrus/lmtp
 rm -f /run/cyrus/lmtp/lmtp
-install -d -o cyrus -g mail -m 0750 /var/lib/cyrus /var/spool/cyrus /var/spool/cyrus/mail /var/spool/sieve
+install -d -o cyrus -g mail -m 0750 /var/lib/cyrus /var/lib/cyrus/search /var/spool/cyrus /var/spool/cyrus/mail /var/spool/sieve
 /usr/lib/cyrus/bin/makedirs >/dev/null
 chown -R cyrus:mail /var/lib/cyrus /var/spool/cyrus /var/spool/sieve
 

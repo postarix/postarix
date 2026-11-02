@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { CyrusEngine, type MailEngine, MemoryMailEngine } from '@postarix/mail-engine';
 import type { Env } from '../config/env.js';
+import { mintJmapToken } from '../jmap/jmap-token.js';
 
 export function createMailEngine(env: Env): MailEngine {
   if (env.MAIL_ENGINE === 'memory') return new MemoryMailEngine();
@@ -12,6 +13,9 @@ export function createMailEngine(env: Env): MailEngine {
     rejectUnauthorized: env.CYRUS_TLS_VERIFY,
     ...(env.CYRUS_TLS_SERVERNAME ? { servername: env.CYRUS_TLS_SERVERNAME } : {}),
     ...(caFile ? { ca: () => readCa(caFile) } : {}),
+    ...(env.CYRUS_JMAP_URL
+      ? { jmap: { url: env.CYRUS_JMAP_URL, password: (address: string) => mintJmapToken(env.AUTH_SECRET, address) } }
+      : {}),
     adminUser: env.CYRUS_ADMIN_USER,
     // Presence is enforced by loadEnv when MAIL_ENGINE is "cyrus".
     adminPassword: env.CYRUS_ADMIN_PASSWORD ?? '',

@@ -18,6 +18,14 @@ export const config = {
 export class ApiClient {
   private cookies = new Map<string, string>();
 
+  /** A request whose response is not JSON (downloads). */
+  async raw(path: string): Promise<{ status: number; headers: Headers; text: string }> {
+    const headers: Record<string, string> = { origin: config.apiUrl };
+    if (this.cookies.size > 0) headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ');
+    const response = await fetch(`${config.apiUrl}${path}`, { headers });
+    return { status: response.status, headers: response.headers, text: await response.text() };
+  }
+
   async request<T = unknown>(method: string, path: string, body?: unknown): Promise<{ status: number; body: T }> {
     const headers: Record<string, string> = { origin: config.apiUrl };
     if (body !== undefined) headers['content-type'] = 'application/json';
@@ -47,7 +55,15 @@ export class ApiClient {
   }
 
   async signIn(email: string, password: string): Promise<void> {
-    await this.ok('POST', '/api/auth/sign-in/email', { email, password });
+    // The API limits sign-ins (3 per 10 s per client, as in production); wait it out.
+    for (let attempt = 0; ; attempt++) {
+      const { status, body } = await this.request('POST', '/api/auth/sign-in/email', { email, password });
+      if (status === 200) return;
+      if (status !== 429 || attempt >= 5) {
+        throw new Error(`sign-in as ${email} → ${status}: ${JSON.stringify(body)}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 4_000));
+    }
   }
 }
 

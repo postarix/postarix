@@ -15,6 +15,23 @@ export interface CreateMailboxOptions {
   quotaBytes: number | null;
 }
 
+/** An HTTP request to the engine's JMAP endpoint (RFC 8620), made on behalf of a mailbox owner. */
+export interface JmapRequest {
+  method: 'GET' | 'POST';
+  /**
+   * Path below the JMAP root, without a leading slash: "" for the session
+   * resource and the API, "upload/<accountId>/", "download/…", "eventsource/".
+   */
+  path: string;
+  /** Raw query string, without the leading "?". */
+  query: string;
+  contentType?: string | undefined;
+  accept?: string | undefined;
+  lastEventId?: string | undefined;
+  body?: ReadableStream<Uint8Array> | Uint8Array | undefined;
+  signal?: AbortSignal | undefined;
+}
+
 /**
  * Operations Postarix needs from the mailbox store. The API depends only on
  * this interface, so the engine (Cyrus today) can be swapped without changes.
@@ -27,6 +44,11 @@ export interface MailEngine {
   renameMailbox(from: string, to: string): Promise<void>;
   setQuota(address: string, quotaBytes: number | null): Promise<void>;
   getUsage(address: string): Promise<MailboxUsage>;
+  /**
+   * Performs a JMAP request as the owner of `address`. URLs inside responses
+   * (the session resource) are the engine's own; callers rewrite them.
+   */
+  jmap(address: string, request: JmapRequest): Promise<Response>;
   health(): Promise<EngineHealth>;
   close(): Promise<void>;
 }

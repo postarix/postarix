@@ -6,6 +6,7 @@ import {
   quote,
 } from './imap-connection.js';
 import {
+  type JmapRequest,
   type CreateMailboxOptions,
   type EngineHealth,
   type MailboxUsage,
@@ -16,6 +17,12 @@ import {
 export interface CyrusEngineOptions extends ImapConnectOptions {
   adminUser: string;
   adminPassword: string;
+  /**
+   * Cyrus' internal JMAP service. Requests log in as the mailbox owner, with
+   * a password the caller provides (Postarix mints short-lived tokens that its
+   * login bridge accepts).
+   */
+  jmap?: { url: string; password: (address: string) => string } | undefined;
 }
 
 const ADDRESS = /^[a-z0-9._+-]+@[a-z0-9.-]+$/;
@@ -122,6 +129,35 @@ export class CyrusEngine implements MailEngine {
     });
   }
 
+  async jmap(address: string, request: JmapRequest): Promise<Response> {
+    const jmap = this.options.jmap;
+    if (!jmap) throw new MailEngineError('JMAP is not configured', 'unavailable');
+    CyrusEngine.mailboxName(address); // validates the address
+    const url = jmapUrl(jmap.url, request.path, request.query);
+
+    const headers = new Headers({
+      authorization: `Basic ${Buffer.from(`${address}:${jmap.password(address)}`).toString('base64')}`,
+      // Internal hop: compression only costs CPU, and the response is streamed on.
+      'accept-encoding': 'identity',
+    });
+    if (request.contentType) headers.set('content-type', request.contentType);
+    if (request.accept) headers.set('accept', request.accept);
+    if (request.lastEventId) headers.set('last-event-id', request.lastEventId);
+
+    try {
+      return await fetch(url, {
+        method: request.method,
+        headers,
+        redirect: 'manual',
+        ...(request.body ? { body: request.body, duplex: 'half' } : {}),
+        ...(request.signal ? { signal: request.signal } : {}),
+      } as RequestInit);
+    } catch (error) {
+      if (request.signal?.aborted) throw error;
+      throw new MailEngineError('Cannot reach the Cyrus JMAP service', 'unavailable', { cause: error });
+    }
+  }
+
   async health(): Promise<EngineHealth> {
     try {
       await this.withAdmin((imap) => imap.expectOk('NOOP'));
@@ -132,6 +168,35 @@ export class CyrusEngine implements MailEngine {
   }
 
   async close(): Promise<void> {}
+}
+
+/**
+ * Builds the URL of a JMAP resource below "<base>/jmap/", refusing anything
+ * that could climb out of it (dot segments, also percent-encoded).
+ */
+export function jmapUrl(base: string, path: string, query: string): URL {
+  const hasControlOrSpace = [...path].some((char) => char.charCodeAt(0) <= 0x20 || char.charCodeAt(0) === 0x7f);
+  if (path.startsWith('/') || path.includes('\\') || path.includes('?') || path.includes('#') || hasControlOrSpace) {
+    throw new MailEngineError('Invalid JMAP path', 'rejected');
+  }
+  for (const segment of path.split('/')) {
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      throw new MailEngineError('Invalid JMAP path', 'rejected');
+    }
+    if (decoded === '.' || decoded === '..' || decoded.includes('/')) {
+      throw new MailEngineError('Invalid JMAP path', 'rejected');
+    }
+  }
+  const root = new URL('/jmap/', base);
+  const url = new URL(path, root);
+  if (url.origin !== root.origin || !url.pathname.startsWith(root.pathname)) {
+    throw new MailEngineError('Invalid JMAP path', 'rejected');
+  }
+  url.search = query;
+  return url;
 }
 
 function storage(quotaBytes: number): string {
