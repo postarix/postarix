@@ -31,3 +31,5 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 docker/compose/external-certs/
+# Test-only certificate (mail.example.test) used by the TLS verification tests.
+!packages/mail-engine/src/fixtures/*.pem

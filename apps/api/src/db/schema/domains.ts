@@ -21,7 +21,7 @@ export const domains = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     organizationId: text()
       .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+      .references(() => organization.id, { onDelete: 'restrict' }),
     name: text().notNull(),
     status: text({ enum: domainStatuses }).notNull().default('pending'),
     verificationToken: text()

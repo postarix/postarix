@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSuperAdmin } from '../src/auth/create-super-admin.js';
 import { DATABASE } from '../src/core/tokens.js';
 import type { Database } from '../src/db/client.js';
-import { session, user } from '../src/db/schema/index.js';
+import { organization, session, user } from '../src/db/schema/index.js';
 import { authOf, newAgent, PASSWORD, signIn, startApp } from './helpers.js';
 
 // Runs the app with production defaults: no public sign-up and only
@@ -59,6 +59,16 @@ describe('secure defaults', () => {
       .post('/api/auth/organization/create')
       .send({ name: 'Yes', slug: `yes-${Date.now()}` });
     expect(allowed.status).toBe(200);
+
+    // Deleting through Better Auth would orphan mailboxes, accounts and DKIM keys.
+    const deleted = await admin.post('/api/auth/organization/delete').send({ organizationId: allowed.body.id });
+    expect(deleted.status).toBeGreaterThanOrEqual(400);
+    const still = await app
+      .get<Database>(DATABASE)
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, allowed.body.id));
+    expect(still).toHaveLength(1);
   });
 
   it('ignores a client-supplied IP header', async () => {

@@ -9,7 +9,9 @@ export POSTFIX_DB_NAME="${POSTFIX_DB_NAME:-postarix}"
 export POSTFIX_DB_USER="${POSTFIX_DB_USER:-postarix_mail}"
 export POSTFIX_DB_PASSWORD
 RSPAMD_MILTER="${RSPAMD_MILTER:-inet:rspamd:11332}"
-CYRUS_LMTP="${CYRUS_LMTP:-inet:cyrus:24}"
+# LMTP to Cyrus over a Unix socket on a volume shared with the cyrus container:
+# unlike a TCP port, it cannot be reached from the network (LMTP is pre-authenticated).
+CYRUS_LMTP="${CYRUS_LMTP:-unix:/run/cyrus-lmtp/lmtp}"
 MESSAGE_SIZE_LIMIT="${MESSAGE_SIZE_LIMIT:-52428800}"
 CERT_DIR="${CERT_DIR:-/certs}"
 
@@ -109,6 +111,10 @@ postconf -e \
   "milter_default_action = tempfail" \
   "milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}"
 
+# Submission: the null sender (bounces) is never legitimate from a client, and
+# the envelope sender must be one the logged-in user owns.
+postconf "postarix_submission_sender_restrictions = check_sender_access inline:{ { <> = REJECT Null sender is not allowed on submission } }, reject_sender_login_mismatch"
+
 # --- master.cf: submission (587, STARTTLS) and submissions (465, implicit TLS) --
 for service in submission smtps; do
   postconf -M "$service/inet=$service inet n - n - - smtpd"
@@ -117,7 +123,7 @@ for service in submission smtps; do
     "$service/inet/smtpd_sasl_auth_enable=yes" \
     "$service/inet/smtpd_tls_auth_only=yes" \
     "$service/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
-    "$service/inet/smtpd_sender_restrictions=reject_sender_login_mismatch" \
+    "$service/inet/smtpd_sender_restrictions=\$postarix_submission_sender_restrictions" \
     "$service/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
     "$service/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "$service/inet/milter_macro_daemon_name=ORIGINATING"

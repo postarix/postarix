@@ -15,14 +15,19 @@ lmtp_downcase_rcpt: yes
 hashimapspool: true
 umask: 077
 
-# Authentication: the sasldb holds only the internal admin account; every
-# mailbox login goes through saslauthd to the Postarix API.
-sasl_pwcheck_method: auxprop saslauthd
+# Authentication: every mailbox login goes through saslauthd to the Postarix
+# API. The internal admin account (sasldb) can only log in on the admin
+# service, whose configuration (imapd-admin.conf) switches to auxprop.
+sasl_pwcheck_method: saslauthd
 sasl_auxprop_plugin: sasldb
 sasl_mech_list: PLAIN LOGIN
 sasl_saslauthd_path: /run/saslauthd/mux
 allowplaintext: no
 allowanonymouslogin: no
+# The HTTP service speaks plain HTTP on the internal network: TLS ends at the
+# reverse proxy. Without this, Cyrus redirects every request to https and
+# clients behind the proxy loop forever.
+http_allowplaintext: yes
 
 # TLS. Cyrus 3.10+ only offers STARTTLS when allowed explicitly.
 allowstarttls: yes
@@ -32,8 +37,10 @@ tls_client_ca_dir: /etc/ssl/certs
 tls_versions: tls1_2 tls1_3
 tls_session_timeout: 1440
 
-# Modern protocols. JMAP needs the conversations database.
-httpmodules: caldav carddav jmap
+# Calendars and contacts. JMAP (for the webmail) is not exposed here: a
+# DAV-scoped app password must not give access to mail. The conversations
+# database is kept enabled for the JMAP service added with the webmail.
+httpmodules: caldav carddav
 conversations: yes
 conversations_db: twoskip
 specialusealways: yes

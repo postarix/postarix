@@ -164,6 +164,30 @@ describe('Mail flow through the full stack', () => {
       ).rejects.toThrow(/not owned by user|553|Sender address rejected/i);
     });
 
+    it('refuses a From header the user does not own', async () => {
+      await expect(
+        smtp(config.submissionPort, { user: alice.address, pass: PASSWORD }).sendMail({
+          envelope: { from: alice.address, to: [bob.address] },
+          from: bob.address,
+          to: bob.address,
+          subject: 'header spoof',
+          text: 'Should be refused.',
+        }),
+      ).rejects.toThrow(/From header must match|5\d\d/i);
+    });
+
+    it('refuses the null envelope sender on submission', async () => {
+      await expect(
+        smtp(config.submissionPort, { user: alice.address, pass: PASSWORD }).sendMail({
+          envelope: { from: '', to: [bob.address] },
+          from: alice.address,
+          to: bob.address,
+          subject: 'null sender',
+          text: 'Should be refused.',
+        }),
+      ).rejects.toThrow(/Null sender|5\d\d/i);
+    });
+
     it('lets a mailbox send as an alias that delivers to it', async () => {
       const subject = unique('send-as-alias');
       await smtp(config.submissionPort, { user: bob.address, pass: PASSWORD }).sendMail({
