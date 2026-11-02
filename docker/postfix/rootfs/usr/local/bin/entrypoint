@@ -128,6 +128,37 @@ for service in submission smtps; do
     "$service/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
     "$service/inet/milter_macro_daemon_name=ORIGINATING"
 done
+# --- master.cf: internal submission (10587) for the Postarix API ----------------
+# Webmail sending. Not published and not on the proxy network; the API logs in
+# with its own account and has already checked that the user owns the From
+# address (Rspamd then requires From = envelope sender, as on 587). Plain text
+# on the internal network; containers cannot sniff it (no NET_RAW).
+if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
+  rm -f /etc/postfix/sasl/sasldb2
+  printf '%s' "$INTERNAL_API_TOKEN" | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-api
+  chown root:postfix /etc/postfix/sasl/sasldb2
+  chmod 0640 /etc/postfix/sasl/sasldb2
+  postconf -M "10587/inet=10587 inet n - n - - smtpd"
+  postconf -P \
+    "10587/inet/syslog_name=postfix/api-submit" \
+    "10587/inet/smtpd_sasl_auth_enable=yes" \
+    "10587/inet/smtpd_sasl_path=postarix-api" \
+    "10587/inet/smtpd_sasl_local_domain=$MAIL_HOSTNAME" \
+    "10587/inet/smtpd_tls_security_level=none" \
+    "10587/inet/smtpd_tls_auth_only=no" \
+    "10587/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
+    "10587/inet/smtpd_sender_restrictions=" \
+    "10587/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
+    "10587/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
+    "10587/inet/smtpd_client_message_rate_limit=0" \
+    "10587/inet/smtpd_client_connection_count_limit=0" \
+    "10587/inet/milter_macro_daemon_name=ORIGINATING"
+  unset INTERNAL_API_TOKEN
+else
+  postconf -MX "10587/inet" 2>/dev/null || true
+  log "INTERNAL_API_TOKEN not set: webmail sending (port 10587) is disabled"
+fi
+
 postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
 postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
 

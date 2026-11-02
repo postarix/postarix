@@ -41,6 +41,7 @@ describe('Webmail access to mail (JMAP through the API)', () => {
   const admin = new ApiClient();
   let ann: Webmail;
   let ben: Webmail;
+  let cat: string;
 
   beforeAll(async () => {
     await admin.signIn(config.adminEmail, config.adminPassword);
@@ -62,6 +63,7 @@ describe('Webmail access to mail (JMAP through the API)', () => {
       ).address;
     ann = new Webmail(await create('ann'));
     ben = new Webmail(await create('ben'));
+    cat = await create('cat');
     await ann.open();
     await ben.open();
   });
@@ -115,5 +117,63 @@ describe('Webmail access to mail (JMAP through the API)', () => {
     const [[name, result]] = (await ben.call([['Mailbox/get', { accountId: ann.accountId }, 'm']])) as [MethodResponse];
     expect(name).toBe('error');
     expect(String(result.type)).toMatch(/accountNotFound|forbidden|accountNotSupportedByMethod/);
+  });
+
+  async function draft(from: string, subject: string): Promise<string> {
+    const [[, drafts]] = (await ann.call([['Mailbox/query', { accountId: ann.accountId, filter: { role: 'drafts' } }, 'd']])) as [
+      MethodResponse,
+    ];
+    const draftsId = (drafts.ids as string[])[0]!;
+    const [[, created]] = (await ann.call([
+      [
+        'Email/set',
+        {
+          accountId: ann.accountId,
+          create: {
+            k1: {
+              mailboxIds: { [draftsId]: true },
+              keywords: { $draft: true, $seen: true },
+              from: [{ email: from }],
+              to: [{ email: ben.address }],
+              bcc: [{ email: cat }],
+              subject,
+              bodyValues: { b: { value: 'Sent from the webmail.' } },
+              textBody: [{ partId: 'b', type: 'text/plain' }],
+            },
+          },
+        },
+        's',
+      ],
+    ])) as [MethodResponse];
+    return (created.created as Record<string, { id: string }>).k1!.id;
+  }
+
+  it('sends a draft: signed, without its Bcc header, delivered to Bcc too, then filed in Sent', async () => {
+    const subject = unique('webmail-send');
+    const id = await draft(ann.address, subject);
+    const result = await ann.api.ok<{ sent: boolean; movedToSent: boolean }>('POST', '/api/mail/send', { emailId: id });
+    expect(result).toEqual({ sent: true, movedToSent: true });
+
+    const received = await waitForMessage(ben.address, PASSWORD, subject);
+    expect(received).toMatch(/^DKIM-Signature:/im);
+    expect(received).toMatch(/^DKIM-Signature:[\s\S]*?\bd=wm-/im);
+    expect(received).not.toMatch(/^Bcc:/im);
+    expect(received).not.toContain(cat);
+    await waitForMessage(cat, PASSWORD, subject);
+
+    const [[, mailboxes], [, email]] = await ann.call([
+      ['Mailbox/query', { accountId: ann.accountId, filter: { role: 'sent' } }, 'm'],
+      ['Email/get', { accountId: ann.accountId, ids: [id], properties: ['mailboxIds', 'keywords'] }, 'e'],
+    ]);
+    const sentId = (mailboxes.ids as string[])[0]!;
+    const sent = (email.list as { mailboxIds: Record<string, boolean>; keywords: Record<string, boolean> }[])[0]!;
+    expect(Object.keys(sent.mailboxIds)).toEqual([sentId]);
+    expect(sent.keywords.$draft).toBeUndefined();
+  });
+
+  it('refuses to send as an address the user does not own', async () => {
+    const id = await draft(ben.address, unique('webmail-spoof'));
+    const res = await ann.api.request('POST', '/api/mail/send', { emailId: id });
+    expect(res.status).toBe(403);
   });
 });

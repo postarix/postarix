@@ -217,6 +217,8 @@ services:
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       POSTFIX_DB_PASSWORD: ${POSTFIX_DB_PASSWORD}
       MESSAGE_SIZE_LIMIT: ${MESSAGE_SIZE_LIMIT:-52428800}
+      # Password of the API's account on the internal submission port (10587).
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
     ports:
       - "${SMTP_PORT:-25}:25"
       - "${SUBMISSIONS_PORT:-465}:465"
