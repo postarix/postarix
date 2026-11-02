@@ -1,18 +1,18 @@
-# Política de seguridad
+# Security policy
 
-## Reportar una vulnerabilidad
+## Reporting a vulnerability
 
-Por favor **no abras un issue público** para reportar vulnerabilidades.
+Please **do not open a public issue** to report a vulnerability.
 
-Usa la función **"Report a vulnerability"** de la pestaña *Security* de este repositorio (GitHub Private Vulnerability Reporting). Incluye:
+Use the **"Report a vulnerability"** button in this repository's *Security* tab (GitHub Private Vulnerability Reporting). Include:
 
-- Descripción del problema y su impacto.
-- Pasos para reproducirlo.
-- Versión o commit afectado.
-- Si la tienes, una propuesta de solución.
+- A description of the problem and its impact.
+- Steps to reproduce it.
+- The affected version or commit.
+- A proposed fix, if you have one.
 
-Nos comprometemos a confirmar la recepción en un máximo de 72 horas y a mantenerte informado mientras trabajamos en la corrección. Cuando se publique el arreglo, te daremos crédito si así lo deseas.
+We will acknowledge your report within 72 hours and keep you informed while we work on a fix. When the fix is released, we will credit you if you wish.
 
-## Versiones soportadas
+## Supported versions
 
-Postarix está en desarrollo temprano. Hasta la versión 1.0, solo la rama `main` recibe correcciones de seguridad.
+Postarix is in early development. Until 1.0, only the `main` branch receives security fixes.

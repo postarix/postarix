@@ -1,5 +1,5 @@
-# Imagen de Unbound
+# Unbound image
 
-Resolvedor DNS propio con validación DNSSEC, necesario para listas negras y DANE.
+Local DNSSEC-validating resolver, required for blocklists and DANE.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

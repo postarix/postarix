@@ -1,5 +1,5 @@
-# Imagen de Postfix
+# Postfix image
 
-Dockerfile y plantillas de configuración de Postfix. Lee dominios, buzones y alias de PostgreSQL.
+Dockerfile and configuration templates for Postfix. Reads domains, mailboxes and aliases from PostgreSQL.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

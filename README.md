@@ -1,86 +1,87 @@
 # Postarix
 
-**Plataforma de correo electrónico autoalojada, moderna y open source.**
+**A modern, self-hosted, open-source email platform.**
 
-Postarix reúne en un solo sistema todo lo necesario para operar correo propio: envío y recepción, antispam, antivirus, webmail, calendario, contactos y un panel de administración. Funciona igual para una sola persona que para una empresa grande o un proveedor que aloja a muchas organizaciones.
+Postarix brings everything you need to run your own email into one system: sending and receiving, spam and virus filtering, webmail, calendar, contacts and an admin panel. It works the same for a single person as for a large company or a provider hosting many organizations.
 
-> ⚠️ **Estado: en desarrollo temprano.** Todavía no es apto para producción.
+> ⚠️ **Status: early development.** Not ready for production yet.
 
-## Por qué Postarix
+## Why Postarix
 
-- **Interfaz propia y moderna.** Webmail, calendario, contactos y panel hechos con React, Next.js y TypeScript. Sin SOGo ni Roundcube.
-- **Multi-organización desde el inicio.** Organizaciones, dominios, roles y cuotas como parte del núcleo, no como añadido.
-- **Escala sin cambiar de arquitectura.** De un VPS a un clúster con las mismas piezas.
-- **100% open source.** Sin componentes con funciones recortadas detrás de ediciones de pago.
-- **Seguro por defecto.** 2FA, passkeys, contraseñas de aplicación, MTA-STS, DANE, aislamiento entre organizaciones.
-- **Funciona con tu proxy.** Traefik, Caddy, nginx o HAProxy, o con un proxy incluido.
+- **Its own modern interface.** Webmail, calendar, contacts and admin built with React, Next.js and TypeScript. No SOGo, no Roundcube.
+- **Multi-tenant from the start.** Organizations, domains, roles and quotas are part of the core, not an add-on.
+- **Scales without changing architecture.** From a VPS to a cluster with the same building blocks.
+- **100% open source.** No components with features held back for paid editions.
+- **Secure by default.** 2FA, passkeys, app passwords, MTA-STS, DANE, isolation between organizations.
+- **Works with your proxy.** Traefik, Caddy, nginx or HAProxy, or a bundled proxy.
 
 ## Stack
 
-| Capa | Tecnología |
+| Layer | Technology |
 |---|---|
 | SMTP | Postfix |
-| Buzones, IMAP, JMAP, CalDAV, CardDAV | Cyrus IMAP |
-| Antispam, DKIM, DMARC | Rspamd |
-| Antivirus | ClamAV (opcional) |
+| Mailboxes, IMAP, JMAP, CalDAV, CardDAV | Cyrus IMAP |
+| Spam filtering, DKIM, DMARC | Rspamd |
+| Antivirus | ClamAV (optional) |
 | DNS | Unbound |
-| Protección contra fuerza bruta | CrowdSec |
+| Brute-force protection | CrowdSec |
 | Backend | NestJS + Better Auth |
-| Panel de administración | Next.js |
+| Admin panel | Next.js |
 | Webmail | React + Vite |
-| Datos | PostgreSQL + Valkey |
+| Data | PostgreSQL + Valkey |
 
-La arquitectura completa, con el porqué de cada decisión, está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The full architecture, with the reasoning behind each decision, is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Estructura
+## Layout
 
 ```
 apps/
   api/          Backend (NestJS)
-  admin/        Panel de administración (Next.js)
-  webmail/      Webmail, calendario y contactos (React + Vite)
+  admin/        Admin panel (Next.js)
+  webmail/      Webmail, calendar and contacts (React + Vite)
 packages/
-  mail-engine/  Adaptador hacia el servidor de correo
-  jmap-client/  Cliente JMAP
-  ui/           Componentes compartidos
-  config/       Configuración compartida (TypeScript, lint)
-docker/         Imágenes y docker-compose
-deploy/         Plantillas de proxies y Helm
-docs/           Documentación
+  mail-engine/  Adapter to the mail server
+  jmap-client/  JMAP client
+  ui/           Shared components
+  config/       Shared configuration
+docker/         Images and docker-compose files
+deploy/         Proxy templates and Helm chart
+tests/          Integration tests against the full stack
+docs/           Documentation
 ```
 
-## Desarrollo
+## Development
 
-Requisitos: Node.js 22 o superior (recomendado 24 LTS), pnpm (vía Corepack) y Docker.
+Requirements: Node.js 22 or newer (24 LTS recommended), pnpm (via Corepack) and Docker.
 
 ```bash
 corepack enable
 pnpm install
-cp .env.example .env                       # completa AUTH_SECRET
-pnpm dev:services                          # levanta PostgreSQL y Valkey
-pnpm --filter @postarix/api db:migrate     # crea las tablas
-ADMIN_EMAIL=tu@dominio.com ADMIN_PASSWORD='una frase larga' \
-  pnpm --filter @postarix/api create-admin # primera cuenta (super-admin)
-pnpm dev                                   # levanta las apps
+cp .env.example .env                       # fill in AUTH_SECRET
+pnpm dev:services                          # starts PostgreSQL and Valkey
+pnpm --filter @postarix/api db:migrate     # creates the tables
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a long passphrase' \
+  pnpm --filter @postarix/api create-admin # first account (super-admin)
+pnpm dev                                   # starts the apps
 ```
 
-Comprobaciones: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
+Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
 
-## Hoja de ruta
+## Roadmap
 
-1. **Fase 0** — Cimientos: monorepo, CI, API con autenticación y organizaciones.
-2. **Fase 1** — Correo funcionando: Postfix, Cyrus, Rspamd, DKIM, certificados.
-3. **Fase 2** — Panel de administración.
-4. **Fase 3** — Webmail.
-5. **Fase 4** — Calendario y contactos.
-6. **Fase 5** — Funciones enterprise, alta disponibilidad y versión 1.0.
+1. **Phase 0** — Foundations: monorepo, CI, API with authentication and organizations.
+2. **Phase 1** — Working mail: Postfix, Cyrus, Rspamd, DKIM, certificates.
+3. **Phase 2** — Admin panel.
+4. **Phase 3** — Webmail.
+5. **Phase 4** — Calendar and contacts.
+6. **Phase 5** — Enterprise features, high availability and 1.0.
 
-Detalle en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#14-fases-de-desarrollo).
+Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#15-roadmap).
 
-## Seguridad
+## Security
 
-Si encuentras una vulnerabilidad, **no abras un issue público**. Sigue las instrucciones de [`SECURITY.md`](SECURITY.md).
+If you find a vulnerability, **do not open a public issue**. Follow [`SECURITY.md`](SECURITY.md).
 
-## Licencia
+## License
 
 [GNU Affero General Public License v3.0](LICENSE).

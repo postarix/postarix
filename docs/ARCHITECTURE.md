@@ -1,30 +1,30 @@
-# Arquitectura de Postarix
+# Postarix Architecture
 
-> Documento vivo. Recoge las decisiones de diseño tomadas al iniciar el proyecto y el porqué de cada una.
-> Cuando una decisión cambie, se actualiza aquí y se deja constancia en la sección [Registro de decisiones](#registro-de-decisiones).
+> Living document. It records the design decisions behind Postarix and the reasoning for each one.
+> When a decision changes, update it here and add an entry to the [decision log](#decision-log).
 
-## 1. Qué es Postarix
+## 1. What Postarix is
 
-Postarix es una plataforma de correo electrónico autoalojada, open source y moderna. Está pensada como alternativa a mailcow, con tres diferencias principales:
+Postarix is a modern, self-hosted, open-source email platform. It is meant as an alternative to mailcow, with three main differences:
 
-1. **Interfaz propia**: panel de administración, webmail, calendario y contactos hechos desde cero con tecnologías actuales (React, Next.js, TypeScript). Sin SOGo ni Roundcube.
-2. **Multi-organización desde el primer día**: el mismo sistema sirve para una sola persona, para una pyme o para un proveedor que aloja a muchas empresas.
-3. **Escalado sin cambiar de arquitectura**: de un único servidor a un clúster, usando las mismas piezas.
+1. **Its own interface**: admin panel, webmail, calendar and contacts built from scratch with current technology (React, Next.js, TypeScript). No SOGo, no Roundcube.
+2. **Multi-tenant from day one**: the same system serves a single person, a small business, or a provider hosting many companies.
+3. **Scales without changing architecture**: from one server to a cluster, using the same building blocks.
 
-### Principios
+### Principles
 
-- **No reinventar lo peligroso.** SMTP, IMAP, el análisis MIME y el antispam los hacen proyectos maduros y auditados. Postarix los orquesta y les pone encima una capa moderna.
-- **Seguro por defecto.** Ninguna opción insegura activada de fábrica.
-- **Sin dependencias de pago.** Todo componente de terceros debe ser open source sin funciones recortadas detrás de una edición comercial.
-- **Componentes intercambiables.** El backend habla con el servidor de correo a través de un adaptador (`MailEngine`), nunca directamente.
-- **Agnóstico del proxy.** Funciona detrás de Traefik, Caddy, nginx o HAProxy, o con un proxy incluido.
+- **Don't reinvent the dangerous parts.** SMTP, IMAP, MIME parsing and spam filtering are done by mature, audited projects. Postarix orchestrates them and adds a modern layer on top.
+- **Secure by default.** No insecure option is enabled out of the box.
+- **No paid dependencies.** Every third-party component must be open source without features held back for a commercial edition.
+- **Swappable components.** The backend talks to the mail server through an adapter (`MailEngine`), never directly.
+- **Proxy-agnostic.** Works behind Traefik, Caddy, nginx or HAProxy, or with a bundled proxy.
 
-## 2. Vista general
+## 2. Overview
 
 ```
                          Internet
             ┌───────────────┴────────────────┐
-     Puertos de correo                  Puertos web (443)
+       Mail ports                       Web ports (443)
   25 · 465 · 587 · 993 · 995 · 4190            │
             │                          Reverse proxy (Traefik / Caddy / nginx / HAProxy)
             │                                  │
@@ -41,314 +41,336 @@ Postarix es una plataforma de correo electrónico autoalojada, open source y mod
    │   Cyrus IMAP    │◄──── saslauthd ────────►│ PostgreSQL  │   Valkey    │
    │ (IMAP·JMAP·DAV) │      (auth bridge)      └─────────────┴─────────────┘
    └─────────────────┘
-        Unbound (resolvedor DNS con DNSSEC) · CrowdSec (bloqueo de IPs)
+        Unbound (DNSSEC-validating resolver) · CrowdSec (IP blocking)
 ```
 
-## 3. Componentes
+## 3. Components
 
-### 3.1 Núcleo de correo (terceros, sin modificar)
+### 3.1 Mail core (third-party, unmodified)
 
-| Componente | Función | Por qué este |
+| Component | Role | Why this one |
 |---|---|---|
-| **Postfix** | Recepción y envío SMTP (MTA) | El MTA más probado y seguro. Lee dominios, buzones y alias directamente de PostgreSQL. |
-| **Cyrus IMAP** | Almacenamiento de buzones, IMAP, POP3, **JMAP**, **CalDAV**, **CardDAV**, Sieve | 100% open source, sin edición de pago. Trae JMAP y DAV integrados, y replicación (`sync_client`/`sync_server`) y clúster (Murder) en la versión libre. |
-| **Rspamd** | Antispam, DKIM, ARC, DMARC, SPF, greylisting | Rápido, con API HTTP, sustituye a varias herramientas antiguas. |
-| **ClamAV** | Antivirus | Estándar de facto. **Opcional**, porque consume mucha RAM. |
-| **olefy** | Detección de macros maliciosas en documentos Office | Se integra con Rspamd. |
-| **Unbound** | Resolvedor DNS propio con DNSSEC | Obligatorio: las listas negras (Spamhaus, etc.) bloquean consultas desde DNS públicos, y DANE necesita validación DNSSEC. |
-| **CrowdSec** | Detección de fuerza bruta y bloqueo de IPs | Sustituto moderno de fail2ban, con listas compartidas por la comunidad. |
+| **Postfix** | SMTP reception and delivery (MTA) | The most proven and secure MTA. Reads domains, mailboxes and aliases directly from PostgreSQL. |
+| **Cyrus IMAP** | Mailbox storage, IMAP, POP3, **JMAP**, **CalDAV**, **CardDAV**, Sieve | 100% open source, no paid edition. Ships JMAP and DAV, plus replication (`sync_client`/`sync_server`) and clustering (Murder) in the free version. |
+| **Rspamd** | Spam filtering, DKIM, ARC, DMARC, SPF, greylisting | Fast, has an HTTP API, replaces several older tools. |
+| **ClamAV** | Antivirus | De facto standard. **Optional**, because it uses a lot of RAM. |
+| **olefy** | Detects malicious macros in Office documents | Integrates with Rspamd. |
+| **Unbound** | Local DNSSEC-validating resolver | Required: blocklists (Spamhaus etc.) refuse queries from public resolvers, and DANE needs DNSSEC validation. |
+| **CrowdSec** | Brute-force detection and IP blocking | Modern fail2ban replacement with community-shared blocklists. |
 
-**Alternativas evaluadas y descartadas:**
+**Alternatives considered and rejected:**
 
-- *Dovecot*: en la versión 2.4 la edición comunitaria eliminó Director y la replicación, que pasaron a la edición de pago. Además no ofrece CalDAV/CardDAV ni JMAP estable.
-- *Stalwart*: muy moderno y completo, pero la multi-tenencia y otras funciones están en la edición Enterprise (de pago). Se mantiene como posible motor alternativo vía `MailEngine`.
-- *SOGo / Roundcube*: los sustituimos por interfaces propias.
+- *Dovecot*: the 2.4 community edition removed Director and replication, which moved to the paid edition. It also lacks CalDAV/CardDAV and stable JMAP.
+- *Stalwart*: very modern and complete, but multi-tenancy and other features are in the paid Enterprise edition. Kept as a possible alternative engine via `MailEngine`.
+- *SOGo / Roundcube*: replaced by our own interfaces.
 
-### 3.2 Plataforma Postarix (código propio)
+### 3.2 Postarix platform (our code)
 
-| App / paquete | Tecnología | Responsabilidad |
+| App / package | Technology | Responsibility |
 |---|---|---|
-| `apps/api` | NestJS + TypeScript | Lógica de negocio: organizaciones, dominios, buzones, alias, cuotas, roles, auditoría, DNS asistido, tareas en segundo plano. Única pieza que modifica la configuración del correo. |
-| `apps/admin` | Next.js + React | Panel de administración (superadmin, admin de organización y portal de usuario). |
-| `apps/webmail` | React + Vite (SPA) | Webmail, calendario y contactos. Habla JMAP con Cyrus a través de la API. |
-| `packages/mail-engine` | TypeScript | Interfaz `MailEngine` y adaptador para Cyrus. |
-| `packages/jmap-client` | TypeScript | Cliente JMAP tipado y reutilizable. |
-| `packages/ui` | React | Componentes de interfaz compartidos entre admin y webmail. |
-| `packages/config` | — | Configuración compartida de TypeScript, ESLint y Prettier. |
+| `apps/api` | NestJS + TypeScript | Business logic: organizations, domains, mailboxes, aliases, quotas, roles, auditing, DNS assistance, background jobs. The only component that changes mail configuration. |
+| `apps/admin` | Next.js + React | Admin panel (super-admin, organization admin and user self-service). |
+| `apps/webmail` | React + Vite (SPA) | Webmail, calendar and contacts. Talks JMAP to Cyrus through the API. |
+| `packages/mail-engine` | TypeScript | The `MailEngine` interface and its Cyrus adapter. |
+| `packages/jmap-client` | TypeScript | Typed, reusable JMAP client. |
+| `packages/ui` | React | UI components shared by admin and webmail. |
+| `packages/config` | — | Shared TypeScript configuration. |
 
-**Por qué SPA para el webmail y Next.js para el admin:** el webmail es una aplicación muy interactiva, siempre detrás de login y con estado en tiempo real; el renderizado en servidor aporta poco. El admin tiene más páginas, formularios y lógica de servidor, donde Next.js sí ayuda.
+**Why an SPA for webmail and Next.js for admin:** webmail is a highly interactive app, always behind login, with real-time state; server-side rendering adds little. The admin panel has more pages, forms and server logic, where Next.js helps.
 
-### 3.3 Datos
+### 3.3 Data
 
-- **PostgreSQL**: fuente de verdad de Postarix (organizaciones, usuarios, dominios, alias, roles, auditoría). Postfix lee de aquí sus mapas virtuales mediante vistas de solo lectura.
-- **Valkey** (fork libre de Redis): caché, sesiones, colas de BullMQ, límites de peticiones.
-- **Cyrus**: guarda los mensajes, calendarios y contactos en su propio almacenamiento. Postarix no duplica esos datos.
+- **PostgreSQL**: source of truth for Postarix (organizations, users, domains, mailboxes, aliases, roles, audit log). Postfix reads its virtual maps from read-only views.
+- **Valkey** (open-source Redis fork): cache, sessions, BullMQ queues, rate limits, and the DKIM keys Rspamd signs with.
+- **Cyrus**: stores messages, calendars and contacts in its own storage. Postarix does not duplicate that data.
 
-## 4. Identidad y autenticación
+## 4. Identity and authentication
 
-### 4.1 Web (admin y webmail)
+### 4.1 Web (admin and webmail)
 
-**Better Auth** integrado en `apps/api`, con estos plugins:
+**Better Auth** inside `apps/api`, with these plugins:
 
-- `organization`: organizaciones, miembros, roles e invitaciones. Es la base de la multi-tenencia.
-- `twoFactor`: TOTP y códigos de recuperación.
-- `passkey`: WebAuthn / llaves de seguridad.
-- `sso`: inicio de sesión con el proveedor de identidad de la empresa (OIDC/SAML: Azure AD, Google Workspace, Okta, Keycloak…).
-- `admin`: bloqueo de usuarios y suplantación auditada para soporte.
+- `organization`: organizations, members, roles and invitations. The basis of multi-tenancy.
+- `twoFactor`: TOTP and recovery codes.
+- `passkey`: WebAuthn / security keys.
+- `admin`: banning users and audited impersonation for support.
+- `sso` (Phase 5): sign-in with the company identity provider (OIDC/SAML: Azure AD, Google Workspace, Okta, Keycloak…).
 
-### 4.2 Clientes de correo (IMAP, SMTP, CalDAV, CardDAV)
+### 4.2 Mail clients (IMAP, SMTP, CalDAV, CardDAV)
 
-Thunderbird, Outlook o el correo del móvil no entienden sesiones web. Por eso:
+Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 
-1. El usuario genera **contraseñas de aplicación** desde su portal. Cada una tiene nombre, alcance (IMAP, SMTP, DAV) y fecha de último uso, y se puede revocar por separado.
-2. Se guardan como hash **argon2id** en PostgreSQL.
-3. Cyrus y Postfix validan el login vía **saslauthd**, que consulta un endpoint interno de `apps/api` (solo accesible desde la red interna, autenticado con secreto compartido).
-4. La contraseña principal y el 2FA nunca se usan fuera de la web.
+1. Users create **app passwords** in their portal. Each has a name, a scope (IMAP, SMTP, DAV) and a last-used timestamp, and can be revoked individually.
+2. They are stored as **argon2id** hashes in PostgreSQL.
+3. Cyrus and Postfix validate logins through **saslauthd** using its `httpform` mechanism, which posts the credentials to an internal endpoint of `apps/api` authenticated with a shared secret.
+4. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
 
-En una fase posterior se evaluará **OAUTHBEARER / XOAUTH2** para que los clientes que lo soporten no necesiten contraseñas.
+**OAUTHBEARER / XOAUTH2** for clients that support it will be evaluated later.
 
-## 5. Multi-tenencia
+## 5. Multi-tenancy
 
-Jerarquía:
+Hierarchy:
 
 ```
-Instancia
- └── Organización           (una empresa, o "personal" para un usuario solo)
-      ├── Dominios          (ejemplo.com, ejemplo.co…)
-      │    ├── Buzones
-      │    ├── Alias y redirecciones
-      │    └── Configuración DKIM / políticas
-      ├── Miembros y roles
-      └── Planes y cuotas
+Instance
+ └── Organization           (a company, or "personal" for a single user)
+      ├── Domains           (example.com, example.co…)
+      │    ├── Mailboxes
+      │    ├── Aliases and forwards
+      │    └── DKIM keys / policies
+      ├── Members and roles
+      └── Plans and quotas
 ```
 
-Roles iniciales:
+Roles:
 
-| Rol | Alcance |
+| Role | Scope |
 |---|---|
-| `superadmin` | Toda la instancia: crear organizaciones, ver salud del sistema. |
-| `org_owner` | Su organización completa, incluida facturación y borrado. |
-| `org_admin` | Dominios, buzones y alias de su organización. |
-| `domain_admin` | Solo los dominios asignados. |
-| `user` | Su propio buzón, contraseñas de aplicación, filtros, reenvíos. |
+| `admin` (instance) | The whole instance: create organizations, see system health. |
+| `owner` | Their whole organization, including billing and deletion. |
+| `admin` (organization) | Domains, mailboxes and aliases of their organization. |
+| `member` | Their own mailbox, app passwords, filters, forwards. |
 
-**Regla de oro:** toda consulta a la base de datos se filtra por organización en la capa de repositorio, nunca en el controlador. Se valida con pruebas automáticas que intentan acceder a datos de otra organización.
+**Golden rule:** every database query is scoped by organization in the repository layer, never in the controller. Automated tests try to reach other organizations' data.
 
-## 6. El adaptador `MailEngine`
+## 6. The `MailEngine` adapter
 
-`apps/api` nunca llama a Cyrus o Postfix directamente. Usa esta interfaz (simplificada):
+`apps/api` never calls Cyrus directly. It uses this interface (simplified):
 
 ```ts
 interface MailEngine {
-  createMailbox(input: CreateMailboxInput): Promise<void>;
+  createMailbox(address: string, options: { quotaBytes: number | null }): Promise<void>;
   deleteMailbox(address: string): Promise<void>;
-  setQuota(address: string, bytes: number): Promise<void>;
+  setQuota(address: string, quotaBytes: number | null): Promise<void>;
   getUsage(address: string): Promise<MailboxUsage>;
   renameMailbox(from: string, to: string): Promise<void>;
   health(): Promise<EngineHealth>;
 }
 ```
 
-- La implementación inicial es `CyrusEngine`.
-- Los mapas de Postfix (dominios, buzones, alias) no pasan por el adaptador: Postfix los lee de vistas de PostgreSQL.
-- Si en el futuro se quiere soportar Dovecot o Stalwart, basta con otra implementación.
+- The first implementation is `CyrusEngine`, which speaks IMAP to Cyrus as its admin user.
+- Postfix maps (domains, mailboxes, aliases) do not go through the adapter: Postfix reads them from PostgreSQL views.
+- Supporting Dovecot or Stalwart later only needs another implementation.
 
-## 7. Seguridad
+## 7. Security
 
 ### 7.1 Webmail
 
-- El HTML de los correos se **sanitiza en el servidor** (DOMPurify sobre jsdom) y se muestra dentro de un `<iframe sandbox>` con CSP estricta.
-- Las **imágenes remotas** se bloquean por defecto y, al permitirlas, pasan por un **proxy de imágenes** propio para no filtrar la IP del usuario ni servir de rastreo.
-- Los adjuntos se descargan con `Content-Disposition: attachment` y tipo MIME forzado.
+- Email HTML is **sanitized on the server** (DOMPurify on jsdom) and rendered inside an `<iframe sandbox>` with a strict CSP.
+- **Remote images** are blocked by default and, when allowed, go through our own **image proxy** so they don't leak the user's IP or act as trackers.
+- Attachments are served with `Content-Disposition: attachment` and a forced MIME type.
 
-### 7.2 Aplicaciones web
+### 7.2 Web applications
 
-- Autorización validada **en cada endpoint y cada server action**, nunca solo en el middleware de Next.js.
-- Cookies `HttpOnly`, `Secure`, `SameSite=Lax`; protección CSRF.
-- Cabeceras de seguridad: CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`.
-- Límites de peticiones por IP y por cuenta (Valkey).
-- La API solo acepta `X-Forwarded-For` de los **proxies de confianza** declarados en la configuración.
+- Authorization is checked **in every endpoint and server action**, never only in Next.js middleware.
+- `HttpOnly`, `Secure`, `SameSite=Lax` cookies; CSRF protection through an origin check.
+- Security headers: CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`.
+- Request bodies are parsed and capped (1 MB, JSON or forms only) before any route.
+- Rate limits per IP and per account (Valkey).
+- The API only honours `X-Forwarded-For` from the **trusted proxies** declared in its configuration.
 
-### 7.3 Correo
+### 7.3 Mail
 
-- Entrada: SPF, DKIM, DMARC, ARC verificados por Rspamd; greylisting; listas negras vía Unbound.
-- Salida: firma DKIM por dominio (rotación de claves asistida), límites de envío por buzón, detección de cuentas comprometidas que envían spam.
-- Transporte: TLS obligatorio en puertos de usuario; **MTA-STS**, **TLS-RPT** y **DANE** (si el dominio usa DNSSEC).
+- Inbound: SPF, DKIM, DMARC and ARC checked by Rspamd; greylisting; blocklists via Unbound.
+- Outbound: per-domain DKIM signing, per-mailbox sending limits, detection of compromised accounts sending spam, and senders may only use addresses they own.
+- Transport: TLS required on user ports; **MTA-STS**, **TLS-RPT** and **DANE** (when the domain uses DNSSEC).
 
-### 7.4 Infraestructura
+### 7.4 Infrastructure
 
-- **Sin acceso al socket de Docker** desde ningún contenedor. Cada servicio se controla por su propia API.
-- Contenedores sin root cuando el componente lo permite, sistema de archivos de solo lectura, capacidades mínimas.
-- Secretos fuera de las imágenes (variables de entorno o Docker/K8s secrets).
-- Backups cifrados.
-- Registro de auditoría de todas las acciones administrativas.
+- **No container has access to the Docker socket.** Each service is controlled through its own API.
+- Non-root containers where the component allows it, minimal capabilities.
+- Secrets live outside images (environment variables or Docker/Kubernetes secrets).
+- Encrypted backups.
+- Audit log of every administrative action.
 
-### 7.5 Proceso
+### 7.5 Process
 
-- Dependencias vigiladas con Renovate; imágenes escaneadas con Trivy en CI.
-- Pruebas automáticas, incluidas las de aislamiento entre organizaciones.
-- Auditoría de seguridad externa antes de la versión 1.0.
-- Política de divulgación responsable en `SECURITY.md`.
+- Dependencies tracked with Dependabot; images scanned with Trivy in CI.
+- Automated tests, including cross-organization isolation tests.
+- External security audit before 1.0.
+- Responsible disclosure policy in `SECURITY.md`.
 
-## 8. Red, proxy y certificados
+## 8. Network, proxy and certificates
 
-### 8.1 Qué pasa por el proxy y qué no
+### 8.1 What goes through the proxy and what doesn't
 
-- **Por el reverse proxy (HTTP/HTTPS):** admin, webmail, API, JMAP, CalDAV/CardDAV, autodiscover/autoconfig y la política MTA-STS.
-- **Directo a los servicios (sin proxy):** 25, 465, 587 (Postfix), 993, 995 (Cyrus), 4190 (ManageSieve). Así Rspamd y CrowdSec ven las IPs reales, y STARTTLS funciona sin trucos.
+- **Through the reverse proxy (HTTP/HTTPS):** admin, webmail, API, JMAP, CalDAV/CardDAV, autodiscover/autoconfig and the MTA-STS policy.
+- **Straight to the services (no proxy):** 25, 465, 587 (Postfix), 143, 993, 995 (Cyrus), 4190 (ManageSieve). This way Rspamd and CrowdSec see real client IPs, and STARTTLS works without tricks.
+- `/api/internal/*` is never exposed through the proxy.
 
-### 8.2 Proxies soportados
+### 8.2 Supported proxies
 
-Postarix incluye plantillas probadas y documentadas para:
+Postarix ships tested, documented templates for **Traefik** (Docker Compose labels), **Caddy**, **nginx** and **HAProxy**, plus a "bundled proxy" mode with Caddy for clean servers.
 
-- **Traefik** (labels de Docker Compose)
-- **Caddy** (`Caddyfile`)
-- **nginx**
-- **HAProxy**
+### 8.3 Certificates
 
-Y un modo **"proxy incluido"** con Caddy para instalaciones en servidores limpios.
+Postfix and Cyrus need TLS certificates too. Three configurable modes:
 
-### 8.3 Certificados
+1. **Built-in ACME (default):** the `certs` service obtains and renews Let's Encrypt certificates and shares them with Postfix, Cyrus and the proxy.
+2. **External:** read from a file path. For Traefik, `traefik-certs-dumper` is documented.
+3. **cert-manager:** on Kubernetes, from Secrets.
 
-Postfix y Cyrus también necesitan certificados TLS. Tres modos configurables:
+In every mode a watcher detects certificate changes and reloads Postfix and Cyrus without dropping service. Without any certificate, a self-signed one is generated so the stack still starts (development only).
 
-1. **ACME propio (por defecto):** el servicio `certs` obtiene y renueva certificados de Let's Encrypt y los comparte con Postfix, Cyrus y el proxy.
-2. **Externos:** se leen de una ruta de archivos. Para Traefik se documenta `traefik-certs-dumper`.
-3. **cert-manager:** en Kubernetes, desde Secrets.
+## 9. Mail flow (Phase 1 design)
 
-En los tres casos, un vigilante detecta el cambio de certificado y recarga Postfix y Cyrus sin cortar el servicio.
+### 9.1 Inbound
 
-## 9. Tareas en segundo plano
+1. A remote server connects to Postfix on port 25.
+2. Postfix checks the recipient against PostgreSQL views (`postfix_domains`, `postfix_mailboxes`, `postfix_aliases`). Only **active (verified)** domains and **enabled** mailboxes accept mail.
+3. Rspamd, as a milter, scores the message (SPF, DKIM, DMARC, blocklists, Bayes) and can reject, greylist or add headers.
+4. Postfix hands the message to Cyrus over **LMTP**; Cyrus files it into `user/<address>` and applies the user's Sieve rules.
 
-**BullMQ** sobre Valkey, dentro de `apps/api`. Sustituye al contenedor `ofelia` de mailcow.
+### 9.2 Outbound (submission)
 
-Ejemplos: renovación de claves DKIM, comprobación de DNS de cada dominio, limpieza de cuarentena, informes DMARC/TLS-RPT, avisos de cuota, backups programados.
+1. A client connects to port 587 (STARTTLS) or 465 (implicit TLS) and authenticates with SASL.
+2. Postfix asks saslauthd, which asks the API (`/api/internal/mail-auth`).
+3. Postfix only allows envelope senders the authenticated user owns (`smtpd_sender_login_maps`, from PostgreSQL).
+4. Rspamd signs the message with the domain's DKIM key (read from Valkey) and applies rate limits.
+5. Postfix delivers it, using DANE/MTA-STS when the destination supports them.
 
-## 10. Observabilidad
+### 9.3 Provisioning
 
-- Health checks en todos los contenedores.
-- Métricas Prometheus (Postfix exporter, Rspamd, Cyrus, API).
-- Paneles Grafana opcionales.
-- Logs estructurados en JSON.
+- Creating a mailbox in the API inserts the row, creates (or links) the user's account, then asks `MailEngine` to create the Cyrus mailbox with its quota. If Cyrus fails, the database change is rolled back.
+- Domains become active only after DNS verification of the `postarix-verification=…` TXT record. A development switch (`DOMAIN_VERIFICATION=skip`) activates them immediately.
+- DKIM keys are generated per domain by the API, stored encrypted in PostgreSQL and published to Valkey for Rspamd.
 
-## 11. Despliegue y escalado
+## 10. Background jobs
 
-| Escenario | Topología |
+**BullMQ** on Valkey, inside `apps/api`. Replaces mailcow's `ofelia` container.
+
+Examples: DKIM key rotation, periodic DNS checks for every domain, quarantine cleanup, DMARC/TLS-RPT reports, quota warnings, scheduled backups.
+
+## 11. Observability
+
+- Health checks in every container.
+- Prometheus metrics (Postfix exporter, Rspamd, Cyrus, API).
+- Optional Grafana dashboards.
+- Structured JSON logs.
+
+## 12. Deployment and scaling
+
+| Scenario | Topology |
 |---|---|
-| **Personal / pyme** | Un servidor con Docker Compose. Todo en un nodo, backups automáticos. |
-| **Empresa mediana** | Dos servidores Cyrus con replicación (principal + réplica). PostgreSQL con réplica. |
-| **Empresa grande / proveedor** | Varios pares Cyrus detrás de Cyrus Murder (proxy que enruta a cada usuario a su servidor). Postfix, Rspamd, API y frontends escalan horizontalmente porque no guardan estado. Despliegue con Helm en Kubernetes. |
+| **Personal / small business** | One server with Docker Compose. Everything on one node, automatic backups. |
+| **Mid-size company** | Two Cyrus servers with replication (primary + replica). PostgreSQL with a replica. |
+| **Large company / provider** | Several Cyrus pairs behind Cyrus Murder (a proxy that routes each user to their server). Postfix, Rspamd, API and frontends scale horizontally because they are stateless. Deployed with Helm on Kubernetes. |
 
-## 12. Contenedores (instalación con Docker Compose)
+## 13. Containers (Docker Compose install)
 
-| Servicio | Imagen | Obligatorio |
+| Service | Image | Required |
 |---|---|---|
-| `postfix` | propia (basada en Debian slim) | Sí |
-| `cyrus` | propia | Sí |
-| `rspamd` | oficial | Sí |
-| `unbound` | propia o comunitaria | Sí |
-| `postgres` | oficial | Sí |
-| `valkey` | oficial | Sí |
-| `api` | propia | Sí |
-| `admin` | propia | Sí |
-| `webmail` | propia | Sí |
-| `certs` | propia | Según modo de certificados |
-| `caddy` | oficial | Solo en modo "proxy incluido" |
-| `crowdsec` | oficial | Recomendado |
-| `clamd` | oficial | Opcional |
-| `olefy` | comunitaria | Recomendado |
-| `prometheus`, `grafana` | oficiales | Opcional |
+| `postfix` | ours (Debian slim) | Yes |
+| `cyrus` | ours (Debian slim), includes saslauthd | Yes |
+| `rspamd` | ours (Debian slim) | Yes |
+| `unbound` | ours (Debian slim) | Yes |
+| `postgres` | official | Yes |
+| `valkey` | official | Yes |
+| `api` | ours | Yes |
+| `admin` | ours | Yes |
+| `webmail` | ours | Yes |
+| `certs` | ours | Depends on the certificate mode |
+| `caddy` | official | Only in "bundled proxy" mode |
+| `crowdsec` | official | Recommended |
+| `clamd` | official | Optional |
+| `olefy` | community | Recommended |
+| `prometheus`, `grafana` | official | Optional |
 
-## 13. Estructura del repositorio
+## 14. Repository layout
 
 ```
 postarix/
 ├── apps/
-│   ├── api/            NestJS — lógica de negocio y Better Auth
-│   ├── admin/          Next.js — panel de administración
-│   └── webmail/        React + Vite — webmail, calendario, contactos
+│   ├── api/            NestJS — business logic and Better Auth
+│   ├── admin/          Next.js — admin panel
+│   └── webmail/        React + Vite — webmail, calendar, contacts
 ├── packages/
-│   ├── mail-engine/    Interfaz MailEngine + adaptador Cyrus
-│   ├── jmap-client/    Cliente JMAP tipado
-│   ├── ui/             Componentes compartidos
-│   └── config/         TS, ESLint, Prettier compartidos
+│   ├── mail-engine/    MailEngine interface + Cyrus adapter
+│   ├── jmap-client/    Typed JMAP client
+│   ├── ui/             Shared components
+│   └── config/         Shared TypeScript config
 ├── docker/
-│   ├── compose/        docker-compose para dev y producción
-│   ├── postfix/        Dockerfile y plantillas de configuración
+│   ├── compose/        docker-compose files for development and production
+│   ├── postfix/        Dockerfile and configuration templates
 │   ├── cyrus/
+│   ├── rspamd/
 │   └── unbound/
 ├── deploy/
-│   ├── proxies/        Plantillas Traefik, Caddy, nginx, HAProxy
-│   └── helm/           Chart de Kubernetes
-└── docs/               Documentación
+│   ├── proxies/        Traefik, Caddy, nginx and HAProxy templates
+│   └── helm/           Kubernetes chart
+├── tests/
+│   └── integration/    End-to-end tests against the full container stack
+└── docs/               Documentation
 ```
 
-## 14. Fases de desarrollo
+## 15. Roadmap
 
-### Fase 0 — Cimientos
-- [x] Monorepo (pnpm + Turborepo), CI, linters, convenciones.
-- [x] Docker Compose de desarrollo: PostgreSQL, Valkey.
-- [x] `apps/api` con Better Auth, organizaciones y roles.
-- [x] Esquema de base de datos inicial y migraciones.
-- [x] Primer recurso multi-organización (dominios) con pruebas de aislamiento.
-- [ ] Límite de peticiones y sesiones en Valkey (hoy en memoria).
+### Phase 0 — Foundations
+- [x] Monorepo (pnpm + Turborepo), CI, linters, conventions.
+- [x] Development Docker Compose: PostgreSQL, Valkey.
+- [x] `apps/api` with Better Auth, organizations and roles.
+- [x] Initial database schema and migrations.
+- [x] First multi-tenant resource (domains) with isolation tests.
 
-### Fase 1 — Correo funcionando
-- Contenedores de Postfix, Cyrus, Rspamd y Unbound.
-- Postfix leyendo dominios, buzones y alias de PostgreSQL.
-- `CyrusEngine` (crear buzones, cuotas).
-- Puente de autenticación saslauthd + contraseñas de aplicación.
-- DKIM por dominio y asistente de DNS.
-- Certificados (los tres modos).
-- **Hito:** enviar y recibir correo desde Thunderbird.
+### Phase 1 — Working mail
+- Postfix, Cyrus, Rspamd and Unbound containers.
+- Postfix reading domains, mailboxes and aliases from PostgreSQL.
+- `CyrusEngine` (create mailboxes, quotas).
+- Mailboxes, aliases and app passwords in the API.
+- Authentication bridge (saslauthd → API).
+- DNS verification of domains, per-domain DKIM.
+- Certificates (all three modes), proxy templates, CrowdSec.
+- **Milestone:** send and receive mail from Thunderbird.
 
-### Fase 2 — Panel de administración
-- Organizaciones, dominios, buzones, alias, roles.
-- Estado de DNS por dominio (MX, SPF, DKIM, DMARC, MTA-STS).
-- Cuarentena y logs de Rspamd.
-- Auditoría.
+### Phase 2 — Admin panel
+- Organizations, domains, mailboxes, aliases, roles.
+- DNS status per domain (MX, SPF, DKIM, DMARC, MTA-STS).
+- Rspamd quarantine and logs.
+- Audit log.
 
-### Fase 3 — Webmail
-- Cliente JMAP, bandeja de entrada, hilos, lectura segura de HTML, redacción, adjuntos.
-- Búsqueda, carpetas, etiquetas, filtros Sieve, respuestas automáticas.
-- Actualizaciones en tiempo real (JMAP push).
+### Phase 3 — Webmail
+- JMAP client, inbox, threads, safe HTML rendering, composing, attachments.
+- Search, folders, labels, Sieve filters, vacation replies.
+- Real-time updates (JMAP push).
 
-### Fase 4 — Calendario y contactos
-- Interfaces sobre CalDAV/CardDAV (o JMAP Calendars/Contacts según madurez en Cyrus).
-- Invitaciones (iMIP), recursos compartidos.
+### Phase 4 — Calendar and contacts
+- UIs on top of CalDAV/CardDAV (or JMAP Calendars/Contacts as Cyrus support matures).
+- Invitations (iMIP), shared resources.
 
-### Fase 5 — Enterprise y escala
-- SSO (OIDC/SAML), passkeys obligatorias por política.
-- Replicación y Cyrus Murder; chart de Helm.
-- Migración desde Google Workspace y Microsoft 365.
-- Retención legal y archivado.
-- Auditoría de seguridad externa → **versión 1.0**.
+### Phase 5 — Enterprise and scale
+- SSO (OIDC/SAML), passkeys enforceable by policy.
+- Replication and Cyrus Murder; Helm chart.
+- Migration from Google Workspace and Microsoft 365.
+- Legal hold and archiving.
+- External security audit → **1.0**.
 
-## Registro de decisiones
+## Decision log
 
-| Fecha | Decisión |
+| Date | Decision |
 |---|---|
-| 2026-11-01 | Nombre del proyecto: **Postarix**. |
-| 2026-11-01 | Motor de buzones: **Cyrus IMAP** (frente a Dovecot CE 2.4 y Stalwart). |
-| 2026-11-01 | MTA: **Postfix**. Antispam: **Rspamd**. |
-| 2026-11-01 | Backend: **NestJS**. Identidad: **Better Auth**. |
-| 2026-11-01 | Admin con **Next.js**; webmail como **SPA React + Vite** sobre **JMAP**. |
-| 2026-11-01 | Monorepo con **pnpm workspaces + Turborepo**. |
-| 2026-11-01 | Proxy agnóstico; puertos de correo fuera del reverse proxy. |
-| 2026-11-01 | Licencia **AGPL-3.0**. |
-| 2026-11-01 | ORM: **Drizzle** (SQL explícito, tipado fuerte, migraciones versionadas; adaptador oficial de Better Auth). |
-| 2026-11-01 | Runtime **Node.js 22+**, **ESM** en todo el monorepo, **TypeScript 6** (typescript-eslint aún no soporta TS 7). |
-| 2026-11-01 | Contraseñas de usuario con **argon2id** (parámetros OWASP), igual que las contraseñas de aplicación. |
-| 2026-11-01 | **Registro público desactivado** y creación de organizaciones solo para super-admins, por defecto. La primera cuenta se crea con `create-admin`. |
-| 2026-11-01 | Acceso a una organización ajena devuelve **404** (no 403) para no revelar su existencia. |
-| 2026-11-01 | Pruebas end-to-end contra **PostgreSQL real** (servicio en CI), no contra mocks. |
-| 2026-11-01 | La propiedad de un dominio se demuestra con un **registro TXT** (`postarix-verification=…`). Mientras está `pending`, varias organizaciones pueden reclamar el mismo nombre: así nadie puede acaparar un dominio ajeno ni averiguar si otro cliente lo tiene. Solo puede existir un dominio verificado por nombre. |
-| 2026-11-01 | Todos los cuerpos de petición se analizan y limitan (1 MB, solo JSON o formularios) **antes** de cualquier ruta, incluidas las de Better Auth. |
-| 2026-11-01 | Las comprobaciones de origen/CSRF de Better Auth se fuerzan explícitamente; la librería las desactiva sola en entornos de prueba. |
-| 2026-11-01 | Una instalación con `AUTH_URL` en https se niega a arrancar si `NODE_ENV` no es `production`. |
+| 2026-11-01 | Project name: **Postarix**. |
+| 2026-11-01 | Mailbox engine: **Cyrus IMAP** (over Dovecot CE 2.4 and Stalwart). |
+| 2026-11-01 | MTA: **Postfix**. Spam filter: **Rspamd**. |
+| 2026-11-01 | Backend: **NestJS**. Identity: **Better Auth**. |
+| 2026-11-01 | Admin with **Next.js**; webmail as a **React + Vite SPA** over **JMAP**. |
+| 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
+| 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |
+| 2026-11-01 | License **AGPL-3.0**. |
+| 2026-11-01 | ORM: **Drizzle** (explicit SQL, strong typing, versioned migrations; official Better Auth adapter). |
+| 2026-11-01 | Runtime **Node.js 22+**, **ESM** across the monorepo, **TypeScript 6** (typescript-eslint does not support TS 7 yet). |
+| 2026-11-01 | User passwords hashed with **argon2id** (OWASP parameters), like app passwords. |
+| 2026-11-01 | **Public sign-up disabled** and organization creation limited to super-admins by default. The first account is created with `create-admin`. |
+| 2026-11-01 | Access to another organization returns **404** (not 403) so its existence isn't revealed. |
+| 2026-11-01 | End-to-end tests run against a **real PostgreSQL** (CI service), not mocks. |
+| 2026-11-01 | Domain ownership is proven with a **TXT record** (`postarix-verification=…`). While `pending`, several organizations may claim the same name, so nobody can squat someone else's domain or learn whether another tenant has it. Only one verified domain per name may exist. |
+| 2026-11-01 | All request bodies are parsed and capped (1 MB, JSON or forms only) **before** any route, Better Auth's included. |
+| 2026-11-01 | Better Auth's origin/CSRF checks are forced on explicitly; the library disables them by itself in test environments. |
+| 2026-11-01 | An installation whose `AUTH_URL` uses https refuses to start unless `NODE_ENV` is `production`. |
+| 2026-11-01 | The repository (code, docs, commits) is in **English**. |
+| 2026-11-01 | Mail-protocol logins go through **saslauthd `httpform` → API**. The account password works for mail only while the user has no 2FA; app passwords always work. |
+| 2026-11-01 | Our own images for Postfix, Cyrus, Rspamd and Unbound on **Debian trixie-slim**, so versions and configuration are under our control. |
 
-**Limitaciones conocidas de la Fase 0:**
+## Known limitations
 
-- Aceptar invitaciones a organizaciones requiere un email verificado, y el envío de correo llega en la Fase 1. Mientras tanto, los administradores añaden miembros directamente.
-- La verificación DNS de dominios (el registro TXT) se implementa en la Fase 1; hoy los dominios quedan en `pending`.
-- El límite de peticiones de Better Auth vive en memoria; pasará a Valkey para funcionar con varias instancias.
+- Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.
+- Better Auth's rate limiter lives in memory; it will move to Valkey so it works across instances.
