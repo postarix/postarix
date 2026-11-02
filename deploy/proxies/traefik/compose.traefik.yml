@@ -1,14 +1,18 @@
-# Labels for an existing Traefik (v3) attached to the "traefik" Docker network.
+# Labels for an existing Traefik (v3), such as Dokploy's or Coolify's.
 # Usage:
 #   docker compose -f docker/compose/postarix.yml -f deploy/proxies/traefik/compose.traefik.yml up -d
-# Set TRAEFIK_ENTRYPOINT (default: websecure) and TRAEFIK_CERTRESOLVER as in your setup,
-# and TRUSTED_PROXIES to the address range of the traefik network.
+# Set as in your Traefik (defaults in brackets):
+#   TRAEFIK_NETWORK        the Docker network Traefik watches [traefik]; Dokploy: dokploy-network
+#   TRAEFIK_ENTRYPOINT     the HTTPS entrypoint [websecure]
+#   TRAEFIK_HTTP_ENTRYPOINT the HTTP entrypoint, redirected to HTTPS [web]
+#   TRAEFIK_CERTRESOLVER   the ACME resolver [letsencrypt]
+# and TRUSTED_PROXIES to the address range of that network.
 services:
   api:
     networks: [default, traefik]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       # Internal endpoints never leave the Docker network (case-insensitive, like Express routing).
       traefik.http.routers.postarix-api.rule: Host(`${MAIL_HOSTNAME}`) && PathPrefix(`/api/`) && !PathRegexp(`(?i)^/+api/+internal(/|$)`)
       traefik.http.routers.postarix-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
@@ -25,7 +29,7 @@ services:
     networks: [traefik]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       traefik.http.routers.postarix-admin.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/admin`) || PathPrefix(`/admin/`))
       traefik.http.routers.postarix-admin.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-admin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
@@ -35,19 +39,26 @@ services:
     networks: [traefik]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       # Lowest priority: everything not claimed by the other routers.
       traefik.http.routers.postarix-webmail.rule: Host(`${MAIL_HOSTNAME}`)
       traefik.http.routers.postarix-webmail.priority: "1"
       traefik.http.routers.postarix-webmail.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-webmail.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       traefik.http.services.postarix-webmail.loadbalancer.server.port: "3002"
+      # Plain HTTP on the mail host goes to HTTPS.
+      traefik.http.routers.postarix-http.rule: Host(`${MAIL_HOSTNAME}`)
+      traefik.http.routers.postarix-http.priority: "1"
+      traefik.http.routers.postarix-http.entrypoints: ${TRAEFIK_HTTP_ENTRYPOINT:-web}
+      traefik.http.routers.postarix-http.middlewares: postarix-https
+      traefik.http.middlewares.postarix-https.redirectscheme.scheme: https
+      traefik.http.middlewares.postarix-https.redirectscheme.permanent: "true"
 
   cyrus:
     networks: [default, traefik]
     labels:
       traefik.enable: "true"
-      traefik.docker.network: traefik
+      traefik.docker.network: ${TRAEFIK_NETWORK:-traefik}
       traefik.http.routers.postarix-dav.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/.well-known/caldav`) || Path(`/.well-known/carddav`) || PathPrefix(`/dav/`))
       traefik.http.routers.postarix-dav.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-dav.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
@@ -63,3 +74,4 @@ services:
 networks:
   traefik:
     external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

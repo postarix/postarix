@@ -177,7 +177,7 @@ jobs:
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
           mkdir -p /tmp/assets
-          tar -czf "/tmp/assets/postarix-compose-$VERSION.tar.gz" docker/compose deploy/scripts deploy/proxies
+          tar -czf "/tmp/assets/postarix-compose-$VERSION.tar.gz" docker/compose docker/postgres deploy/scripts deploy/proxies deploy/monitoring
           flags=(--generate-notes --title "Postarix $VERSION")
           [ "$PRERELEASE" = true ] && flags+=(--prerelease)
           cat > /tmp/notes.md <<EOF
