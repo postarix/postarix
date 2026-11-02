@@ -71,6 +71,15 @@ describe('Deleting an organization', () => {
     expect(engine.mailboxes.has(`info@${domainA.name}`)).toBe(true);
   });
 
+  it('never deletes an instance administrator’s account along with the organization', async () => {
+    await db.update(user).set({ role: 'admin' }).where(eq(user.email, `info@${domainA.name}`));
+    const res = await root.delete(`/api/admin/organizations/${orgA}`).send({ confirm: 'Doomed' }).expect(409);
+    expect(res.body.message).toContain(`info@${domainA.name}`);
+    expect(engine.mailboxes.has(`info@${domainA.name}`)).toBe(true);
+    await alice.agent.get(`/api/orgs/${orgA}/overview`).expect(200);
+    await db.update(user).set({ role: 'user' }).where(eq(user.email, `info@${domainA.name}`));
+  });
+
   it('removes mailboxes, accounts, aliases, domains and DKIM keys, and nothing of other organizations', async () => {
     const res = await root.delete(`/api/admin/organizations/${orgA}`).send({ confirm: 'Doomed' }).expect(200);
     expect(res.body).toEqual({ aliases: 1, mailboxes: 1, domains: 1 });

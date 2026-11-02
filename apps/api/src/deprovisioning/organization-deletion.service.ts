@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { AliasesService } from '../aliases/aliases.service.js';
@@ -6,7 +6,7 @@ import { AuditService } from '../audit/audit.service.js';
 import type { AuthSession } from '../auth/session.js';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { organization } from '../db/schema/index.js';
+import { member, organization } from '../db/schema/index.js';
 import { DomainsService } from '../domains/domains.service.js';
 import { MailboxesService } from '../mailboxes/mailboxes.service.js';
 import { SsoService } from '../sso/sso.service.js';
@@ -61,16 +61,30 @@ export class OrganizationDeletionService {
       role: 'owner',
       viaSuperAdmin: true,
     };
-    const report: DeletionReport = { aliases: 0, mailboxes: 0, domains: 0 };
-    // Sign-in providers first, so nobody signs in while the rest is removed.
-    await this.sso.removeAll(ctx);
-    for (const alias of await this.aliases.list(ctx)) {
-      await this.aliases.remove(ctx, alias.id);
-      report.aliases++;
+    // Deleting a mailbox deletes its account; an account that administers the
+    // instance is never removed as a side effect.
+    const admins = await this.mailboxes.instanceAdminAddresses(ctx);
+    if (admins.length > 0) {
+      throw new ConflictException(
+        `These mailboxes belong to instance administrators; remove their administrator role or move them first: ${admins.join(', ')}`,
+      );
     }
-    for (const mailbox of await this.mailboxes.list(ctx)) {
-      await this.mailboxes.remove(ctx, mailbox.id);
-      report.mailboxes++;
+    const report: DeletionReport = { aliases: 0, mailboxes: 0, domains: 0 };
+    // Members first, so the organization's admins cannot provision anything
+    // while it is being taken apart, then sign-in providers, so nobody signs in.
+    await this.db.delete(member).where(eq(member.organizationId, org.id));
+    await this.sso.removeAll(ctx);
+    // Twice: a request that was already running when the members went may
+    // still have added something.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const alias of await this.aliases.list(ctx)) {
+        await this.aliases.remove(ctx, alias.id);
+        report.aliases++;
+      }
+      for (const mailbox of await this.mailboxes.list(ctx)) {
+        await this.mailboxes.remove(ctx, mailbox.id);
+        report.mailboxes++;
+      }
     }
     for (const domain of await this.domains.list(ctx)) {
       await this.domains.remove(ctx, domain.id);

@@ -9,9 +9,11 @@
 # It REPLACES the database and the mail store of the target installation.
 set -euo pipefail
 
-source_dir="${1:?usage: restore.sh <backup directory>}"
+source_dir="$(realpath -m "${1:?usage: restore.sh <backup directory>}")"
 cd "$(dirname "$0")/../.."
-COMPOSE=(docker compose -f "${COMPOSE_FILE:-docker/compose/postarix.yml}" --env-file "${ENV_FILE:-docker/compose/postarix.env}")
+# COMPOSE_FILE may list several files separated by ":" (Docker Compose reads it).
+export COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/postarix.yml}"
+COMPOSE=(docker compose --env-file "${ENV_FILE:-docker/compose/postarix.env}")
 log() { printf '[restore] %s\n' "$*"; }
 
 for file in database.dump mailboxes.txt cyrus.tar.gz; do
@@ -39,11 +41,9 @@ log "mail store"
   tar -C / -xzf -
   chown -R cyrus:mail /var/spool/cyrus /var/spool/sieve /var/lib/cyrus
 ' <"$source_dir/cyrus.tar.gz"
-"${COMPOSE[@]}" run --rm -T --no-deps --entrypoint sh cyrus -c '
-  set -e
-  rm -f /var/lib/cyrus/mailboxes.db
-  su -s /bin/sh cyrus -c "/usr/lib/cyrus/bin/ctl_mboxlist -u"
-' <"$source_dir/mailboxes.txt"
+# The mailbox list comes back with Cyrus' databases (checkpointed by the
+# backup); mailboxes.txt is a readable copy of it for manual recovery. Cyrus
+# rebuilds each mailbox's index from the message files once it is running.
 
 if [ -s "$source_dir/valkey.rdb" ]; then
   log "spam filter data"
@@ -55,5 +55,5 @@ fi
 log "starting everything"
 "${COMPOSE[@]}" up -d --wait
 log "rebuilding Cyrus' indexes"
-"${COMPOSE[@]}" exec -T -u cyrus cyrus /usr/lib/cyrus/bin/reconstruct -r -G >/dev/null || log "reconstruct reported problems; check the Cyrus logs"
+"${COMPOSE[@]}" exec -T -u cyrus cyrus /usr/lib/cyrus/bin/reconstruct -r -G "*" >/dev/null || log "reconstruct reported problems; check the Cyrus logs"
 log "done"

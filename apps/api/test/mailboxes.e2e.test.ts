@@ -173,6 +173,8 @@ describe('Mailboxes and aliases API', () => {
       const path = `${url(orgA, 'mailboxes')}/${created.body.id}`;
       await alice.agent.post(`${path}/password`).send({ password: 'a takeover long password' }).expect(403);
       await alice.agent.delete(path).expect(403);
+      await alice.agent.patch(path).send({ status: 'disabled' }).expect(403);
+      await alice.agent.patch(path).send({ displayName: 'Not the chief' }).expect(403);
       expect(engine.mailboxes.has(`chief@${domainA.name}`)).toBe(true);
       await db.update(user).set({ role: 'user' }).where(eq(user.email, `chief@${domainA.name}`));
       await alice.agent.delete(path).expect(204);

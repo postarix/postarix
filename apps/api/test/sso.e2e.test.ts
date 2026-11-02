@@ -114,6 +114,8 @@ describe('Single sign-on', () => {
       await bob.agent.get('/api/auth/sso/providers').expect(404);
       await bob.agent.post('/api/auth/sso/delete-provider').send({ providerId: providerA.providerId }).expect(404);
       await bob.agent.post('/api/auth/sso/update-provider').send({ providerId: providerA.providerId }).expect(404);
+      await bob.agent.post('/api/auth/sso/verify-domain').send({ providerId: providerA.providerId }).expect(404);
+      await bob.agent.post(`/api/auth/sso/saml2/sp/acs/${providerA.providerId}`).send({}).expect(404);
     });
   });
 
@@ -164,6 +166,27 @@ describe('Single sign-on', () => {
       const audit = await alice.agent.get(`/api/orgs/${orgA}/audit`).expect(200);
       const actions = audit.body.data.map((e: { action: string }) => e.action);
       expect(actions).toEqual(expect.arrayContaining(['sign_in_provider.added', 'sign_in_provider.removed']));
+    });
+  });
+
+  describe('when a domain is deleted', () => {
+    it('takes its provider with it, so the next owner of the domain can set up its own', async () => {
+      const name = `sso-moving-${Date.now()}.example`;
+      const first = await alice.agent.post(`/api/orgs/${orgA}/domains`).send({ name }).expect(201);
+      await alice.agent.post(`/api/orgs/${orgA}/domains/${first.body.id}/verify`).expect(200);
+      await alice.agent
+        .post(`/api/orgs/${orgA}/sso`)
+        .send({ domainId: first.body.id, issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret })
+        .expect(201);
+      await alice.agent.delete(`/api/orgs/${orgA}/domains/${first.body.id}`).expect(204);
+      expect((await alice.agent.get(`/api/orgs/${orgA}/sso`).expect(200)).body.data.map((p: { domain: string }) => p.domain)).not.toContain(name);
+
+      const second = await bob.agent.post(`/api/orgs/${orgB}/domains`).send({ name }).expect(201);
+      await bob.agent.post(`/api/orgs/${orgB}/domains/${second.body.id}/verify`).expect(200);
+      await bob.agent
+        .post(`/api/orgs/${orgB}/sso`)
+        .send({ domainId: second.body.id, issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret })
+        .expect(201);
     });
   });
 });
