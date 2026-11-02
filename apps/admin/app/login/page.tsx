@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@post
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Separator } from '@postarix/ui/components/separator';
-import { KeyRound } from 'lucide-react';
+import { Building2, KeyRound } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useState } from 'react';
 import { BrandMark } from '@/components/brand';
@@ -13,13 +13,16 @@ import { FormField } from '@/components/form-field';
 import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { authClient } from '@/lib/auth-client';
+import { ssoErrorMessage, startSso } from '@/lib/sso';
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [step, setStep] = useState<'password' | '2fa'>(params.get('step') === '2fa' ? '2fa' : 'password');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(ssoErrorMessage(params.get('error')));
   const [pending, setPending] = useState(false);
+  const [email, setEmail] = useState('');
+  const [ssoPending, setSsoPending] = useState(false);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,6 +59,14 @@ function LoginForm() {
     router.replace('/');
   }
 
+  async function signInWithSso() {
+    setError(null);
+    if (!email.includes('@')) return setError('Enter your email address first.');
+    setSsoPending(true);
+    setError(await startSso(email, '/admin', '/admin/login'));
+    setSsoPending(false);
+  }
+
   return (
     <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
       <CardHeader className="gap-3">
@@ -71,7 +82,18 @@ function LoginForm() {
             <FieldGroup>
               {error ? <Notice>{error}</Notice> : null}
               <FormField label="Email">
-                {(props) => <Input {...props} name="email" type="email" autoComplete="username" required autoFocus />}
+                {(props) => (
+                  <Input
+                    {...props}
+                    name="email"
+                    type="email"
+                    autoComplete="username"
+                    required
+                    autoFocus
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                )}
               </FormField>
               <FormField label="Password">
                 {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
@@ -88,6 +110,10 @@ function LoginForm() {
                 <KeyRound aria-hidden />
                 Sign in with a passkey
               </Button>
+              <LoadingButton type="button" variant="outline" className="w-full" loading={ssoPending} onClick={signInWithSso}>
+                <Building2 aria-hidden />
+                Sign in with your company account
+              </LoadingButton>
             </FieldGroup>
           </form>
         ) : (

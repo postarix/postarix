@@ -50,6 +50,13 @@
       "when": 1793594493119,
       "tag": "0006_audit_keyset",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793598361276,
+      "tag": "0007_sso_provider",
+      "breakpoints": true
     }
   ]
 }

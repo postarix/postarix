@@ -1,4 +1,5 @@
 import { passkey } from '@better-auth/passkey';
+import { sso } from '@better-auth/sso';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
@@ -7,6 +8,7 @@ import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 import { hashPassword, verifyPassword } from './passwords.js';
+import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
 
 /** Header the API sets with the client IP resolved by Express (honours TRUSTED_PROXIES). */
@@ -22,6 +24,15 @@ export const AUTH_BASE_PATH = '/api/auth';
  */
 const OPEN_ORGANIZATION_ENDPOINTS = new Set(['/organization/create']);
 
+/**
+ * Single sign-on: only signing in stays open. Providers are managed through
+ * our organization-scoped API (`orgs/:orgId/sso`), which ties each one to a
+ * verified domain of the organization and writes the audit log.
+ */
+function isOpenSsoEndpoint(path: string): boolean {
+  return path === '/sign-in/sso' || path === '/sso/callback' || path.startsWith('/sso/callback/');
+}
+
 export function createAuth(db: Database, env: Env) {
   const authUrl = new URL(env.AUTH_URL);
 
@@ -31,7 +42,8 @@ export function createAuth(db: Database, env: Env) {
     basePath: AUTH_BASE_PATH,
     secret: env.AUTH_SECRET,
     trustedOrigins: env.TRUSTED_ORIGINS,
-    database: drizzleAdapter(db, { provider: 'pg', schema }),
+    // Transactions are required by SSO user resolution (and keep multi-step writes atomic).
+    database: drizzleAdapter(db, { provider: 'pg', schema, transaction: true }),
     emailAndPassword: {
       enabled: true,
       disableSignUp: !env.ALLOW_SIGNUP,
@@ -71,6 +83,9 @@ export function createAuth(db: Database, env: Env) {
         if (ctx.path.startsWith('/organization/') && !OPEN_ORGANIZATION_ENDPOINTS.has(ctx.path)) {
           throw new APIError('NOT_FOUND');
         }
+        if ((ctx.path.startsWith('/sso/') || ctx.path === '/sign-in/sso') && !isOpenSsoEndpoint(ctx.path)) {
+          throw new APIError('NOT_FOUND');
+        }
       }),
     },
     plugins: [
@@ -89,6 +104,15 @@ export function createAuth(db: Database, env: Env) {
         rpID: authUrl.hostname,
         rpName: 'Postarix',
         origin: [env.AUTH_URL, ...env.TRUSTED_ORIGINS],
+      }),
+      sso({
+        // Accounts are mailboxes: SSO never creates one, it only signs in the
+        // owner of an existing mailbox of the provider's organization.
+        disableImplicitSignUp: true,
+        organizationProvisioning: { disabled: true },
+        // Registration through Better Auth's endpoint is closed (see the hook above).
+        providersLimit: 0,
+        resolveUser: (input) => resolveSsoUser(db, input),
       }),
     ],
   });

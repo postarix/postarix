@@ -94,7 +94,7 @@ Postarix is a modern, self-hosted, open-source email platform. It is meant as an
 - `twoFactor`: TOTP and recovery codes.
 - `passkey`: WebAuthn / security keys.
 - `admin`: banning users and audited impersonation for support.
-- `sso` (Phase 5): sign-in with the company identity provider (OIDC/SAML: Azure AD, Google Workspace, Okta, Keycloak…).
+- `sso`: sign-in with the organization's OpenID Connect identity provider (Microsoft Entra ID, Google Workspace, Okta, Keycloak…). Providers are managed through our API (`orgs/:orgId/sso`, organization admins), one per verified domain; Better Auth's own provider endpoints are closed. SSO never creates accounts: on every sign-in the asserted email must be an **active mailbox of the provider's organization**, and never an instance administrator. Issuer URLs must be public https addresses (checked again after DNS resolution); an internal IdP must be added to `TRUSTED_ORIGINS` by the operator. Mail clients keep using app passwords. SAML is not offered yet.
 
 ### 4.2 Mail clients (IMAP, SMTP, CalDAV, CardDAV)
 
@@ -242,7 +242,7 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 ### 9.3 Provisioning
 
 - Creating a mailbox in the API creates the user's account and the row, then asks `MailEngine` to create the Cyrus mailbox with its folders and quota. If any step fails, the earlier ones are undone (each undo step independently), and the engine removes a mailbox it created only partly.
-- Organizations cannot be deleted through Better Auth: that would drop rows and leave Cyrus mailboxes, accounts and DKIM keys behind. A deprovisioning deletion arrives with the instance tools (Phase 5); the mail tables reference organizations with `ON DELETE RESTRICT` as a safety net.
+- Organizations cannot be deleted through Better Auth: that would drop rows and leave Cyrus mailboxes, accounts and DKIM keys behind. Instance administrators delete them through `DELETE /api/admin/organizations/:id` (the name must be typed to confirm), which removes sign-in providers, aliases, mailboxes (mail and accounts) and domains (DKIM keys) through the normal services before the organization row. The mail tables reference organizations with `ON DELETE RESTRICT` as a safety net.
 - Domains become active only after DNS verification of the `postarix-verification=…` TXT record. A development switch (`DOMAIN_VERIFICATION=skip`) activates them immediately.
 - DKIM keys are generated per domain by the API, stored encrypted in PostgreSQL and published to Valkey for Rspamd. The API re-synchronises Valkey at start and every five minutes (one failing domain does not stop the others), and verifying an active domain again re-publishes its key.
 
@@ -371,13 +371,13 @@ out the account password after repeated failures (app passwords keep working).
 - Invitations (iMIP), shared resources.
 
 ### Phase 5 — Enterprise and scale
-- SSO (OIDC/SAML), passkeys enforceable by policy.
+- [x] SSO with OpenID Connect. Later: SAML, passkeys enforceable by policy.
 - CrowdSec with a host firewall bouncer.
 - Replication and Cyrus Murder; Helm chart.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.
 - Rspamd quarantine and logs per organization; MTA-STS policy host.
-- Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
+- [x] Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
 - External security audit → **1.0**.
 
 ## Decision log
@@ -417,8 +417,11 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | The `From` header of submitted mail must equal the envelope sender, which Postfix ties to the login; the null sender is refused on submission. This closes cross-tenant DKIM signing. |
 | 2026-11-02 | Mail-login lockout (10 failures / 15 min) applies to the account password only. App passwords (~120 bits) keep working, so an attacker cannot lock real clients out. Per-IP throttling comes with CrowdSec (Phase 5). |
 | 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
+| 2026-11-02 | SSO signs in only the owner of an active mailbox of the identity provider's organization (checked on every sign-in). An organization's IdP thus has no more power than its admins, who can already reset those mailboxes' passwords, and never reaches other tenants or instance administrators. Providers are owned by a banned, passwordless system account because Better Auth deletes a provider with its owning user. |
 
 ## Known limitations
+
+- SSO client secrets are stored in PostgreSQL as Better Auth's SSO plugin reads them (not encrypted like DKIM keys).
 
 - Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.
 - Better Auth's rate limiter and the mail-login failure counters live in memory; they will move to Valkey so they work across API instances.
