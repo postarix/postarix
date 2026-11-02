@@ -239,6 +239,13 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 5. Rspamd signs the message with the domain's DKIM key (read from Valkey) and applies rate limits.
 6. Postfix delivers it, using DANE/MTA-STS when the destination supports them.
 
+### 9.2.1 Mail Cyrus sends (Sieve)
+
+Sieve `redirect` and vacation replies are sent by Cyrus' `lmtpd` (its own configuration, `imapd-lmtp.conf`; every other Cyrus service keeps a closed `smtp_host`) to a Postfix port kept for it (10588), where only Cyrus' account can log in. Rspamd recognizes that port by its milter daemon name and lets through only:
+
+- redirects, never DKIM-signed (the original signature still verifies), whose envelope sender Postfix replaces with `sieve-redirect@<MAIL_HOSTNAME>` so SPF passes at the destination (bounces of forwarded mail are not accepted back);
+- vacation replies (null envelope sender), DKIM-signed with the From domain only when every hosted recipient of the message being answered was on that domain. Rspamd remembers the recipients of each message by Message-ID for two days. Sieve lets a user choose the From address; this stops them from making the server sign as another organization's domain.
+
 ### 9.3 Provisioning
 
 - Creating a mailbox in the API creates the user's account and the row, then asks `MailEngine` to create the Cyrus mailbox with its folders and quota. If any step fails, the earlier ones are undone (each undo step independently), and the engine removes a mailbox it created only partly.
@@ -419,14 +426,16 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
 | 2026-11-02 | SSO signs in only the owner of an active mailbox of the identity provider's organization (checked on every sign-in). An organization's IdP thus has no more power than its admins, who can already reset those mailboxes' passwords, and never reaches other tenants or instance administrators. Providers are owned by a banned, passwordless system account because Better Auth deletes a provider with its owning user. |
 
+| 2026-11-02 | Cyrus sends Sieve redirects and vacation replies through Postfix (port 10588) with Rspamd rules that bound what may be sent and signed (§9.2.1), instead of not sending at all. Envelope senders of redirects are rewritten to the server's own name rather than SRS: the Cyrus package is built without libsrs2, and a rewrite needs no extra daemon. |
+| 2026-11-02 | Internal secrets are derived per purpose (HMAC-SHA256) from `INTERNAL_API_TOKEN`: the mail-login bridge, the API's submission port and Cyrus' submission port each get their own, and the token never leaves the API. The API's submission connection uses STARTTLS. |
+| 2026-11-02 | SSO client secrets are encrypted at rest (AES-256-GCM, key derived from `AUTH_SECRET`) and opened only by the database adapter Better Auth reads providers through. Private identity providers are allowed with `SSO_TRUSTED_ISSUERS`, trusted by Better Auth on the sign-in routes only. |
+| 2026-11-02 | Rate limits, mail-login failure counters and sending quotas live in Valkey, so they hold across API replicas. |
+| 2026-11-02 | No organization invitations: members are mailbox owners of the organization, added by its admins, who are told by mail (system notices through Postfix). |
+| 2026-11-02 | On Kubernetes the mail pod resolves through an Unbound container of its own (DNSSEC-validating, forwarding the cluster domain to the cluster DNS), so DANE works as with Compose. CI installs the chart on kind and runs the mail tests against it. |
+
 ## Known limitations
 
-- SSO client secrets are stored in PostgreSQL as Better Auth's SSO plugin reads them (not encrypted like DKIM keys).
-- Cyrus never sends mail by itself (`smtp_backend` points at a closed port so attempts fail at once): Sieve `redirect` and vacation replies do not work yet; forwarding is done with aliases.
-- Spam to an alias is filed in the destinations' Inbox, not their Junk folder: the `+Junk` extension is not carried through aliases (`propagate_unmatched_extensions = canonical`), because an alias may point to an outside address.
-- On Kubernetes, the API's internal token is both the mail-login bearer token and the password of the webmail submission port, and it travels unencrypted inside the cluster network; use a CNI with encryption (or a service mesh) where the pod network is not trusted.
-- The SSO issuer allow-list for private addresses reuses `TRUSTED_ORIGINS`; a separate setting is planned.
-- The internal JMAP service authenticates through the same `http` login service as CalDAV/CardDAV, so a DAV app password would work there too. It is reachable only from the internal network (bound to Cyrus' address on it); a dedicated login service is planned.
-
-- Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.
-- Better Auth's rate limiter and the mail-login failure counters live in memory; they will move to Valkey so they work across API instances.
+- Bounces of mail forwarded by a Sieve `redirect` are not delivered back to the original sender (the envelope sender is the server's, not SRS).
+- A vacation reply is not sent when Rspamd does not know the message it answers (received more than two days earlier, or without a Message-ID).
+- The webmail has no screen for filters and vacation replies yet: users set them with any ManageSieve client (port 4190), e.g. Thunderbird or a phone app.
+- The internal JMAP service and Cyrus' submission port use plain text inside the internal network (Compose) or inside the mail pod (Kubernetes, loopback); the mail-login bridge to the API crosses the cluster network in plain text with a secret good for that purpose only. Use a CNI with encryption where the pod network is not trusted.

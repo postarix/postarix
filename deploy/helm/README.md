@@ -22,8 +22,9 @@ Differences from the Docker Compose install:
 
 - TLS for the mail services comes from a `kubernetes.io/tls` secret
   (`tls.secretName`), e.g. issued by cert-manager (`tls.certManager.enabled`).
-- Postfix uses the cluster's DNS, which usually does not validate DNSSEC: DANE
-  for outgoing mail is then inactive (TLS is still used opportunistically).
+- DANE for outgoing mail works as with Compose: the mail pod resolves through
+  an Unbound container of its own (DNSSEC-validating) that forwards the
+  cluster's names to the cluster DNS (`mail.dane`).
 - Network policies keep the mail pod's internal ports (admin IMAP, JMAP and
   webmail submission) reachable from the API only. Your CNI must enforce them.
 - CrowdSec is not included: run it on the nodes that receive mail traffic.

@@ -35,8 +35,11 @@ with your server's name.
 | CalDAV | `https://mail.example.com/dav/calendars/user/you@example.com/` | 443 | HTTPS |
 | CardDAV | `https://mail.example.com/dav/addressbooks/user/you@example.com/` | 443 | HTTPS |
 
-Filters can file, flag or reject mail; forwarding to another address and
-automatic replies are not available yet (use an alias to forward).
+Filters can file, flag, reject or forward mail (`redirect`) and send automatic
+replies while you are away (`vacation`), e.g. with Thunderbird's Sieve add-on or
+a phone app that speaks ManageSieve. An automatic reply always comes from your
+own address on your own domain; the server refuses to send one that claims
+someone else's.
 
 Most calendar and contacts apps only need `https://mail.example.com`: they find
 the rest through `/.well-known/caldav` and `/.well-known/carddav`.

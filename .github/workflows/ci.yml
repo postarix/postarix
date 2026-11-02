@@ -194,3 +194,79 @@ jobs:
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar -xz kubeconform
           ./kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered.yaml
+
+  kubernetes:
+    name: Helm chart on Kubernetes (kind)
+    needs: [check, helm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: azure/setup-helm@v4
+
+      - name: Build the images
+        run: docker compose -f docker/compose/postarix.yml --env-file docker/compose/test.env build api admin webmail cyrus postfix rspamd unbound
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: postarix
+
+      - name: Load the images into the cluster
+        run: |
+          for image in api admin webmail cyrus postfix rspamd unbound; do
+            kind load docker-image "postarix/$image:dev" --name postarix
+          done
+
+      - name: Install the chart
+        run: |
+          kubectl create namespace postarix
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=mail.postarix.test \
+            -addext subjectAltName=DNS:mail.postarix.test -keyout /tmp/tls.key -out /tmp/tls.crt
+          kubectl -n postarix create secret tls postarix-mail-tls --cert=/tmp/tls.crt --key=/tmp/tls.key
+          # ci-values.yaml pins the cluster DNS address for helm template; here it is looked up.
+          helm install postarix deploy/helm/postarix -n postarix \
+            -f deploy/helm/postarix/ci-values.yaml -f deploy/helm/postarix/kind-values.yaml \
+            --wait --timeout 15m
+
+      - name: The mail pod resolves through its own validating resolver
+        run: |
+          kubectl -n postarix exec postarix-mail-0 -c postfix -- cat /etc/resolv.conf
+          kubectl -n postarix exec postarix-mail-0 -c postfix -- getent hosts postarix-rspamd
+          kubectl -n postarix exec postarix-mail-0 -c postfix -- getent hosts github.com
+          test "$(kubectl -n postarix exec postarix-mail-0 -c postfix -- postconf -h smtp_tls_security_level)" = dane
+
+      - name: Mail flow through the cluster
+        env:
+          ADMIN_EMAIL: admin@postarix.test
+          ADMIN_PASSWORD: kubernetes admin password
+        run: |
+          kubectl -n postarix exec deploy/postarix-api -- env ADMIN_EMAIL="$ADMIN_EMAIL" ADMIN_PASSWORD="$ADMIN_PASSWORD" ADMIN_NAME=Admin node dist/cli/create-admin.js
+          kubectl -n postarix port-forward svc/postarix-api 3000:3000 > /tmp/pf-api.log 2>&1 &
+          kubectl -n postarix port-forward svc/postarix-mail 2525:25 5870:587 4650:465 9930:993 1430:143 41900:4190 > /tmp/pf-mail.log 2>&1 &
+          for port in 3000 2525 9930 41900; do
+            timeout 60 sh -c "until nc -z 127.0.0.1 $port; do sleep 1; done"
+          done
+          # Everything but the tests that need the test-only spam rule.
+          pnpm --filter @postarix/integration-tests exec vitest run src/mail-flow.test.ts src/sieve.test.ts \
+            -t "provisioning|submission and delivery|vacation|redirect|another organization"
+
+      - name: Cluster state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl -n postarix describe pods
+          for pod in $(kubectl -n postarix get pods -o name); do
+            kubectl -n postarix logs "$pod" --all-containers --tail=150 || true
+          done
+

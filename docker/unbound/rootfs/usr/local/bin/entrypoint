@@ -6,4 +6,19 @@ if ! unbound-anchor -a /var/lib/unbound/root.key; then
   [ -s /var/lib/unbound/root.key ] || cp /usr/share/dns/root.key /var/lib/unbound/root.key
 fi
 chown unbound:unbound /var/lib/unbound/root.key
+
+# UNBOUND_FORWARD_ZONES="cluster.local=10.96.0.10 other.zone=10.0.0.2": zones
+# answered by another server (not DNSSEC-validated: internal names are unsigned).
+install -d /etc/unbound/local.d
+rm -f /etc/unbound/local.d/*.conf
+{
+  for zone in ${UNBOUND_FORWARD_ZONES:-}; do
+    name=${zone%%=*}
+    address=${zone#*=}
+    printf 'server:\n  domain-insecure: "%s"\n' "$name"
+    printf 'forward-zone:\n  name: "%s"\n  forward-addr: %s\n' "$name" "$address"
+  done
+} > /etc/unbound/local.d/postarix.conf
+unbound-checkconf /etc/unbound/unbound.conf >/dev/null
+
 exec unbound -d -c /etc/unbound/unbound.conf

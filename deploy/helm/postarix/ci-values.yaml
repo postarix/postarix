@@ -7,3 +7,7 @@ secrets:
   postfixDbPassword: ci
   valkeyPassword: ci
   rspamdControllerPassword: ci
+mail:
+  dane:
+    # helm template has no cluster to look the DNS service up in.
+    clusterDnsIP: 10.96.0.10

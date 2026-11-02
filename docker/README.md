@@ -30,6 +30,15 @@ docker compose -f docker/compose/postarix.yml --env-file docker/compose/postarix
 The API listens on port 3000 inside the Docker network; put your reverse proxy in
 front of it (see `deploy/proxies`). Never expose `/api/internal/*`.
 
+DNS for the server itself (each hosted domain gets its own records from the
+admin panel):
+
+| Name | Type | Value |
+|---|---|---|
+| `MAIL_HOSTNAME` (e.g. mail.example.com) | A | the server's public address |
+| `MAIL_HOSTNAME` | TXT | `v=spf1 a -all` (forwarded mail and bounces are sent from this name) |
+| the server's address | PTR (ask your provider) | `MAIL_HOSTNAME` |
+
 ## How a login works
 
 1. A mail client logs in to Cyrus (IMAP/POP3/Sieve) or Postfix (SMTP submission).
