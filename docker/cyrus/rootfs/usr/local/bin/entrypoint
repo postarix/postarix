@@ -30,6 +30,9 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
 sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
     -e 's/^allowplaintext:.*/allowplaintext: yes/' \
     -e 's|^sasl_saslauthd_path:.*|sasl_saslauthd_path: /run/saslauthd-jmap/mux|' /etc/imapd.conf > /etc/imapd-jmap.conf
+# Contacts over JMAP are a Cyrus extension (the IETF JMAP for Contacts
+# capability is not in this Cyrus version yet).
+echo 'jmap_nonstandard_extensions: yes' >> /etc/imapd-jmap.conf
 # The JMAP service listens on the internal network address only.
 sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
