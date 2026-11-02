@@ -111,9 +111,10 @@ CREATE TABLE "domains" (
 	"organization_id" text NOT NULL,
 	"name" text NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
+	"verification_token" text NOT NULL,
+	"verified_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "domains_name_unique" UNIQUE("name")
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -136,4 +137,6 @@ CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> state
 CREATE INDEX "twoFactor_secret_idx" ON "two_factor" USING btree ("secret");--> statement-breakpoint
 CREATE INDEX "twoFactor_userId_idx" ON "two_factor" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
-CREATE INDEX "domains_organization_id_idx" ON "domains" USING btree ("organization_id");
+CREATE INDEX "domains_organization_id_idx" ON "domains" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "domains_organization_id_name_unique" ON "domains" USING btree ("organization_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX "domains_name_verified_unique" ON "domains" USING btree ("name") WHERE "domains"."status" <> 'pending';

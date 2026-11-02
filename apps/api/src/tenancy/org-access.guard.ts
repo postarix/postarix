@@ -60,9 +60,10 @@ export class OrgAccessGuard implements CanActivate {
       .where(and(eq(member.organizationId, organizationId), eq(member.userId, session.user.id)))
       .limit(1);
 
-    if (membership) {
-      role = highestRole(membership.role);
-    } else if (isSuperAdmin(session)) {
+    if (membership) role = highestRole(membership.role);
+
+    // Super-admins get owner-level access even where they are also a plain member.
+    if (role !== 'owner' && isSuperAdmin(session)) {
       const [org] = await this.db
         .select({ id: organization.id })
         .from(organization)

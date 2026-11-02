@@ -25,7 +25,8 @@ export class DomainsService {
       return toDomainDto(row);
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new ConflictException('Domain is already registered');
+        // Only reachable for a duplicate inside the caller's own organization.
+        throw new ConflictException('Domain already exists in this organization');
       }
       throw error;
     }

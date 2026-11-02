@@ -6,6 +6,7 @@ import { admin, organization, twoFactor } from 'better-auth/plugins';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
+import { hasInstanceAdminRole } from './roles.js';
 
 /** Header the API sets with the client IP resolved by Express (honours TRUSTED_PROXIES). */
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
@@ -45,6 +46,10 @@ export function createAuth(db: Database, env: Env) {
       max: 100,
     },
     advanced: {
+      // Explicit: Better Auth otherwise disables its origin/CSRF check whenever it
+      // detects a test environment (NODE_ENV=test or a truthy TEST variable).
+      disableOriginCheck: false,
+      disableCSRFCheck: false,
       useSecureCookies: authUrl.protocol === 'https:',
       ipAddress: {
         // Only trust the header our own middleware writes from Express' req.ip.
@@ -59,7 +64,9 @@ export function createAuth(db: Database, env: Env) {
       admin(),
       organization({
         allowUserToCreateOrganization: (user) =>
-          env.ALLOW_USER_CREATE_ORG || (user as { role?: string | null }).role === 'admin',
+          env.ALLOW_USER_CREATE_ORG || hasInstanceAdminRole((user as { role?: string | null }).role),
+        // Accepting an invitation requires a verified email. Email delivery arrives in
+        // Phase 1; until then members are added by admins (auth.api.addMember).
       }),
       twoFactor({ issuer: 'Postarix' }),
       passkey({

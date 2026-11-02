@@ -1,5 +1,5 @@
 {
-  "id": "02ec7436-a1ac-45dd-8abd-039e91b6edd7",
+  "id": "e00c8d36-d835-4180-a044-76bce1957127",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -939,6 +939,18 @@
           "notNull": true,
           "default": "'pending'"
         },
+        "verification_token": {
+          "name": "verification_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -969,6 +981,43 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "domains_organization_id_name_unique": {
+          "name": "domains_organization_id_name_unique",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "domains_name_verified_unique": {
+          "name": "domains_name_verified_unique",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"domains\".\"status\" <> 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -987,15 +1036,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "domains_name_unique": {
-          "name": "domains_name_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
