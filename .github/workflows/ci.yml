@@ -174,7 +174,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: The chart's init script matches the Compose one
         run: cmp deploy/helm/postarix/files/10-postarix-mail-role.sh docker/postgres/10-postarix-mail-role.sh
       - name: Lint and render
@@ -213,7 +213,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
 
       - name: Build the images
         run: docker compose -f docker/compose/postarix.yml --env-file docker/compose/test.env build api admin webmail cyrus postfix rspamd unbound
