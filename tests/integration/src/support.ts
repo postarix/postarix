@@ -116,12 +116,13 @@ export async function waitForMessage(
   pass: string,
   subject: string,
   timeoutMs = 45_000,
+  folder = 'INBOX',
 ): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   const client = await imapLogin(user, pass);
   try {
     while (Date.now() < deadline) {
-      const lock = await client.getMailboxLock('INBOX');
+      const lock = await client.getMailboxLock(folder);
       try {
         const uids = await client.search({ subject }, { uid: true });
         if (uids && uids.length > 0) {

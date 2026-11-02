@@ -89,6 +89,9 @@ export class CyrusEngine implements MailEngine {
         for (const [folder, use] of DEFAULT_FOLDERS) {
           await imap.expectOk(`CREATE ${quote(CyrusEngine.folderName(address, folder))} (USE (${use}))`);
         }
+        // Spam is delivered to user+Junk@domain: Cyrus files "+Junk" into this
+        // folder only if the delivering party ("anyone" over LMTP) may post there.
+        await imap.expectOk(`SETACL ${quote(CyrusEngine.folderName(address, 'Junk'))} anyone p`);
         if (options.quotaBytes !== null) await imap.expectOk(`SETQUOTA ${name} ${storage(options.quotaBytes)}`);
       } catch (error) {
         // Never leave a half-created mailbox behind: it would block the address.
