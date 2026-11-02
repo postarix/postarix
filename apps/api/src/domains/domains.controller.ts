@@ -57,8 +57,9 @@ export class DomainsController {
     return { data: await this.domains.dnsRecords(ctx, id) };
   }
 
-  /** Live check of the domain's DNS records (any member may look). */
+  /** Live check of the domain's DNS records (cached briefly; see DomainsService.dnsCheck). */
   @Get(':id/dns-check')
+  @RequireOrgRole('admin')
   async dnsCheck(
     @Tenant() ctx: TenantContext,
     @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,

@@ -18,9 +18,12 @@ import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto 
 import { DomainsRepository } from './domains.repository.js';
 import { checkDnsRecords, type DnsRecordCheckDto } from './dns-check.js';
 
+const DNS_CHECK_CACHE_MS = 30_000;
+
 @Injectable()
 export class DomainsService {
   private readonly logger = new Logger(DomainsService.name);
+  private readonly dnsCheckCache = new Map<string, { result: DnsRecordCheckDto[]; expires: number }>();
 
   constructor(
     @Inject(DomainsRepository) private readonly repository: DomainsRepository,
@@ -63,9 +66,20 @@ export class DomainsService {
   }
 
   /** The DNS records the organization must publish for this domain. */
-  /** The records the domain should publish, with what DNS answers for each today. */
+  /**
+   * The records the domain should publish, with what DNS answers for each
+   * today. Results are kept for a short while per domain, so repeated clicks
+   * cannot turn the API into a DNS query pump.
+   */
   async dnsCheck(ctx: TenantContext, id: string): Promise<DnsRecordCheckDto[]> {
-    return checkDnsRecords(this.dns, await this.dnsRecords(ctx, id), this.env.MAIL_HOSTNAME);
+    const expected = await this.dnsRecords(ctx, id); // also enforces tenancy
+    const key = `${id}:${JSON.stringify(expected)}`;
+    const cached = this.dnsCheckCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.result;
+    const result = await checkDnsRecords(this.dns, expected, this.env.MAIL_HOSTNAME);
+    if (this.dnsCheckCache.size > 10_000) this.dnsCheckCache.clear();
+    this.dnsCheckCache.set(key, { result, expires: Date.now() + DNS_CHECK_CACHE_MS });
+    return result;
   }
 
   async dnsRecords(ctx: TenantContext, id: string): Promise<DnsRecordDto[]> {
