@@ -14,6 +14,9 @@ if [ -z "$resolver_ip" ]; then
 else
   printf 'dns {\n  nameserver = ["%s:53"];\n}\n' "$resolver_ip" > /etc/rspamd/local.d/options.inc
 fi
+# Test messages (GTUBE) for every action, not only reject: lets admins and the
+# integration tests check spam handling end to end.
+echo 'gtube_patterns = "all";' >> /etc/rspamd/local.d/options.inc
 
 : "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
 umask 027

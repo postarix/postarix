@@ -129,6 +129,33 @@ describe('Mail flow through the full stack', () => {
     });
   });
 
+  describe('spam handling', () => {
+    // Rspamd's test patterns (GTUBE) trigger each action deterministically.
+    const GTUBE = {
+      spam: 'YJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X',
+      reject: 'XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X',
+    };
+
+    it('files mail marked as spam in the recipient’s Junk folder', async () => {
+      const subject = unique('junk');
+      await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject, text: `Cheap stuff\n${GTUBE.spam}\n` });
+      const raw = await waitForMessage(bob.address, PASSWORD, subject, 45_000, 'Junk');
+      expect(raw).toMatch(/^X-Spam: Yes/im);
+    });
+
+    it('rejects mail over the reject threshold', async () => {
+      await expect(
+        smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject: unique('reject'), text: `${GTUBE.reject}\n` }),
+      ).rejects.toThrow(/5\d\d/);
+    });
+
+    it('shows what the filter did in the organization’s mail log', async () => {
+      const log = await admin.ok<{ data: { to: string[]; outcome: string }[] }>('GET', `/api/orgs/${orgId}/mail-log`);
+      const outcomes = log.data.filter((e) => e.to.includes(bob.address)).map((e) => e.outcome);
+      expect(outcomes).toEqual(expect.arrayContaining(['spam', 'rejected']));
+    });
+  });
+
   describe('abuse protection', () => {
     it('refuses to relay unauthenticated mail to other domains', async () => {
       await expect(

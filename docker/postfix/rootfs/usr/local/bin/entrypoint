@@ -88,6 +88,7 @@ postconf -e \
   "virtual_mailbox_domains = $(pg domains)" \
   "virtual_mailbox_maps = $(pg mailboxes)" \
   "virtual_alias_maps = $(pg aliases)" \
+  "propagate_unmatched_extensions = canonical" \
   "virtual_alias_domains =" \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \

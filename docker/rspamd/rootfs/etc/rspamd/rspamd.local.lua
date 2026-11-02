@@ -40,3 +40,40 @@ rspamd_config:register_symbol({
     end
   end,
 })
+
+-- Postarix: incoming mail the filter marks as spam (but does not reject) is
+-- filed in the recipient's Junk folder. Each recipient becomes user+Junk@domain;
+-- Postfix keeps the extension on the way to Cyrus, which delivers "+Junk" into
+-- that folder (falling back to the inbox if it cannot).
+local SPAM_ACTIONS = { ['add header'] = true, ['rewrite subject'] = true }
+
+rspamd_config:register_symbol({
+  name = 'POSTARIX_FILE_AS_JUNK',
+  type = 'postfilter',
+  priority = 5,
+  callback = function(task)
+    if task:get_user() then
+      return
+    end
+    local action = task:get_metric_action('default')
+    if not SPAM_ACTIONS[action] then
+      return
+    end
+    local recipients = task:get_recipients('smtp') or {}
+    local remove, add = {}, {}
+    for _, rcpt in ipairs(recipients) do
+      local user, domain = rcpt.user or '', rcpt.domain or ''
+      if user ~= '' and domain ~= '' then
+        local base = user:gsub('%+.*$', '')
+        table.insert(remove, rcpt.addr)
+        table.insert(add, base .. '+Junk@' .. domain)
+      end
+    end
+    if #add > 0 then
+      task:set_milter_reply({ del_rcpt = remove, add_rcpt = add })
+      task:insert_result('POSTARIX_FILE_AS_JUNK', 1.0)
+    end
+  end,
+})
+
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_FILE_AS_JUNK', score = 0.0, description = 'Spam filed in the Junk folder' })
