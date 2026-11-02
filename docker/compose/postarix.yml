@@ -137,7 +137,8 @@ services:
       CYRUS_TLS_CA_FILE: /certs/fullchain.pem
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD:?set CYRUS_ADMIN_PASSWORD}
       # Cyrus' internal JMAP service, used to serve the webmail.
-      CYRUS_JMAP_URL: http://cyrus:8008
+      # By address: the JMAP service listens on the internal network only.
+      CYRUS_JMAP_URL: http://${CYRUS_IP:-172.30.53.10}:8008
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
       DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
@@ -192,6 +193,9 @@ services:
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
       POSTARIX_API_URL: http://api:3000
+      # The internal JMAP service (for the API) binds to this address only, so
+      # containers on the proxy network cannot reach it.
+      JMAP_LISTEN_ADDRESS: ${CYRUS_IP:-172.30.53.10}
     ports:
       - "${IMAP_PORT:-143}:143"
       - "${IMAPS_PORT:-993}:993"
@@ -205,7 +209,10 @@ services:
       - lmtp-socket:/run/cyrus/lmtp
       - mail-logs:/var/log/postarix
       - certs:/certs:ro
-    networks: [default, proxy]
+    networks:
+      default:
+        ipv4_address: ${CYRUS_IP:-172.30.53.10}
+      proxy: {}
     depends_on:
       api:
         condition: service_started

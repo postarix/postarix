@@ -85,9 +85,15 @@ export interface FetchedImage {
 export interface FetchPolicy {
   isAllowedAddress: (address: string) => boolean;
   anyPort: boolean;
+  /** Deadline for the whole fetch, redirects included (default 15 s). */
+  totalTimeoutMs?: number;
 }
 
 const DEFAULT_POLICY: FetchPolicy = { isAllowedAddress: isPublicAddress, anyPort: false };
+
+/** At most this many remote fetches at once; the endpoint is public. */
+const MAX_CONCURRENT_FETCHES = 32;
+let activeFetches = 0;
 
 /** Only resolves to allowed addresses; used as the socket's lookup, so the checked address is the one connected to. */
 const safeLookup = (policy: FetchPolicy) =>
@@ -107,8 +113,22 @@ const safeLookup = (policy: FetchPolicy) =>
   });
   };
 
-/** Fetches a remote image with SSRF protections, size and type limits. */
-export async function fetchRemoteImage(rawUrl: string, policy: FetchPolicy = DEFAULT_POLICY, redirects = 0): Promise<FetchedImage> {
+/**
+ * Fetches a remote image with SSRF protections, size and type limits, an
+ * overall deadline (a slow server cannot hold a request open) and a cap on
+ * concurrent fetches.
+ */
+export async function fetchRemoteImage(rawUrl: string, policy: FetchPolicy = DEFAULT_POLICY): Promise<FetchedImage> {
+  if (activeFetches >= MAX_CONCURRENT_FETCHES) throw new ImageProxyError(503, 'Too many images are loading; try again');
+  activeFetches++;
+  try {
+    return await fetchOnce(rawUrl, policy, 0, Date.now() + (policy.totalTimeoutMs ?? 15_000));
+  } finally {
+    activeFetches--;
+  }
+}
+
+async function fetchOnce(rawUrl: string, policy: FetchPolicy, redirects: number, deadline: number): Promise<FetchedImage> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -137,7 +157,7 @@ export async function fetchRemoteImage(rawUrl: string, policy: FetchPolicy = DEF
           res.resume();
           if (redirects >= MAX_REDIRECTS) return reject(new ImageProxyError(502, 'Too many redirects'));
           const next = new URL(res.headers.location, url).href;
-          return fetchRemoteImage(next, policy, redirects + 1).then(resolve, reject);
+          return fetchOnce(next, policy, redirects + 1, deadline).then(resolve, reject);
         }
         if (status !== 200) {
           res.resume();
@@ -166,6 +186,8 @@ export async function fetchRemoteImage(rawUrl: string, policy: FetchPolicy = DEF
         res.on('error', (error) => reject(new ImageProxyError(502, error.message)));
       },
     );
+    const timer = setTimeout(() => req.destroy(new ImageProxyError(504, 'Upstream timed out')), Math.max(0, deadline - Date.now()));
+    req.on('close', () => clearTimeout(timer));
     req.on('timeout', () => req.destroy(new ImageProxyError(504, 'Upstream timed out')));
     req.on('error', (error) => {
       if (error instanceof ImageProxyError) return reject(error);

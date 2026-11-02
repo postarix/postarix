@@ -4,7 +4,7 @@ import request from 'supertest';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAIL_ENGINE } from '../src/core/tokens.js';
-import { createOrg, newAgent, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
+import { createOrg, mailboxInNewOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
 
 describe('JMAP proxy for the webmail', () => {
   let app: INestApplication;
@@ -132,14 +132,59 @@ describe('JMAP proxy for the webmail', () => {
     await ann.get('/api/jmap/').expect(503);
   });
 
-  it('keeps its own login tokens out of reach of real mail logins', async () => {
-    // A token is only valid for the address it was minted for and only on HTTP;
-    // see the mail-auth tests. Here: a guessed token string is never accepted.
-    const res = await newAgent(app)
-      .post('/api/internal/mail-auth')
-      .set('x-postarix-internal-token', process.env.INTERNAL_API_TOKEN ?? '')
-      .type('form')
-      .send({ username: annAddress, password: 'pxj1.9999999999.forged', service: 'http' });
-    expect([401, 404]).toContain(res.status);
+  it('only lets through the capabilities and methods the webmail uses', async () => {
+    const call = (using: string[], methodCalls: unknown[]) => ann.post('/api/jmap/').send({ using, methodCalls });
+    const core = ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'];
+    for (const name of ['EmailSubmission/set', 'Identity/get', 'SieveScript/set', 'VacationResponse/set', 'Backup/restoreMail', 'Admin/rewriteCalEventPrivacy']) {
+      await call(core, [[name, {}, 'c0']]).expect(403);
+    }
+    for (const capability of ['urn:ietf:params:jmap:submission', 'urn:ietf:params:jmap:sieve', 'https://cyrusimap.org/ns/jmap/backup']) {
+      await call([...core, capability], [['Email/get', {}, 'c0']]).expect(403);
+    }
+    // One forbidden call spoils the whole request.
+    await call(core, [['Email/get', {}, 'c0'], ['EmailSubmission/set', {}, 'c1']]).expect(403);
+    await ann.post('/api/jmap/').set('content-type', 'application/json').send('{not json').expect(400);
+    expect(calls).toEqual([]);
+
+    await call(core, [['Email/query', {}, 'c0'], ['Email/get', {}, 'c1'], ['Mailbox/get', {}, 'c2']]).expect(200);
+    expect(JSON.parse(calls[0]!.body)).toEqual({ using: core, methodCalls: [['Email/query', {}, 'c0'], ['Email/get', {}, 'c1'], ['Mailbox/get', {}, 'c2']] });
+  });
+
+  it('advertises only the capabilities it lets through', async () => {
+    const full = {
+      'urn:ietf:params:jmap:core': {},
+      'urn:ietf:params:jmap:mail': {},
+      'urn:ietf:params:jmap:submission': {},
+      'https://cyrusimap.org/ns/jmap/backup': {},
+    };
+    engine.jmapHandler = async () =>
+      Response.json({
+        apiUrl: '/jmap/',
+        capabilities: full,
+        primaryAccounts: { 'urn:ietf:params:jmap:mail': 'a', 'urn:ietf:params:jmap:submission': 'a' },
+        accounts: { a: { name: annAddress, accountCapabilities: full } },
+      });
+    const res = await ann.get('/api/jmap/').expect(200);
+    const kept = ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'];
+    expect(Object.keys(res.body.capabilities)).toEqual(kept);
+    expect(Object.keys(res.body.primaryAccounts)).toEqual(['urn:ietf:params:jmap:mail']);
+    expect(Object.keys(res.body.accounts.a.accountCapabilities)).toEqual(kept);
+  });
+
+  it('answers a malformed download name without an error', async () => {
+    const res = await ann.get('/api/jmap/download/u1/B1/%E0%A4').expect(200);
+    expect(res.headers['content-disposition']).toBe("attachment; filename*=UTF-8''download");
+  });
+
+  it('keeps people of other organizations on their own mailbox', async () => {
+    const other = await mailboxInNewOrg(app, 'jmap-other');
+    await other.agent.get('/api/jmap/').expect(200);
+    await other.agent
+      .post('/api/jmap/')
+      .set('authorize-as', annAddress)
+      .send({ using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'], methodCalls: [['Email/get', { accountId: annAddress }, 'c0']] })
+      .expect(200);
+    await other.agent.get('/api/jmap/download/ann-account/B1/x.png').expect(200);
+    expect(calls.map((c) => c.address)).toEqual([other.address, other.address, other.address]);
   });
 });

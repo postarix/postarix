@@ -5,7 +5,7 @@ import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MAIL_ENGINE } from '../src/core/tokens.js';
 import { proxiedImageUrl } from '../src/mail/image-proxy.js';
-import { createOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
+import { createOrg, mailboxInNewOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
@@ -50,7 +50,8 @@ describe('Message rendering for the webmail', () => {
       if (req.method === 'GET' && req.path.startsWith('download/')) return new Response(PNG, { headers: { 'content-type': 'image/png' } });
       const { methodCalls } = await readJson(req.body);
       const id = methodCalls[0]![1].ids?.[0];
-      if (id !== 'M1') return Response.json({ methodResponses: [['Email/get', { list: [] }, '0']] });
+      // M1 exists in Ann's mailbox only.
+      if (id !== 'M1' || address !== annAddress) return Response.json({ methodResponses: [['Email/get', { list: [] }, '0']] });
       return Response.json({
         methodResponses: [
           [
@@ -114,6 +115,14 @@ describe('Message rendering for the webmail', () => {
     expect(src).toBeDefined();
     const url = new URL(src!.replace(/&amp;/g, '&'));
     expect(url.searchParams.get('u')).toBe('https://tracker.example/open.gif');
+  });
+
+  it('never shows a message of another organization’s mailbox', async () => {
+    const other = await mailboxInNewOrg(app, 'render-other');
+    seenAddresses = [];
+    await other.agent.get('/api/mail/messages/M1').expect(404);
+    expect(seenAddresses.length).toBeGreaterThan(0);
+    expect(new Set(seenAddresses)).toEqual(new Set([other.address]));
   });
 
   it('answers 404 for unknown messages and users without a mailbox', async () => {
