@@ -59,6 +59,15 @@ describe('Mail client discovery and MTA-STS', () => {
     expect(mtaStsPolicyId(res.text)).toMatch(/^[0-9a-f]{16}$/);
   });
 
+  it('lets the proxy get certificates only for the server and hosted domains’ discovery names', async () => {
+    for (const domain of ['mail.example.test', `autoconfig.${hosted}`, `MTA-STS.${hosted}.`]) {
+      await server().get('/api/tls/allowed').query({ domain }).expect(200);
+    }
+    for (const domain of [hosted, `www.${hosted}`, `autoconfig.${pending}`, 'autoconfig.evil.example', 'evil.example', '']) {
+      await server().get('/api/tls/allowed').query({ domain }).expect(404);
+    }
+  });
+
   it('keeps the API itself under /api', async () => {
     await server().get('/health').expect(404);
     await server().get('/api/health').expect(200);

@@ -5,17 +5,17 @@ PostgreSQL and Valkey use their official images.
 
 | Directory | Image | Role |
 |---|---|---|
-| `cyrus/` | `postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, CalDAV, CardDAV, and JMAP for the API (webmail). Also runs saslauthd, the login bridge to the API. With `CYRUS_ROLE` it is a Cyrus Murder backend, frontend or mupdate server (`compose/murder.yml`, see `docs/SCALING.md`). |
-| `postfix/` | `postarix/postfix` | SMTP: inbound mail (25), submission (587, 465) and internal ports for webmail sending (10587) and Sieve (10588). |
-| `rspamd/` | `postarix/rspamd` | Spam filtering and DKIM, as a Postfix milter. |
-| `unbound/` | `postarix/unbound` | DNSSEC-validating resolver for Rspamd. |
-| `clamav/` | `postarix/clamav` | Optional virus scanning for Rspamd (`--profile clamav`, see `docs/ANTIVIRUS.md`). |
-| `crowdsec/` | `postarix/crowdsec` | Optional blocking of attackers by address (`--profile crowdsec`, see `docs/CROWDSEC.md`). |
+| `cyrus/` | `ghcr.io/postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, CalDAV, CardDAV, and JMAP for the API (webmail). Also runs saslauthd, the login bridge to the API. With `CYRUS_ROLE` it is a Cyrus Murder backend, frontend or mupdate server (`compose/murder.yml`, see `docs/SCALING.md`). |
+| `postfix/` | `ghcr.io/postarix/postfix` | SMTP: inbound mail (25), submission (587, 465) and internal ports for webmail sending (10587) and Sieve (10588). |
+| `rspamd/` | `ghcr.io/postarix/rspamd` | Spam filtering and DKIM, as a Postfix milter. |
+| `unbound/` | `ghcr.io/postarix/unbound` | DNSSEC-validating resolver for Rspamd. |
+| `clamav/` | `ghcr.io/postarix/clamav` | Optional virus scanning for Rspamd (`--profile clamav`, see `docs/ANTIVIRUS.md`). |
+| `crowdsec/` | `ghcr.io/postarix/crowdsec` | Optional blocking of attackers by address (`--profile crowdsec`, see `docs/CROWDSEC.md`). |
 | `postgres/` | — | Init script that creates the read-only role Postfix uses. |
-| `certs/` | `postarix/certs` | TLS certificates (self-signed, ACME or external) shared with Postfix and Cyrus. |
-| `../apps/api/Dockerfile` | `postarix/api` | The Postarix API. Applies database migrations on start. |
-| `../apps/admin/Dockerfile` | `postarix/admin` | The admin panel, served under `/admin`. |
-| `../apps/webmail/Dockerfile` | `postarix/webmail` | The webmail, served at the site root. |
+| `certs/` | `ghcr.io/postarix/certs` | TLS certificates (self-signed, ACME or external) shared with Postfix and Cyrus. |
+| `../apps/api/Dockerfile` | `ghcr.io/postarix/api` | The Postarix API. Applies database migrations on start. |
+| `../apps/admin/Dockerfile` | `ghcr.io/postarix/admin` | The admin panel, served under `/admin`. |
+| `../apps/webmail/Dockerfile` | `ghcr.io/postarix/webmail` | The webmail, served at the site root. |
 
 ## Running the stack
 
