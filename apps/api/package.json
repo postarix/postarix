@@ -31,7 +31,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^4.6.7",
-    "@postarix/mail-engine": "workspace:*"
+    "@postarix/mail-engine": "workspace:*",
+    "ioredis": "^6.0.0"
   },
   "devDependencies": {
     "@nestjs/testing": "^12.3.2",

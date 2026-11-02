@@ -56,6 +56,14 @@ const envSchema = z
     DOMAIN_VERIFICATION: z.enum(['dns', 'skip']).default('dns'),
     /** DNS resolvers used for verification (defaults to the system resolver). */
     DNS_SERVERS: commaList,
+
+    /** Public name of the mail server, used in the DNS records shown to admins (MX target). */
+    MAIL_HOSTNAME: z.string().min(1).default('localhost'),
+    /**
+     * Valkey URL (redis://:password@host:6379). DKIM keys are published there for
+     * Rspamd. Without it keys are kept in memory and nothing is signed.
+     */
+    VALKEY_URL: z.string().optional(),
   })
   .refine((env) => env.NODE_ENV === 'production' || !env.AUTH_URL.startsWith('https:'), {
     // An unset NODE_ENV means "development", which relaxes library fallbacks.
@@ -66,6 +74,10 @@ const envSchema = z
   .refine((env) => env.MAIL_ENGINE !== 'cyrus' || (env.CYRUS_ADMIN_PASSWORD ?? '').length > 0, {
     path: ['CYRUS_ADMIN_PASSWORD'],
     message: 'is required when MAIL_ENGINE is "cyrus"',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || (env.VALKEY_URL ?? '').length > 0, {
+    path: ['VALKEY_URL'],
+    message: 'is required in production (Rspamd reads DKIM keys from Valkey)',
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.DOMAIN_VERIFICATION === 'dns', {
     // Skipping verification would let any tenant activate someone else's domain.

@@ -4,3 +4,4 @@ export const DATABASE_POOL = Symbol('DATABASE_POOL');
 export const AUTH = Symbol('AUTH');
 export const MAIL_ENGINE = Symbol('MAIL_ENGINE');
 export const DNS_RESOLVER = Symbol('DNS_RESOLVER');
+export const DKIM_PUBLISHER = Symbol('DKIM_PUBLISHER');

@@ -73,6 +73,10 @@ describe('Mail flow through the full stack', () => {
       });
       const source = await waitForMessage(bob.address, PASSWORD, subject);
       expect(source).toContain('Hello Bob, over STARTTLS.');
+      // Rspamd signed it with the domain's key, published in Valkey by the API.
+      const signature = /^DKIM-Signature:[\s\S]*?(?=^\S)/im.exec(source)?.[0] ?? '';
+      expect(signature).toMatch(new RegExp(`d=${domain.name.replace(/\./g, '\\.')};`));
+      expect(signature).toMatch(/s=px\d{6};/);
     });
 
     it('delivers authenticated mail on 465 (implicit TLS)', async () => {

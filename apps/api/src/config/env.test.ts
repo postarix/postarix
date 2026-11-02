@@ -7,6 +7,7 @@ const base = {
   AUTH_URL: 'https://mail.example.com',
   AUTH_SECRET: 'x'.repeat(32),
   CYRUS_ADMIN_PASSWORD: 'cyrus-admin-secret',
+  VALKEY_URL: 'redis://:secret@valkey:6379',
 };
 
 describe('loadEnv', () => {
@@ -43,6 +44,11 @@ describe('loadEnv', () => {
   it('keeps internal endpoints disabled unless a long token is set', () => {
     expect(loadEnv(base).INTERNAL_API_TOKEN).toBeUndefined();
     expect(() => loadEnv({ ...base, INTERNAL_API_TOKEN: 'short' })).toThrow(/INTERNAL_API_TOKEN/);
+  });
+
+  it('requires Valkey in production', () => {
+    const { VALKEY_URL: _unused, ...withoutValkey } = base;
+    expect(() => loadEnv(withoutValkey)).toThrow(/VALKEY_URL/);
   });
 
   it('rejects a short secret', () => {

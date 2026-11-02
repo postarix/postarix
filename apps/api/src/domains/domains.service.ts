@@ -10,8 +10,9 @@ import type { Env } from '../config/env.js';
 import type { DnsResolver } from '../core/dns.js';
 import { DNS_RESOLVER, ENV } from '../core/tokens.js';
 import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js';
+import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
-import { type CreateDomainInput, type DomainDto, toDomainDto } from './domains.dto.js';
+import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto } from './domains.dto.js';
 import { DomainsRepository } from './domains.repository.js';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class DomainsService {
     @Inject(DomainsRepository) private readonly repository: DomainsRepository,
     @Inject(DNS_RESOLVER) private readonly dns: DnsResolver,
     @Inject(ENV) private readonly env: Env,
+    @Inject(DkimService) private readonly dkim: DkimService,
   ) {}
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
@@ -34,9 +36,9 @@ export class DomainsService {
   }
 
   async create(ctx: TenantContext, input: CreateDomainInput): Promise<DomainDto> {
+    let row;
     try {
-      const row = await this.repository.create(ctx, input.name);
-      return toDomainDto(row);
+      row = await this.repository.create(ctx, input.name);
     } catch (error) {
       if (isUniqueViolation(error)) {
         // Only reachable for a duplicate inside the caller's own organization.
@@ -44,6 +46,49 @@ export class DomainsService {
       }
       throw error;
     }
+    try {
+      await this.dkim.createForDomain(row.id);
+    } catch (error) {
+      await this.repository.delete(ctx, row.id);
+      throw error;
+    }
+    return toDomainDto(row);
+  }
+
+  /** The DNS records the organization must publish for this domain. */
+  async dnsRecords(ctx: TenantContext, id: string): Promise<DnsRecordDto[]> {
+    const domain = await this.repository.findById(ctx, id);
+    if (!domain) throw new NotFoundException('Domain not found');
+    const host = this.env.MAIL_HOSTNAME;
+    const records: DnsRecordDto[] = [];
+    if (domain.status === 'pending') {
+      records.push({
+        purpose: 'verification',
+        type: 'TXT',
+        name: domain.name,
+        value: `postarix-verification=${domain.verificationToken}`,
+      });
+    }
+    records.push(
+      { purpose: 'mx', type: 'MX', name: domain.name, value: `10 ${host}.` },
+      { purpose: 'spf', type: 'TXT', name: domain.name, value: 'v=spf1 mx -all' },
+    );
+    const key = await this.dkim.activeKey(domain.id);
+    if (key) {
+      records.push({
+        purpose: 'dkim',
+        type: 'TXT',
+        name: `${key.selector}._domainkey.${domain.name}`,
+        value: `v=DKIM1; k=rsa; p=${key.publicKey}`,
+      });
+    }
+    records.push({
+      purpose: 'dmarc',
+      type: 'TXT',
+      name: `_dmarc.${domain.name}`,
+      value: 'v=DMARC1; p=quarantine; adkim=s; aspf=s',
+    });
+    return records;
   }
 
   /**
@@ -69,6 +114,7 @@ export class DomainsService {
     try {
       const row = await this.repository.activate(ctx, id);
       if (!row) throw new NotFoundException('Domain not found');
+      await this.dkim.publish(row);
       return toDomainDto(row);
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -91,6 +137,8 @@ export class DomainsService {
   }
 
   async remove(ctx: TenantContext, id: string): Promise<void> {
+    const domain = await this.repository.findById(ctx, id);
+    if (!domain) throw new NotFoundException('Domain not found');
     let deleted: boolean;
     try {
       deleted = await this.repository.delete(ctx, id);
@@ -101,5 +149,6 @@ export class DomainsService {
       throw error;
     }
     if (!deleted) throw new NotFoundException('Domain not found');
+    if (domain.status !== 'pending') await this.dkim.unpublish(domain.name);
   }
 }

@@ -1,4 +1,8 @@
-#!/bin/sh
-# Healthy when the SMTP listener greets us.
+#!/bin/bash
+# Healthy when the SMTP listener greets us. Read the banner before sending
+# anything: Postfix rejects clients that talk before the greeting.
 set -e
-printf 'QUIT\r\n' | nc -w 3 127.0.0.1 25 | grep -q '^220 '
+exec 3<>/dev/tcp/127.0.0.1/25
+IFS= read -r -t 5 banner <&3
+printf 'QUIT\r\n' >&3
+[[ "$banner" == 220* ]]
