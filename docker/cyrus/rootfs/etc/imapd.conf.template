@@ -41,10 +41,13 @@ tls_session_timeout: 1440
 # DAV-scoped app password must not give access to mail. The JMAP service
 # (imapd-jmap.conf, internal) adds jmap to these modules.
 httpmodules: caldav carddav
-# Every user gets a default calendar (with scheduling) and address book on
-# first use, through DAV or JMAP.
+# Every user gets a default calendar and address book on first use.
+# Scheduling (iTIP invitations between users, iMIP mail) is off: invitations
+# would land in other people's calendars, even in other organizations, without
+# going through the mail pipeline and its checks.
 caldav_create_default: yes
-caldav_create_sched: yes
+caldav_create_sched: no
+caldav_allowscheduling: off
 carddav_create_default: yes
 conversations: yes
 conversations_db: twoskip

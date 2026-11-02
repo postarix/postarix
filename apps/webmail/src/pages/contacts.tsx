@@ -24,6 +24,7 @@ function initialOf(contact: Contact): string {
 function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Contact; onEdit: () => void; onWrite: (email: string) => void; onDeleted: () => void }) {
   const remove = useDeleteContact();
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const name = contactName(contact);
   const email = primaryEmail(contact);
   return (
@@ -57,6 +58,8 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
           className="text-destructive hover:text-destructive"
           disabled={remove.isPending}
           onClick={async () => {
+            // A second click confirms: the contact also disappears from synced phones.
+            if (!confirmDelete) return setConfirmDelete(true);
             try {
               await remove.mutateAsync(contact.id);
               onDeleted();
@@ -66,7 +69,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
           }}
         >
           <Trash2 aria-hidden />
-          Delete
+          {confirmDelete ? 'Delete for good' : 'Delete'}
         </Button>
       </div>
       {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}

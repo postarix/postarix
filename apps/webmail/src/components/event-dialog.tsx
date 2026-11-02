@@ -20,7 +20,8 @@ function initialInput(draft: EventDraft, calendars: Calendar[]): EventInput {
   if ('event' in draft) {
     const { event } = draft;
     const span = eventSpan(event);
-    const endShown = span.allDay ? new Date(span.end.getTime() - 86_400_000) : span.end;
+    // All-day events end at midnight after their last day; the dialog shows the last day.
+    const endShown = span.allDay ? new Date(span.end.getFullYear(), span.end.getMonth(), span.end.getDate() - 1) : span.end;
     return {
       calendarId: Object.keys(event.calendarIds)[0] ?? calendarId,
       title: event.title,
@@ -50,7 +51,9 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
   const existing = 'event' in draft ? draft.event : null;
   // Occurrences of a repeating event are edited through the series.
   const seriesId = existing?.baseEventId ?? null;
-  const [input, setInput] = useState<EventInput>(() => initialInput(draft, calendars));
+  const [before] = useState<EventInput>(() => initialInput(draft, calendars));
+  const [input, setInput] = useState<EventInput>(before);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const save = useSaveEvent();
   const remove = useDeleteEvent();
@@ -62,7 +65,11 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
     if (!input.allDay && input.end <= input.start) return setError('The event must end after it starts.');
     if (input.allDay && input.end.slice(0, 10) < input.start.slice(0, 10)) return setError('The last day cannot be before the first.');
     try {
-      await save.mutateAsync({ id: existing ? (seriesId ?? existing.id) : null, input, ...(seriesId ? { textOnly: true } : {}) });
+      await save.mutateAsync({
+        id: existing ? (seriesId ?? existing.id) : null,
+        input,
+        ...(existing ? { edit: { original: existing, before, textOnly: Boolean(seriesId) } } : {}),
+      });
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -166,6 +173,8 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
                   className="text-destructive hover:text-destructive"
                   disabled={remove.isPending}
                   onClick={async () => {
+                    // A second click confirms: deleting also removes the event from synced devices.
+                    if (!confirmDelete) return setConfirmDelete(true);
                     try {
                       await remove.mutateAsync(seriesId ?? existing.id);
                       onClose();
@@ -175,7 +184,7 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
                   }}
                 >
                   <Trash2 aria-hidden />
-                  {seriesId ? 'Delete the series' : 'Delete'}
+                  {confirmDelete ? (seriesId ? 'Delete every occurrence' : 'Delete for good') : seriesId ? 'Delete the series' : 'Delete'}
                 </Button>
               ) : (
                 <span />

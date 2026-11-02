@@ -2,7 +2,7 @@ import { JmapRequestError } from '@postarix/jmap-client';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { TooltipProvider } from '@postarix/ui/components/tooltip';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { StrictMode, useEffect } from 'react';
+import { Component, type ErrorInfo, type ReactNode, StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
@@ -82,11 +82,39 @@ function App() {
   return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} {...user} />;
 }
 
+/** A rendering error shows a way out instead of a blank page. */
+class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  override state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  override componentDidCatch(error: unknown, info: ErrorInfo) {
+    console.error(error, info.componentStack);
+  }
+  override render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <Centered>
+        <div className="max-w-sm space-y-3">
+          <p className="text-base font-medium text-foreground">Something on this page could not be shown.</p>
+          <p>
+            <a className="underline underline-offset-4" href="/">
+              Back to the inbox
+            </a>
+          </p>
+        </div>
+      </Centered>
+    );
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
-      <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </TooltipProvider>
     </QueryClientProvider>
   </StrictMode>,
