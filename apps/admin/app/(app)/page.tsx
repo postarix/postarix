@@ -89,7 +89,7 @@ export default function DashboardPage() {
         description={superAdmin ? 'Every organization on this instance.' : 'Organizations you belong to.'}
         actions={
           superAdmin ? (
-            <Button onClick={() => setCreating(true)}>
+            <Button variant="stamp" onClick={() => setCreating(true)}>
               <Plus aria-hidden />
               New organization
             </Button>
@@ -106,17 +106,17 @@ export default function DashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orgs.map((org) => (
             <Link key={org.id} href={`/o/${org.id}`} className="group rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
-              <Card className="h-full transition-shadow group-hover:shadow-md">
+              <Card className="h-full border-transparent shadow-[0_1px_2px_rgb(22_33_61/0.06)] transition-colors group-hover:border-primary/30">
                 <CardHeader>
                   <CardTitle>{org.name}</CardTitle>
                   <CardDescription>{org.role ? `Your role: ${org.role}` : 'Instance administrator access'}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <dl className="grid grid-cols-3 gap-2 text-center">
+                  <dl className="flex gap-5 text-sm">
                     {(['domains', 'mailboxes', 'members'] as const).map((key) => (
-                      <div key={key} className="rounded-md bg-muted px-2 py-2">
-                        <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">{key}</dt>
-                        <dd className="text-lg font-semibold">{org.counts[key]}</dd>
+                      <div key={key} className="flex items-baseline gap-1.5">
+                        <dd className="font-display text-xl font-semibold tabular-nums">{org.counts[key]}</dd>
+                        <dt className="text-muted-foreground">{org.counts[key] === 1 ? key.replace(/s$/, '') : key}</dt>
                       </div>
                     ))}
                   </dl>

@@ -19,6 +19,7 @@ const badgeVariants = cva(
         // Postarix additions: status colors.
         success: "bg-success/12 text-success dark:bg-success/20",
         warning: "bg-warning/15 text-warning dark:bg-warning/20",
+        stamp: "bg-stamp text-stamp-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
       },
     },

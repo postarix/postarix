@@ -51,3 +51,15 @@ export function parseAddresses(input: string): { addresses: EmailAddress[]; inva
   }
   return { addresses, invalid };
 }
+
+/** Section heading for a list of mail: Today, Yesterday, the weekday this week, then month and year. */
+export function dayGroup(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(date)) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+  if (date.getFullYear() === now.getFullYear()) return new Intl.DateTimeFormat(undefined, { month: 'long' }).format(date);
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date);
+}

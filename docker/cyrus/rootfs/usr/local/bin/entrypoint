@@ -19,10 +19,11 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
   sed 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' /etc/imapd.conf
   echo "admins: cyrus"
 } > /etc/imapd-admin.conf
-# The JMAP service: JMAP only, plain HTTP on the internal network. The API logs
+# The JMAP service: JMAP (mail, calendars, contacts; the DAV modules provide
+# the calendar and contact stores behind JMAP), plain HTTP on the internal network. The API logs
 # in as the user with a short-lived token it mints itself (checked through
 # saslauthd like any other login).
-sed -e 's/^httpmodules:.*/httpmodules: jmap/' \
+sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
     -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf > /etc/imapd-jmap.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 

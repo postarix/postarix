@@ -38,9 +38,14 @@ tls_versions: tls1_2 tls1_3
 tls_session_timeout: 1440
 
 # Calendars and contacts. JMAP (for the webmail) is not exposed here: a
-# DAV-scoped app password must not give access to mail. The conversations
-# database is kept enabled for the JMAP service added with the webmail.
+# DAV-scoped app password must not give access to mail. The JMAP service
+# (imapd-jmap.conf, internal) adds jmap to these modules.
 httpmodules: caldav carddav
+# Every user gets a default calendar (with scheduling) and address book on
+# first use, through DAV or JMAP.
+caldav_create_default: yes
+caldav_create_sched: yes
+carddav_create_default: yes
 conversations: yes
 conversations_db: twoskip
 specialusealways: yes

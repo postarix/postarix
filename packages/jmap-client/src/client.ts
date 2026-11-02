@@ -99,10 +99,14 @@ export class JmapClient {
     return results;
   }
 
-  /** One method call on the primary mail account. */
-  async call<T = Record<string, unknown>>(name: string, args: Record<string, unknown> = {}): Promise<T> {
+  /** One method call on the primary mail account (whose id is also the calendar and contacts account in Cyrus). */
+  async call<T = Record<string, unknown>>(
+    name: string,
+    args: Record<string, unknown> = {},
+    using: string[] = [CAPABILITIES.core, CAPABILITIES.mail],
+  ): Promise<T> {
     const accountId = await this.accountId();
-    const results = await this.batch((b) => b.add(name, { accountId, ...args }));
+    const results = await this.batch((b) => b.add(name, { accountId, ...args }), using);
     return results.get('c0') as T;
   }
 

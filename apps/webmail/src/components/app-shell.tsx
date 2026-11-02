@@ -1,0 +1,125 @@
+import { Button } from '@postarix/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@postarix/ui/components/dropdown-menu';
+import { Postmark } from '@postarix/ui/components/postmark';
+import { cn } from '@postarix/ui/lib/utils';
+import { CalendarDays, ChevronsUpDown, Inbox, LogOut, Menu, Settings, UsersRound, X } from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { authClient } from '@/lib/auth-client';
+import { useRoute } from '@/lib/router';
+import { Avatar } from './avatar';
+
+const APPS = [
+  { name: 'mailbox', label: 'Mail', href: '/', icon: Inbox },
+  { name: 'calendar', label: 'Calendar', href: '/calendar', icon: CalendarDays },
+  { name: 'contacts', label: 'Contacts', href: '/contacts', icon: UsersRound },
+] as const;
+
+/**
+ * The frame of every screen: a slab of ink on the left with the stamp, the
+ * switch between Mail, Calendar and Contacts, the current app's navigation
+ * and the account. On small screens it slides in from a top bar.
+ */
+export function AppShell({ email, name, nav, children }: { email: string; name: string; nav?: ReactNode; children: ReactNode }) {
+  const route = useRoute();
+  const [open, setOpen] = useState(false);
+  const routeKey = JSON.stringify(route);
+  useEffect(() => setOpen(false), [routeKey]);
+
+  const signOut = async () => {
+    await authClient.signOut();
+    window.location.assign('/login');
+  };
+
+  const sidebar = (
+    <div className="flex h-full flex-col gap-5 px-3 pt-4 pb-3">
+      <a data-nav href="/" className="flex items-center gap-2.5 px-2">
+        <Postmark className="size-8" />
+        <span className="font-display text-[1.35rem] leading-none font-semibold tracking-tight text-white">Postarix</span>
+      </a>
+
+      <nav aria-label="Apps" className="grid grid-cols-3 gap-1 rounded-lg bg-black/20 p-1">
+        {APPS.map(({ name: app, label, href, icon: Icon }) => {
+          const active = route.name === app;
+          return (
+            <a
+              key={app}
+              data-nav
+              href={href}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'flex flex-col items-center gap-1 rounded-md py-2 text-[0.7rem] font-medium transition-colors',
+                active ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white',
+              )}
+            >
+              <Icon className={cn('size-4', active && 'text-stamp')} aria-hidden />
+              {label}
+            </a>
+          );
+        })}
+      </nav>
+
+      <div className="min-h-0 flex-1">{nav}</div>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+          >
+            <Avatar name={name} email={email} className="size-8" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-white">{name || email}</span>
+              <span className="block truncate text-xs text-sidebar-muted">{email}</span>
+            </span>
+            <ChevronsUpDown className="size-4 text-sidebar-muted" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="w-60">
+          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{email}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <a href="/admin/account">
+              <Settings aria-hidden />
+              Security and app passwords
+            </a>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void signOut()}>
+            <LogOut aria-hidden />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
+  return (
+    <div className="flex h-full bg-background">
+      <aside className="hidden w-64 shrink-0 bg-sidebar text-sidebar-foreground md:block">{sidebar}</aside>
+
+      {open ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+          <aside className="relative h-full w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground shadow-2xl">{sidebar}</aside>
+        </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-2 bg-sidebar px-2 py-2 text-white md:hidden">
+          <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu" onClick={() => setOpen(true)}>
+            {open ? <X aria-hidden /> : <Menu aria-hidden />}
+          </Button>
+          <Postmark className="size-6" />
+          <span className="font-display text-lg font-semibold">Postarix</span>
+        </header>
+        <main className="min-h-0 flex-1">{children}</main>
+      </div>
+    </div>
+  );
+}

@@ -1,6 +1,5 @@
 'use client';
 
-import { Badge } from '@postarix/ui/components/badge';
 import { Button } from '@postarix/ui/components/button';
 import {
   DropdownMenu,
@@ -51,22 +50,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const brand = (
     <Link href="/" className="flex items-center gap-2.5">
       <BrandMark />
-      <span className="font-semibold">Postarix</span>
-      {superAdmin ? (
-        <Badge variant="secondary" className="ml-1 uppercase">
-          Admin
-        </Badge>
-      ) : null}
+      <span className="leading-tight">
+        <span className="block font-display text-[1.3rem] leading-none font-semibold tracking-tight">Postarix</span>
+        <span className="block text-xs text-sidebar-muted md:text-sidebar-muted">{superAdmin ? 'Instance administration' : 'Administration'}</span>
+      </span>
     </Link>
   );
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex">
-        <div className="px-5 py-5">{brand}</div>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+        <div className="px-5 py-5 text-white">{brand}</div>
 
         <nav aria-label="Organizations" className="flex-1 overflow-y-auto px-3">
-          <p className="px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Organizations</p>
+          <p className="px-2 pt-2 pb-1.5 text-xs font-medium text-sidebar-muted">Organizations</p>
           <ul className="space-y-0.5">
             {orgs.map((org) => {
               const active = pathname.startsWith(`/o/${org.id}`);
@@ -76,37 +73,38 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     href={`/o/${org.id}`}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
                       active
-                        ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                        : 'hover:bg-sidebar-accent/60',
+                        ? 'bg-sidebar-accent font-medium text-white'
+                        : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white',
                     )}
                   >
-                    <Building2 className="size-4 shrink-0 opacity-70" aria-hidden />
+                    <Building2 className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted')} aria-hidden />
                     <span className="truncate">{org.name}</span>
                   </Link>
                 </li>
               );
             })}
             {orgs.length === 0 && !mine.isLoading ? (
-              <li className="px-2 py-1.5 text-sm text-muted-foreground">No organizations yet</li>
+              <li className="px-2 py-1.5 text-sm text-sidebar-muted">No organizations yet</li>
             ) : null}
           </ul>
         </nav>
 
-        <div className="border-t p-3">
+        <div className="border-t border-sidebar-border p-3">
           <Link
             href="/account"
             aria-current={pathname === '/account' ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent/60',
-              pathname === '/account' && 'bg-sidebar-accent font-medium',
+              'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-sidebar-accent/50 hover:text-white',
+              pathname === '/account' && 'bg-sidebar-accent font-medium text-white',
             )}
           >
-            <UserRound className="size-4 opacity-70" aria-hidden />
+            <UserRound className="size-4 text-sidebar-muted" aria-hidden />
             <span className="truncate">{session.user.email}</span>
           </Link>
-          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start" onClick={signOut}>
+          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white" onClick={signOut}>
             <LogOut aria-hidden />
             Sign out
           </Button>
@@ -115,11 +113,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Small screens: the sidebar becomes a menu. */}
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/90 px-4 py-3 backdrop-blur md:hidden">
+        <header className="sticky top-0 z-10 flex items-center justify-between bg-sidebar px-4 py-3 text-white md:hidden">
           {brand}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" aria-label="Open menu">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu">
                 <Menu aria-hidden />
               </Button>
             </DropdownMenuTrigger>

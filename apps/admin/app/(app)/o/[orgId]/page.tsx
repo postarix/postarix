@@ -1,6 +1,5 @@
 'use client';
 
-import { Card, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
 import { AtSign, Globe, Inbox, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -19,25 +18,27 @@ export default function OverviewPage() {
   ] as const;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 overflow-hidden rounded-xl border bg-card lg:grid-cols-4">
       {stats.map(({ key, label, icon: Icon }) => {
         const card = (
-          <Card className="h-full gap-2 transition-shadow hover:shadow-md">
-            <CardHeader>
-              <CardDescription className="flex items-center justify-between">
-                {label}
-                <Icon className="size-4" aria-hidden />
-              </CardDescription>
-              <CardTitle className="text-3xl tabular-nums">{org.counts[key]}</CardTitle>
-            </CardHeader>
-          </Card>
+          <div className="flex h-full items-center gap-4 p-5 transition-colors hover:bg-accent/40">
+            <span className="grid size-10 place-items-center rounded-full bg-stamp-soft text-stamp-foreground dark:text-stamp">
+              <Icon className="size-5" aria-hidden />
+            </span>
+            <span>
+              <span className="block font-display text-3xl leading-none font-semibold tabular-nums">{org.counts[key]}</span>
+              <span className="mt-1 block text-sm text-muted-foreground">{label}</span>
+            </span>
+          </div>
         );
         return isAdmin ? (
-          <Link key={key} href={`/o/${orgId}/${key}`} className="rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+          <Link key={key} href={`/o/${orgId}/${key}`} className="border-r border-b last:border-r-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset lg:border-b-0">
             {card}
           </Link>
         ) : (
-          <div key={key}>{card}</div>
+          <div key={key} className="border-r border-b last:border-r-0 lg:border-b-0">
+            {card}
+          </div>
         );
       })}
     </div>

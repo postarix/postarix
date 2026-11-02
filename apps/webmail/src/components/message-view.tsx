@@ -16,6 +16,7 @@ import { addressList, displayName, formatBytes, longDate } from '@/lib/format';
 import { jmap } from '@/lib/jmap';
 import { type RenderedMessage, useMessage, useUpdateEmails } from '@/lib/mail';
 import { mailboxPath, navigate } from '@/lib/router';
+import { Avatar } from './avatar';
 import { MessageFrame } from './message-frame';
 
 function AttachmentLink({ attachment }: { attachment: RenderedMessage['attachments'][number] }) {
@@ -27,7 +28,7 @@ function AttachmentLink({ attachment }: { attachment: RenderedMessage['attachmen
     <a
       href={href ?? undefined}
       download={attachment.name}
-      className="inline-flex max-w-full items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent"
+      className="inline-flex max-w-full items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40"
     >
       <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="truncate">{attachment.name}</span>
@@ -92,7 +93,7 @@ export function MessageView({
 
   return (
     <article className="flex h-full min-h-0 flex-col" aria-label={data.subject || 'Message'}>
-      <div className="flex flex-wrap items-center gap-1 border-b p-2">
+      <div className="flex flex-wrap items-center gap-1 px-3 pt-3 pb-1 md:px-5">
         <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Back to the list" onClick={back}>
           <ArrowLeft aria-hidden />
         </Button>
@@ -138,7 +139,7 @@ export function MessageView({
             title={data.keywords.$flagged ? 'Remove flag' : 'Flag'}
             onClick={() => update.mutate({ update: { [data.id]: { 'keywords/$flagged': data.keywords.$flagged ? null : true } } })}
           >
-            <Flag aria-hidden className={data.keywords.$flagged ? 'fill-current text-warning' : undefined} />
+            <Flag aria-hidden className={data.keywords.$flagged ? 'fill-current text-airmail-red' : undefined} />
           </Button>
           <Button
             variant="ghost"
@@ -164,19 +165,26 @@ export function MessageView({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 md:p-6">
-        <header className="space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight break-words">{data.subject || '(no subject)'}</h2>
-          <p className="text-sm">
-            <span className="font-medium">{displayName(data.from[0])}</span>{' '}
-            {data.from[0]?.name ? <span className="text-muted-foreground">&lt;{data.from[0].email}&gt;</span> : null}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            To {addressList(data.to)}
-            {data.cc.length ? ` · Cc ${addressList(data.cc)}` : ''}
-            {data.bcc.length ? ` · Bcc ${addressList(data.bcc)}` : ''}
-          </p>
-          <p className="text-xs text-muted-foreground">{longDate(data.sentAt ?? data.receivedAt)}</p>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-3 pb-6 md:px-8">
+        <header className="space-y-4">
+          <h2 className="text-2xl leading-tight font-semibold break-words md:text-[1.75rem]">{data.subject || '(no subject)'}</h2>
+          <div className="flex items-start gap-3">
+            <Avatar name={displayName(data.from[0])} email={data.from[0]?.email ?? '?'} className="size-10" />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <span className="font-semibold">{displayName(data.from[0])}</span>
+                {data.from[0]?.name ? <span className="truncate text-muted-foreground">{data.from[0].email}</span> : null}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                To {addressList(data.to)}
+                {data.cc.length ? `, cc ${addressList(data.cc)}` : ''}
+                {data.bcc.length ? `, bcc ${addressList(data.bcc)}` : ''}
+              </p>
+            </div>
+            <time className="shrink-0 text-xs text-muted-foreground" dateTime={data.sentAt ?? data.receivedAt}>
+              {longDate(data.sentAt ?? data.receivedAt)}
+            </time>
+          </div>
         </header>
 
         {data.blockedImages > 0 ? (

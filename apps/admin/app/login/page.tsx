@@ -57,14 +57,12 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <div className="mb-2 flex items-center gap-2.5">
-          <BrandMark className="size-9" />
-          <div>
-            <CardTitle>Postarix</CardTitle>
-            <CardDescription>Administration</CardDescription>
-          </div>
+    <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
+      <CardHeader className="gap-3">
+        <BrandMark className="size-12" />
+        <div>
+          <CardTitle className="text-3xl font-semibold">Postarix</CardTitle>
+          <CardDescription className="mt-1">Sign in to manage domains, mailboxes and people.</CardDescription>
         </div>
       </CardHeader>
       <CardContent>
@@ -123,7 +121,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-muted/40 p-4">
+    <main className="grid min-h-screen place-items-center bg-sidebar p-4">
       <Suspense>
         <LoginForm />
       </Suspense>

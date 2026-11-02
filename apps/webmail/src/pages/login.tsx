@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@post
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Spinner } from '@postarix/ui/components/spinner';
-import { CircleAlert, KeyRound, Mail } from 'lucide-react';
+import { Postmark } from '@postarix/ui/components/postmark';
+import { CircleAlert, KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { navigate } from '@/lib/router';
@@ -47,17 +48,13 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-full place-items-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Mail className="size-5" aria-hidden />
-            </span>
-            <div>
-              <CardTitle>Postarix Mail</CardTitle>
-              <CardDescription>Sign in to your mailbox</CardDescription>
-            </div>
+    <main className="grid min-h-full place-items-center bg-sidebar p-4">
+      <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
+        <CardHeader className="gap-3">
+          <Postmark className="size-12" />
+          <div>
+            <CardTitle className="text-3xl font-semibold">Postarix</CardTitle>
+            <CardDescription className="mt-1">Sign in to your mailbox.</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -79,7 +76,7 @@ export function LoginPage() {
                     <FieldLabel htmlFor="password">Password</FieldLabel>
                     <Input id="password" name="password" type="password" autoComplete="current-password" required />
                   </Field>
-                  <Button type="submit" disabled={pending}>
+                  <Button type="submit" size="lg" disabled={pending}>
                     {pending ? <Spinner /> : null}
                     Sign in
                   </Button>
