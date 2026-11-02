@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@12.16.1",
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.19"
   },
   "scripts": {
     "dev": "turbo run dev",

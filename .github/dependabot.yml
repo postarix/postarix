@@ -8,7 +8,8 @@ updates:
       minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Type definitions follow the Node.js version we run (.nvmrc), not the newest.
+      # Type definitions follow the oldest Node.js we support (package.json engines),
+      # so code never relies on APIs newer than that.
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
