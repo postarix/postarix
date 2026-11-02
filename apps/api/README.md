@@ -1,63 +1,63 @@
 # @postarix/api
 
-Backend de Postarix: NestJS 12 (ESM) + Better Auth + Drizzle ORM sobre PostgreSQL.
+The Postarix backend: NestJS 12 (ESM) + Better Auth + Drizzle ORM on PostgreSQL.
 
-Es la única pieza que modifica la configuración del correo. La arquitectura general está en [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+It is the only component that changes mail configuration. The overall architecture is in [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
-## Qué incluye hoy (Fase 0)
+## Features
 
-- **Autenticación** con Better Auth en `/api/auth/*`: email y contraseña (argon2id), sesiones, 2FA (TOTP), passkeys, organizaciones y administración de usuarios.
-- **Registro público desactivado por defecto.** La primera cuenta se crea con el script `create-admin`.
-- **Organizaciones y roles** (`owner`, `admin`, `member`) más el rol de instancia `admin` (super-admin).
-- **Dominios** por organización, en `/api/orgs/:orgId/domains`, con aislamiento verificado por pruebas.
-- **Health check** en `/api/health`.
+- **Authentication** with Better Auth under `/api/auth/*`: email and password (argon2id), sessions, 2FA (TOTP), passkeys, organizations and user administration.
+- **Public sign-up disabled by default.** The first account is created with the `create-admin` script.
+- **Organizations and roles** (`owner`, `admin`, `member`) plus the instance-wide `admin` role (super-admin).
+- **Domains** per organization under `/api/orgs/:orgId/domains`, with tested isolation.
+- **Health check** at `/api/health`.
 
-## Puesta en marcha
+## Getting started
 
 ```bash
-cp ../../.env.example ../../.env   # y completa AUTH_SECRET
-pnpm dev:services                   # desde la raíz: PostgreSQL y Valkey
+cp ../../.env.example ../../.env   # and fill in AUTH_SECRET
+pnpm dev:services                   # from the root: PostgreSQL and Valkey
 pnpm --filter @postarix/api db:migrate
-ADMIN_EMAIL=tu@dominio.com ADMIN_PASSWORD='una frase larga' \
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a long passphrase' \
   pnpm --filter @postarix/api create-admin
 pnpm --filter @postarix/api dev
 ```
 
 ## Scripts
 
-| Script | Qué hace |
+| Script | What it does |
 |---|---|
-| `dev` | Arranca la API con recarga automática. |
-| `build` / `start` | Compila a `dist/` y la ejecuta. |
-| `test` | Pruebas unitarias y end-to-end (necesitan PostgreSQL). |
-| `db:generate` | Genera una migración a partir de los cambios en `src/db/schema`. |
-| `db:migrate` | Aplica las migraciones pendientes. |
-| `auth:schema` | Regenera `src/db/schema/auth.ts` con la CLI de Better Auth (tras cambiar plugins). |
-| `create-admin` | Crea un super-admin (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`). |
+| `dev` | Runs the API with auto-reload. |
+| `build` / `start` | Compiles to `dist/` and runs it. |
+| `test` | Unit and end-to-end tests (need PostgreSQL). |
+| `db:generate` | Generates a migration from changes in `src/db/schema`. |
+| `db:migrate` | Applies pending migrations. |
+| `auth:schema` | Regenerates `src/db/schema/auth.ts` with the Better Auth CLI (after changing plugins). |
+| `create-admin` | Creates a super-admin (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`). |
 
-## Pruebas
+## Tests
 
-Las pruebas end-to-end usan un PostgreSQL real. Por defecto se conectan a
-`postgresql://postarix:postarix@127.0.0.1:5432/postarix_test`; puedes cambiarlo con `TEST_DATABASE_URL`.
-El nombre de la base de datos **debe terminar en `_test`**: la suite la vacía al empezar.
+End-to-end tests use a real PostgreSQL. By default they connect to
+`postgresql://postarix:postarix@127.0.0.1:5432/postarix_test`; override it with `TEST_DATABASE_URL`.
+The database name **must end in `_test`**: the suite wipes it on start.
 
-## Estructura
+## Layout
 
 ```
 src/
-  auth/        Configuración de Better Auth, guard de sesión, decoradores
-  tenancy/     Contexto de organización y guard de acceso por organización
-  domains/     Primer recurso multi-organización (controller → service → repository)
-  db/          Cliente Drizzle, esquema y migraciones
-  common/      Validación con Zod, errores de PostgreSQL, comprobación de origen
-  config/      Variables de entorno validadas con Zod
-drizzle/       Migraciones SQL generadas (se versionan)
-test/          Pruebas end-to-end
+  auth/        Better Auth configuration, session guard, decorators
+  tenancy/     Organization context and organization access guard
+  domains/     Multi-tenant resource (controller → service → repository)
+  db/          Drizzle client, schema and migrations
+  common/      Zod validation, PostgreSQL errors, origin check, body limits
+  config/      Environment variables validated with Zod
+drizzle/       Generated SQL migrations (committed)
+test/          End-to-end tests
 ```
 
-## Convenciones
+## Conventions
 
-- **Inyección explícita:** usa siempre `@Inject(Token)` en los constructores. No dependas solo de los metadatos de tipos.
-- **Repositorios con contexto de organización:** cada método recibe `TenantContext` como primer argumento y filtra por `organizationId`. No existen accesores sin filtrar.
-- **Rutas de organización** bajo `orgs/:orgId/...` con `@UseGuards(OrgAccessGuard)`. Quien no es miembro recibe **404**, no 403, para no revelar qué organizaciones existen.
-- **Cada endpoint nuevo** lleva pruebas de aislamiento entre organizaciones.
+- **Explicit injection:** always use `@Inject(Token)` in constructors. Don't rely on type metadata alone.
+- **Tenant-scoped repositories:** every method takes `TenantContext` first and filters by `organizationId`. There are no unscoped accessors.
+- **Organization routes** live under `orgs/:orgId/...` with `@UseGuards(OrgAccessGuard)`. Non-members get **404**, not 403, so organization IDs can't be probed.
+- **Every new endpoint** ships with cross-organization isolation tests.

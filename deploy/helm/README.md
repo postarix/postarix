@@ -1,5 +1,5 @@
-# Chart de Helm
+# Helm chart
 
-Despliegue en Kubernetes para instalaciones grandes.
+Kubernetes deployment for large installations.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

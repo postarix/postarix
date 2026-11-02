@@ -1,5 +1,5 @@
-# Imagen de Cyrus IMAP
+# Cyrus IMAP image
 
-Dockerfile y configuración de Cyrus IMAP (IMAP, JMAP, CalDAV, CardDAV, Sieve).
+Dockerfile and configuration for Cyrus IMAP (IMAP, JMAP, CalDAV, CardDAV, Sieve).
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

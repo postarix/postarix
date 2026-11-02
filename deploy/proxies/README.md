@@ -1,5 +1,5 @@
-# Plantillas de reverse proxy
+# Reverse proxy templates
 
-Configuraciones probadas para Traefik, Caddy, nginx y HAProxy. Solo el tráfico HTTP pasa por el proxy; los puertos de correo van directo a los servicios.
+Tested configurations for Traefik, Caddy, nginx and HAProxy. Only HTTP traffic goes through the proxy; mail ports go straight to the services.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

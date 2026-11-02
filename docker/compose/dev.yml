@@ -1,5 +1,5 @@
-# Servicios de apoyo para desarrollo local.
-# Uso: pnpm dev:services  (lee las variables de ../../.env)
+# Supporting services for local development.
+# Usage: pnpm dev:services  (reads variables from ../../.env)
 name: postarix-dev
 
 services:

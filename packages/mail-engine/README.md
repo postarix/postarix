@@ -1,5 +1,5 @@
 # @postarix/mail-engine
 
-Interfaz `MailEngine` y su implementación para Cyrus IMAP. Permite cambiar de motor de correo sin tocar la API.
+The `MailEngine` interface and its Cyrus IMAP implementation. Lets the API switch mail engines without changes.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

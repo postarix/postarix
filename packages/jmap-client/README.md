@@ -1,5 +1,5 @@
 # @postarix/jmap-client
 
-Cliente JMAP tipado, compartido entre la API y el webmail.
+Typed JMAP client shared by the API and the webmail.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

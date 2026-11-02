@@ -1,5 +1,5 @@
 # webmail
 
-Webmail, calendario y contactos como SPA en React + Vite, sobre JMAP.
+Webmail, calendar and contacts as a React + Vite SPA over JMAP.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

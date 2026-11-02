@@ -1,5 +1,5 @@
 # admin
 
-Panel de administración en Next.js: superadmin, administración de organizaciones y portal de usuario.
+Admin panel built with Next.js: super-admin, organization administration and user self-service.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

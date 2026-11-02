@@ -1,5 +1,5 @@
 # @postarix/ui
 
-Componentes de interfaz compartidos entre el panel y el webmail.
+UI components shared by the admin panel and the webmail.
 
-Ver [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
