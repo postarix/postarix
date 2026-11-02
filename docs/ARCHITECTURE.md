@@ -102,8 +102,9 @@ Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 
 1. Users create **app passwords** in their portal. Each has a name, a scope (IMAP, SMTP, DAV) and a last-used timestamp, and can be revoked individually.
 2. They are stored as **argon2id** hashes in PostgreSQL.
-3. Cyrus and Postfix validate logins through **saslauthd** using its `httpform` mechanism, which posts the credentials to an internal endpoint of `apps/api` authenticated with a shared secret.
-4. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
+3. Cyrus and Postfix validate logins through **saslauthd** with PAM. A `pam_exec` helper posts the credentials to an internal endpoint of `apps/api` (`/api/internal/mail-auth`), authenticated with a shared secret. (`saslauthd`'s `httpform` mechanism would be simpler, but Debian does not compile it in.) saslauthd's credential cache stays off so revoking an app password takes effect immediately.
+4. Failed attempts are rate-limited per username in the API, on top of CrowdSec watching the mail logs.
+5. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
 
 **OAUTHBEARER / XOAUTH2** for clients that support it will be evaluated later.
 
@@ -224,7 +225,7 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 ### 9.2 Outbound (submission)
 
 1. A client connects to port 587 (STARTTLS) or 465 (implicit TLS) and authenticates with SASL.
-2. Postfix asks saslauthd, which asks the API (`/api/internal/mail-auth`).
+2. Postfix asks saslauthd, which asks the API through PAM (`/api/internal/mail-auth`).
 3. Postfix only allows envelope senders the authenticated user owns (`smtpd_sender_login_maps`, from PostgreSQL).
 4. Rspamd signs the message with the domain's DKIM key (read from Valkey) and applies rate limits.
 5. Postfix delivers it, using DANE/MTA-STS when the destination supports them.
@@ -367,7 +368,7 @@ postarix/
 | 2026-11-01 | Better Auth's origin/CSRF checks are forced on explicitly; the library disables them by itself in test environments. |
 | 2026-11-01 | An installation whose `AUTH_URL` uses https refuses to start unless `NODE_ENV` is `production`. |
 | 2026-11-01 | The repository (code, docs, commits) is in **English**. |
-| 2026-11-01 | Mail-protocol logins go through **saslauthd `httpform` → API**. The account password works for mail only while the user has no 2FA; app passwords always work. |
+| 2026-11-01 | Mail-protocol logins go through **saslauthd → PAM (`pam_exec`) → API**. The account password works for mail only while the user has no 2FA; app passwords always work. |
 | 2026-11-01 | Our own images for Postfix, Cyrus, Rspamd and Unbound on **Debian trixie-slim**, so versions and configuration are under our control. |
 
 ## Known limitations

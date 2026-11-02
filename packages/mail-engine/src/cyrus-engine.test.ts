@@ -1,0 +1,178 @@
+import net from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
+import { CyrusEngine } from './cyrus-engine.js';
+import { ImapConnection, quote } from './imap-connection.js';
+import { MailEngineError } from './types.js';
+
+type Handler = (command: string, tag: string) => string | string[];
+
+/** A scripted IMAP server: records commands and answers through `handler`. */
+async function fakeServer(handler: Handler) {
+  const received: string[] = [];
+  const sockets = new Set<net.Socket>();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+    socket.write('* OK fake IMAP ready\r\n');
+    let buffer = '';
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let end: number;
+      while ((end = buffer.indexOf('\r\n')) !== -1) {
+        const line = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const space = line.indexOf(' ');
+        const tag = line.slice(0, space);
+        const command = line.slice(space + 1);
+        received.push(command);
+        if (command === 'LOGOUT') {
+          socket.end(`* BYE\r\n${tag} OK bye\r\n`);
+          continue;
+        }
+        const reply = handler(command, tag);
+        socket.write((Array.isArray(reply) ? reply : [reply]).join('\r\n') + '\r\n');
+      }
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as net.AddressInfo;
+  const close = () =>
+    new Promise<void>((resolve) => {
+      for (const socket of sockets) socket.destroy();
+      server.close(() => resolve());
+    });
+  return { port, received, close };
+}
+
+const ok = (_: string, tag: string) => `${tag} OK done`;
+
+describe('quote', () => {
+  it('escapes quotes and backslashes', () => {
+    expect(quote('a"b\\c')).toBe('"a\\"b\\\\c"');
+  });
+
+  it('refuses control characters and non-ASCII', () => {
+    expect(() => quote('a\r\nb')).toThrow();
+    expect(() => quote('café')).toThrow();
+  });
+});
+
+describe('ImapConnection', () => {
+  let close: (() => Promise<void>) | undefined;
+  afterEach(async () => close?.());
+
+  it('inlines server literals in untagged responses', async () => {
+    const server = await fakeServer((command, tag) =>
+      command === 'LIST "" "*"' ? ['* LIST () "/" {5}', 'INBOX', `${tag} OK listed`] : ok(command, tag),
+    );
+    close = server.close;
+    const imap = await ImapConnection.connect({ host: '127.0.0.1', port: server.port, security: 'none' });
+    const response = await imap.command('LIST "" "*"');
+    expect(response.untagged).toEqual(['LIST () "/" INBOX']);
+    await imap.logout();
+  });
+
+  it('refuses to continue in plaintext when STARTTLS is rejected', async () => {
+    const server = await fakeServer((command, tag) =>
+      command === 'STARTTLS' ? `${tag} BAD not supported` : ok(command, tag),
+    );
+    close = server.close;
+    await expect(
+      ImapConnection.connect({ host: '127.0.0.1', port: server.port, security: 'starttls' }),
+    ).rejects.toThrow(/STARTTLS/);
+  });
+});
+
+describe('CyrusEngine', () => {
+  let server: Awaited<ReturnType<typeof fakeServer>>;
+  afterEach(async () => server?.close());
+
+  const engineFor = (port: number) =>
+    new CyrusEngine({
+      host: '127.0.0.1',
+      port,
+      security: 'none',
+      adminUser: 'cyrus',
+      adminPassword: 'pa"ss',
+    });
+
+  it('creates a mailbox with a quota in KiB', async () => {
+    server = await fakeServer(ok);
+    await engineFor(server.port).createMailbox('alice@example.com', { quotaBytes: 1_048_576 });
+    expect(server.received).toEqual([
+      'LOGIN "cyrus" "pa\\"ss"',
+      'CREATE "user/alice@example.com"',
+      'SETQUOTA "user/alice@example.com" (STORAGE 1024)',
+      'LOGOUT',
+    ]);
+  });
+
+  it('skips SETQUOTA for unlimited mailboxes', async () => {
+    server = await fakeServer(ok);
+    await engineFor(server.port).createMailbox('bob@example.com', { quotaBytes: null });
+    expect(server.received).not.toContainEqual(expect.stringMatching(/^SETQUOTA/));
+  });
+
+  it('grants itself the delete right before deleting', async () => {
+    server = await fakeServer(ok);
+    await engineFor(server.port).deleteMailbox('alice@example.com');
+    expect(server.received.slice(1, 3)).toEqual([
+      'SETACL "user/alice@example.com" "cyrus" lrswipkxtecdan',
+      'DELETE "user/alice@example.com"',
+    ]);
+  });
+
+  it('maps server errors to engine error codes', async () => {
+    server = await fakeServer((command, tag) => {
+      if (command.startsWith('CREATE')) return `${tag} NO [ALREADYEXISTS] Mailbox already exists`;
+      if (command.startsWith('RENAME')) return `${tag} NO [NONEXISTENT] Mailbox does not exist`;
+      return ok(command, tag);
+    });
+    const engine = engineFor(server.port);
+    await expect(engine.createMailbox('a@example.com', { quotaBytes: null })).rejects.toMatchObject({
+      code: 'already_exists',
+    });
+    await expect(engine.renameMailbox('a@example.com', 'b@example.com')).rejects.toMatchObject({
+      code: 'not_found',
+    });
+  });
+
+  it('reports unavailability when login fails', async () => {
+    server = await fakeServer((command, tag) =>
+      command.startsWith('LOGIN') ? `${tag} NO authentication failed` : ok(command, tag),
+    );
+    const error = await engineFor(server.port)
+      .createMailbox('a@example.com', { quotaBytes: null })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(MailEngineError);
+    expect((error as MailEngineError).code).toBe('unavailable');
+  });
+
+  it('parses usage from GETQUOTAROOT', async () => {
+    server = await fakeServer((command, tag) =>
+      command.startsWith('GETQUOTAROOT')
+        ? [
+            '* QUOTAROOT "user/alice@example.com" "user/alice@example.com"',
+            '* QUOTA "user/alice@example.com" (STORAGE 10 2048)',
+            `${tag} OK done`,
+          ]
+        : ok(command, tag),
+    );
+    await expect(engineFor(server.port).getUsage('alice@example.com')).resolves.toEqual({
+      usedBytes: 10 * 1024,
+      quotaBytes: 2048 * 1024,
+    });
+  });
+
+  it('rejects addresses that could escape the mailbox namespace', async () => {
+    expect(() => CyrusEngine.mailboxName('first.last+tag@example.com')).not.toThrow();
+    // '/' is Cyrus' hierarchy separator: it would address someone else's folders.
+    expect(() => CyrusEngine.mailboxName('../etc@example.com')).toThrow();
+    expect(() => CyrusEngine.mailboxName('bob/Sent@example.com')).toThrow();
+    expect(() => CyrusEngine.mailboxName('a b@example.com')).toThrow();
+    expect(() => CyrusEngine.mailboxName('Alice@Example.com')).toThrow();
+    expect(() => CyrusEngine.mailboxName('a"@example.com')).toThrow();
+    expect(() => CyrusEngine.mailboxName('*@example.com')).toThrow(); // IMAP wildcard
+    expect(() => CyrusEngine.mailboxName('a%b@example.com')).toThrow();
+  });
+});

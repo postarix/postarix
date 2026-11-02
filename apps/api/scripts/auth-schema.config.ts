@@ -13,4 +13,12 @@ export const auth = createAuth({} as Database, {
   TRUSTED_PROXIES: [],
   ALLOW_SIGNUP: false,
   ALLOW_USER_CREATE_ORG: false,
+  MAIL_ENGINE: 'memory',
+  CYRUS_HOST: 'cyrus',
+  CYRUS_PORT: 143,
+  CYRUS_SECURITY: 'starttls',
+  CYRUS_TLS_VERIFY: true,
+  CYRUS_ADMIN_USER: 'cyrus',
+  DOMAIN_VERIFICATION: 'skip',
+  DNS_SERVERS: [],
 });

@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
-const booleanFromString = z
-  .enum(['true', 'false'])
-  .default('false')
-  .transform((value) => value === 'true');
+const booleanFromString = (fallback: 'true' | 'false') =>
+  z
+    .enum(['true', 'false'])
+    .default(fallback)
+    .transform((value) => value === 'true');
 
 const commaList = z
   .string()
@@ -15,30 +16,62 @@ const commaList = z
       .filter((item) => item.length > 0),
   );
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.url(),
-  /** Public base URL of the API, used by Better Auth for callbacks and cookies. */
-  AUTH_URL: z.url(),
-  AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters'),
-  /** Browser origins allowed to call the API with credentials (admin, webmail). */
-  TRUSTED_ORIGINS: commaList,
-  /**
-   * Reverse proxies whose X-Forwarded-For header is trusted (IPs or CIDRs).
-   * Empty means the API is reached directly and forwarded headers are ignored.
-   */
-  TRUSTED_PROXIES: commaList,
-  /** Public self-registration. Off by default: accounts are created by admins. */
-  ALLOW_SIGNUP: booleanFromString,
-  /** Whether regular users may create organizations. Off by default. */
-  ALLOW_USER_CREATE_ORG: booleanFromString,
-}).refine((env) => env.NODE_ENV === 'production' || !env.AUTH_URL.startsWith('https:'), {
-  // An unset NODE_ENV means "development", which relaxes library fallbacks.
-  // A public HTTPS deployment must say so explicitly.
-  path: ['NODE_ENV'],
-  message: 'must be "production" when AUTH_URL uses https',
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(3000),
+    DATABASE_URL: z.url(),
+    /** Public base URL of the API, used by Better Auth for callbacks and cookies. */
+    AUTH_URL: z.url(),
+    AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters'),
+    /** Browser origins allowed to call the API with credentials (admin, webmail). */
+    TRUSTED_ORIGINS: commaList,
+    /**
+     * Reverse proxies whose X-Forwarded-For header is trusted (IPs or CIDRs).
+     * Empty means the API is reached directly and forwarded headers are ignored.
+     */
+    TRUSTED_PROXIES: commaList,
+    /** Public self-registration. Off by default: accounts are created by admins. */
+    ALLOW_SIGNUP: booleanFromString('false'),
+    /** Whether regular users may create organizations. Off by default. */
+    ALLOW_USER_CREATE_ORG: booleanFromString('false'),
+
+    /** Mailbox engine. "memory" keeps mailboxes in RAM (tests, UI development). */
+    MAIL_ENGINE: z.enum(['cyrus', 'memory']).default('cyrus'),
+    CYRUS_HOST: z.string().default('cyrus'),
+    CYRUS_PORT: z.coerce.number().int().positive().default(143),
+    CYRUS_SECURITY: z.enum(['tls', 'starttls', 'none']).default('starttls'),
+    /** Verify Cyrus' certificate. Disable only with self-signed development certificates. */
+    CYRUS_TLS_VERIFY: booleanFromString('true'),
+    CYRUS_ADMIN_USER: z.string().default('cyrus'),
+    CYRUS_ADMIN_PASSWORD: z.string().optional(),
+
+    /**
+     * Shared secret for /api/internal/* (the mail login bridge). When unset,
+     * the internal endpoints are disabled.
+     */
+    INTERNAL_API_TOKEN: z.string().min(32, 'INTERNAL_API_TOKEN must be at least 32 characters').optional(),
+
+    /** How domain ownership is proven. "skip" activates domains immediately (development only). */
+    DOMAIN_VERIFICATION: z.enum(['dns', 'skip']).default('dns'),
+    /** DNS resolvers used for verification (defaults to the system resolver). */
+    DNS_SERVERS: commaList,
+  })
+  .refine((env) => env.NODE_ENV === 'production' || !env.AUTH_URL.startsWith('https:'), {
+    // An unset NODE_ENV means "development", which relaxes library fallbacks.
+    // A public HTTPS deployment must say so explicitly.
+    path: ['NODE_ENV'],
+    message: 'must be "production" when AUTH_URL uses https',
+  })
+  .refine((env) => env.MAIL_ENGINE !== 'cyrus' || (env.CYRUS_ADMIN_PASSWORD ?? '').length > 0, {
+    path: ['CYRUS_ADMIN_PASSWORD'],
+    message: 'is required when MAIL_ENGINE is "cyrus"',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.DOMAIN_VERIFICATION === 'dns', {
+    // Skipping verification would let any tenant activate someone else's domain.
+    path: ['DOMAIN_VERIFICATION'],
+    message: 'must be "dns" in production',
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

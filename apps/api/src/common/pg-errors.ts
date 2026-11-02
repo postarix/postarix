@@ -1,4 +1,5 @@
 const UNIQUE_VIOLATION = '23505';
+const FOREIGN_KEY_VIOLATION = '23503';
 
 function pgCode(error: unknown): string | undefined {
   // Drizzle wraps driver errors in DrizzleQueryError; the pg error is its `cause`.
@@ -13,4 +14,8 @@ function pgCode(error: unknown): string | undefined {
 
 export function isUniqueViolation(error: unknown): boolean {
   return pgCode(error) === UNIQUE_VIOLATION;
+}
+
+export function isForeignKeyViolation(error: unknown): boolean {
+  return pgCode(error) === FOREIGN_KEY_VIOLATION;
 }

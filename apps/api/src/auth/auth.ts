@@ -1,20 +1,17 @@
 import { passkey } from '@better-auth/passkey';
-import { hash, verify } from '@node-rs/argon2';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
+import { hashPassword, verifyPassword } from './passwords.js';
 import { hasInstanceAdminRole } from './roles.js';
 
 /** Header the API sets with the client IP resolved by Express (honours TRUSTED_PROXIES). */
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
 
 export const AUTH_BASE_PATH = '/api/auth';
-
-// OWASP-recommended argon2id parameters (19 MiB, 2 iterations, 1 lane).
-const ARGON2_OPTIONS = { memoryCost: 19_456, timeCost: 2, parallelism: 1 } as const;
 
 export function createAuth(db: Database, env: Env) {
   const authUrl = new URL(env.AUTH_URL);
@@ -32,8 +29,8 @@ export function createAuth(db: Database, env: Env) {
       minPasswordLength: 12,
       maxPasswordLength: 256,
       password: {
-        hash: (password) => hash(password, ARGON2_OPTIONS),
-        verify: ({ hash: stored, password }) => verify(stored, password),
+        hash: hashPassword,
+        verify: ({ hash: stored, password }) => verifyPassword(stored, password),
       },
     },
     session: {
