@@ -118,7 +118,7 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             - name: UNBOUND_FORWARD_ZONES
-              value: "{{ .Values.clusterDomain }}={{ $clusterDns }}"
+              value: "{{ .Values.clusterDomain }}={{ $clusterDns }}{{ range .Values.mail.dane.forwardZones }} {{ . }}{{ end }}"
           readinessProbe:
             exec: { command: [/usr/local/bin/healthcheck] }
             periodSeconds: 15
