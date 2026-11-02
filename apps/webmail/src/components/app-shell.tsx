@@ -39,12 +39,12 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
 
   const sidebar = (
     <div className="flex h-full flex-col gap-5 px-3 pt-4 pb-3">
-      <a data-nav href="/" className="flex items-center gap-2.5 px-2">
-        <Postmark className="size-8" />
-        <span className="font-display text-[1.35rem] leading-none font-semibold tracking-tight text-white">Postarix</span>
+      <a data-nav href="/" className="flex items-center gap-2.5 rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
+        <Postmark className="size-7" />
+        <span className="text-[1.05rem] leading-none font-semibold tracking-tight text-white">Postarix</span>
       </a>
 
-      <nav aria-label="Apps" className="grid grid-cols-3 gap-1 rounded-lg bg-black/20 p-1">
+      <nav aria-label="Apps" className="grid grid-cols-3 gap-0.5 rounded-lg bg-white/[0.04] p-0.5 ring-1 ring-white/[0.06]">
         {APPS.map(({ name: app, label, href, icon: Icon }) => {
           const active = route.name === app;
           return (
@@ -54,11 +54,12 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
               href={href}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'flex flex-col items-center gap-1 rounded-md py-2 text-[0.7rem] font-medium transition-colors',
-                active ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white',
+                'flex flex-col items-center gap-1 rounded-md py-1.5 text-[0.7rem] font-medium transition-colors',
+                'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
+                active ? 'bg-sidebar-accent text-white shadow-sm ring-1 ring-white/[0.06]' : 'text-sidebar-muted hover:text-white',
               )}
             >
-              <Icon className={cn('size-4', active && 'text-stamp')} aria-hidden />
+              <Icon className={cn('size-4', active ? 'text-stamp' : 'opacity-80')} aria-hidden />
               {label}
             </a>
           );
@@ -71,9 +72,9 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+            className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
           >
-            <Avatar name={name} email={email} className="size-8" />
+            <Avatar name={name} email={email} className="size-8 rounded-lg" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-white">{name || email}</span>
               <span className="block truncate text-xs text-sidebar-muted">{email}</span>
@@ -100,8 +101,8 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
   );
 
   return (
-    <div className="flex h-full bg-background">
-      <aside className="hidden w-64 shrink-0 bg-sidebar text-sidebar-foreground md:block">{sidebar}</aside>
+    <div className="flex h-full bg-sidebar">
+      <aside className="hidden w-60 shrink-0 text-sidebar-foreground md:block">{sidebar}</aside>
 
       {open ? (
         <div className="fixed inset-0 z-40 md:hidden">
@@ -116,9 +117,11 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
             {open ? <X aria-hidden /> : <Menu aria-hidden />}
           </Button>
           <Postmark className="size-6" />
-          <span className="font-display text-lg font-semibold">Postarix</span>
+          <span className="font-semibold tracking-tight">Postarix</span>
         </header>
-        <main className="min-h-0 flex-1">{children}</main>
+        <main className="min-h-0 flex-1 overflow-hidden bg-card md:my-2 md:mr-2 md:rounded-xl md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
+          {children}
+        </main>
       </div>
     </div>
   );

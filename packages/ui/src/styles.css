@@ -3,12 +3,11 @@
  *   @import "tailwindcss";
  *   @import "@postarix/ui/styles.css";
  *
- * The identity comes from the post: ink blue for structure and actions,
- * postal yellow for what deserves attention (compose, the selected message,
- * unread mail), post-box red for destructive actions. Dark mode follows the
- * operating system and keeps the same three colours on deep ink.
+ * shadcn's quiet, neutral system, tinted with two colours: ink blue for
+ * structure and actions, and postal yellow used sparingly for what deserves
+ * attention (compose, today, the unread count). Dark mode follows the
+ * operating system.
  */
-@import "@fontsource-variable/bricolage-grotesque/opsz.css";
 @import "@fontsource-variable/instrument-sans/index.css";
 @import "tw-animate-css";
 
@@ -17,81 +16,80 @@
 :root {
   --radius: 0.625rem;
 
-  /* Paper and ink */
-  --background: #f3f5f9;
-  --foreground: #16213d;
+  --background: #f5f6fa;
+  --foreground: #141b31;
   --card: #ffffff;
-  --card-foreground: #16213d;
+  --card-foreground: #141b31;
   --popover: #ffffff;
-  --popover-foreground: #16213d;
+  --popover-foreground: #141b31;
   --primary: #1e2a52;
   --primary-foreground: #ffffff;
-  --secondary: #e8ecf4;
-  --secondary-foreground: #16213d;
-  --muted: #eceff6;
-  --muted-foreground: #5a6582;
-  --accent: #e6ebf5;
-  --accent-foreground: #16213d;
-  --border: #dbe0eb;
-  --input: #cfd6e4;
-  --ring: #e0a800;
+  --secondary: #eef1f7;
+  --secondary-foreground: #1e2a52;
+  --muted: #f1f3f8;
+  --muted-foreground: #646d84;
+  --accent: #eef2fb;
+  --accent-foreground: #1e2a52;
+  --border: #e3e6ee;
+  --input: #dadfe9;
+  --ring: #6b82c4;
 
-  /* The post */
+  /* Brand accents */
   --stamp: #ffc72c;
-  --stamp-foreground: #16213d;
-  --stamp-soft: #fff3c7;
-  --airmail-red: #c8322b;
-  --airmail-blue: #2b4c9b;
-  --destructive: #c8322b;
+  --stamp-foreground: #1e2a52;
+  --stamp-soft: #fff6d6;
+  --ink: #2b4c9b;
+  --destructive: #d23b33;
   --success: #1d7a52;
   --warning: #a86400;
 
-  /* The sidebar is a slab of ink */
-  --sidebar: #16213d;
-  --sidebar-foreground: #dfe5f2;
-  --sidebar-muted: #8e9abb;
+  /* The navigation rail is ink; content sits on an inset white panel. */
+  --sidebar: #141b31;
+  --sidebar-foreground: #c9d0e2;
+  --sidebar-muted: #8089a3;
   --sidebar-primary: #ffc72c;
-  --sidebar-primary-foreground: #16213d;
-  --sidebar-accent: #24315a;
+  --sidebar-primary-foreground: #1e2a52;
+  --sidebar-accent: #222b47;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #24315a;
-  --sidebar-ring: #ffc72c;
+  --sidebar-border: #232c48;
+  --sidebar-ring: #6b82c4;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0d1427;
-    --foreground: #e6ebf6;
-    --card: #131c33;
-    --card-foreground: #e6ebf6;
-    --popover: #172140;
-    --popover-foreground: #e6ebf6;
-    --primary: #ffc72c;
-    --primary-foreground: #16213d;
-    --secondary: #1c2747;
-    --secondary-foreground: #e6ebf6;
-    --muted: #1a2442;
-    --muted-foreground: #9ba6c4;
-    --accent: #1e2a4c;
-    --accent-foreground: #e6ebf6;
-    --border: #253152;
-    --input: #2d3a5e;
-    --ring: #ffc72c;
-    --stamp-soft: #3a3417;
+    --background: #0e1322;
+    --foreground: #e7eaf3;
+    --card: #131a2c;
+    --card-foreground: #e7eaf3;
+    --popover: #172036;
+    --popover-foreground: #e7eaf3;
+    --primary: #e7eaf3;
+    --primary-foreground: #141b31;
+    --secondary: #1b2338;
+    --secondary-foreground: #e7eaf3;
+    --muted: #182034;
+    --muted-foreground: #949cb3;
+    --accent: #1d2741;
+    --accent-foreground: #e7eaf3;
+    --border: #232c44;
+    --input: #2b3550;
+    --ring: #8ea2dc;
+    --stamp-soft: #3a3214;
+    --ink: #8ea2dc;
     --destructive: #f0645b;
     --success: #4cc28d;
     --warning: #f2b544;
-    --sidebar: #090f1f;
-    --sidebar-foreground: #d5dcec;
-    --sidebar-muted: #7a86a8;
-    --sidebar-accent: #18223f;
-    --sidebar-border: #18223f;
+    --sidebar: #0a0e1a;
+    --sidebar-foreground: #c3cadc;
+    --sidebar-muted: #747d97;
+    --sidebar-accent: #182036;
+    --sidebar-border: #182036;
   }
 }
 
 @theme inline {
   --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Bricolage Grotesque Variable", "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -117,8 +115,7 @@
   --color-stamp: var(--stamp);
   --color-stamp-foreground: var(--stamp-foreground);
   --color-stamp-soft: var(--stamp-soft);
-  --color-airmail-red: var(--airmail-red);
-  --color-airmail-blue: var(--airmail-blue);
+  --color-ink: var(--ink);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -147,37 +144,7 @@
   [data-slot="card-title"],
   [data-slot="dialog-title"],
   [data-slot="alert-dialog-title"] {
-    font-family: var(--font-display);
-    font-optical-sizing: auto;
-    letter-spacing: -0.015em;
-  }
-}
-
-@layer components {
-  /*
-   * The airmail edge: red and blue diagonal bands, as on an airmail envelope.
-   * Used only where a message is being written or the post office is entered
-   * (the composer and the sign-in card).
-   */
-  .airmail-edge {
-    position: relative;
-  }
-  .airmail-edge::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 6px;
-    border-radius: inherit;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    background: repeating-linear-gradient(
-      -45deg,
-      var(--airmail-red) 0 12px,
-      transparent 12px 18px,
-      var(--airmail-blue) 18px 30px,
-      transparent 30px 36px
-    );
-    pointer-events: none;
+    letter-spacing: -0.02em;
   }
 }
 

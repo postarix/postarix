@@ -57,13 +57,15 @@ function LoginForm() {
   }
 
   return (
-    <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
-      <CardHeader className="gap-3">
-        <BrandMark className="size-12" />
-        <div>
-          <CardTitle className="text-3xl font-semibold">Postarix</CardTitle>
-          <CardDescription className="mt-1">Sign in to manage domains, mailboxes and people.</CardDescription>
-        </div>
+    <div className="w-full max-w-sm">
+      <div className="mb-6 flex items-center justify-center gap-2.5">
+        <BrandMark className="size-8" />
+        <span className="text-lg font-semibold tracking-tight text-white">Postarix</span>
+      </div>
+    <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
+      <CardHeader className="text-center">
+        <CardTitle className="text-xl font-semibold">{step === 'password' ? 'Administration' : 'Two-step verification'}</CardTitle>
+        <CardDescription>{step === 'password' ? 'Sign in to manage domains, mailboxes and people.' : 'One more step to keep your account safe.'}</CardDescription>
       </CardHeader>
       <CardContent>
         {step === 'password' ? (
@@ -116,12 +118,13 @@ function LoginForm() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-screen place-items-center bg-sidebar p-4">
+    <main className="grid min-h-screen place-items-center bg-sidebar bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgb(43_76_155/0.45),transparent)] p-4">
       <Suspense>
         <LoginForm />
       </Suspense>

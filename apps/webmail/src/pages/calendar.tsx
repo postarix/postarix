@@ -32,10 +32,10 @@ function EventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () => void
       className={cn(
         'flex w-full items-center gap-1.5 truncate rounded-md px-1.5 py-0.5 text-left text-xs transition-colors',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        span.allDay ? 'bg-primary font-medium text-primary-foreground hover:opacity-90' : 'hover:bg-accent',
+        span.allDay ? 'bg-accent font-medium text-accent-foreground ring-1 ring-ink/15 ring-inset hover:bg-ink/15' : 'hover:bg-muted',
       )}
     >
-      {span.allDay ? null : <span className="size-1.5 shrink-0 rounded-full bg-airmail-blue" aria-hidden />}
+      {span.allDay ? null : <span className="size-1.5 shrink-0 rounded-full bg-ink" aria-hidden />}
       {span.allDay ? null : <span className="shrink-0 text-muted-foreground tabular-nums">{time(span.start)}</span>}
       <span className="truncate">{event.title}</span>
     </button>
@@ -79,16 +79,16 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
 
   const nav = (
     <div className="flex flex-col gap-4">
-      <Button variant="stamp" size="lg" className="w-full justify-start" onClick={() => newAt(focus)}>
+      <Button variant="stamp" className="h-9 w-full justify-start" onClick={() => newAt(focus)}>
         <CalendarPlus aria-hidden />
         New event
       </Button>
       <div className="px-1">
-        <p className="mb-2 text-xs font-medium text-sidebar-muted">Calendars</p>
+        <p className="mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">Calendars</p>
         <ul className="space-y-1">
           {(calendars.data ?? []).map((c) => (
             <li key={c.id} className="flex items-center gap-2.5 px-1.5 py-1 text-sm">
-              <span className="size-2.5 rounded-full bg-stamp" aria-hidden />
+              <span className="size-2.5 rounded-[3px] bg-ink ring-1 ring-white/20" aria-hidden />
               <span className="truncate capitalize">{c.name}</span>
             </li>
           ))}
@@ -99,26 +99,28 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
 
   return (
     <AppShell email={email} name={name} nav={nav}>
-      <div className="flex h-full min-h-0 flex-col px-3 pt-4 pb-3 md:px-6">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <h1 className="mr-auto text-3xl font-semibold capitalize">{monthTitle}</h1>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:px-5">
+          <h1 className="mr-auto text-lg font-semibold capitalize">{monthTitle}</h1>
           <Button variant="outline" size="sm" onClick={() => go(new Date())}>
             Today
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Previous month" onClick={() => go(new Date(year, month - 1, 1))}>
-            <ChevronLeft aria-hidden />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Next month" onClick={() => go(new Date(year, month + 1, 1))}>
-            <ChevronRight aria-hidden />
-          </Button>
+          <div className="flex items-center rounded-md border shadow-xs">
+            <Button variant="ghost" size="icon-sm" className="rounded-r-none" aria-label="Previous month" onClick={() => go(new Date(year, month - 1, 1))}>
+              <ChevronLeft aria-hidden />
+            </Button>
+            <Button variant="ghost" size="icon-sm" className="rounded-l-none border-l" aria-label="Next month" onClick={() => go(new Date(year, month + 1, 1))}>
+              <ChevronRight aria-hidden />
+            </Button>
+          </div>
         </div>
-        {events.error ? <p className="mb-2 text-sm text-destructive">{errorMessage(events.error)}</p> : null}
+        {events.error ? <p className="px-5 pt-2 text-sm text-destructive">{errorMessage(events.error)}</p> : null}
 
         {/* Month grid (larger screens) */}
-        <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card md:flex" role="grid" aria-label={monthTitle}>
+        <div className="hidden min-h-0 flex-1 flex-col overflow-hidden md:flex" role="grid" aria-label={monthTitle}>
           <div className="grid grid-cols-7 border-b" role="row">
             {weekdays.map((w) => (
-              <div key={w} role="columnheader" className="px-3 py-2 text-xs font-medium text-muted-foreground capitalize">
+              <div key={w} role="columnheader" className="px-3 py-2 text-right text-xs font-medium text-muted-foreground capitalize">
                 {w}
               </div>
             ))}
@@ -137,12 +139,12 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
                   onClick={() => newAt(day)}
                   className={cn(
                     'group flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b p-1.5 transition-colors [&:nth-child(7n)]:border-r-0',
-                    inMonth ? 'hover:bg-accent/40' : 'bg-muted/40 text-muted-foreground',
+                    inMonth ? 'hover:bg-muted/50' : 'bg-muted/40 text-muted-foreground/70',
                   )}
                 >
                   <span
                     className={cn(
-                      'mb-0.5 grid size-7 place-items-center rounded-full text-sm tabular-nums',
+                      'mb-0.5 ml-auto grid size-6 place-items-center rounded-full text-xs tabular-nums',
                       isToday ? 'bg-stamp font-semibold text-stamp-foreground' : 'font-medium',
                     )}
                   >
@@ -159,7 +161,7 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
         </div>
 
         {/* Agenda (small screens) */}
-        <div className="min-h-0 flex-1 overflow-y-auto md:hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:hidden">
           {agendaDays.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">Nothing planned this month.</p>
           ) : (

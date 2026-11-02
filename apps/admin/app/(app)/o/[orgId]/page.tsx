@@ -22,11 +22,11 @@ export default function OverviewPage() {
       {stats.map(({ key, label, icon: Icon }) => {
         const card = (
           <div className="flex h-full items-center gap-4 p-5 transition-colors hover:bg-accent/40">
-            <span className="grid size-10 place-items-center rounded-full bg-stamp-soft text-stamp-foreground dark:text-stamp">
+            <span className="grid size-10 place-items-center rounded-lg bg-accent text-ink">
               <Icon className="size-5" aria-hidden />
             </span>
             <span>
-              <span className="block font-display text-3xl leading-none font-semibold tabular-nums">{org.counts[key]}</span>
+              <span className="block text-2xl leading-none font-semibold tabular-nums">{org.counts[key]}</span>
               <span className="mt-1 block text-sm text-muted-foreground">{label}</span>
             </span>
           </div>
