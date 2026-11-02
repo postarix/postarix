@@ -1,10 +1,22 @@
 'use client';
 
-import { Button, Spinner, cn } from '@postarix/ui';
-import { Building2, LogOut, Mail, UserRound } from 'lucide-react';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@postarix/ui/components/dropdown-menu';
+import { Spinner } from '@postarix/ui/components/spinner';
+import { cn } from '@postarix/ui/lib/utils';
+import { Building2, LogOut, Menu, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
+import { BrandMark } from '@/components/brand';
 import { authClient, useSession } from '@/lib/auth-client';
 import { isSuperAdmin, useAllOrganizations, useMyOrganizations } from '@/lib/queries';
 
@@ -22,31 +34,37 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (isPending || !session) {
     return (
-      <div className="grid min-h-screen place-items-center text-ink-muted">
-        <Spinner />
+      <div className="grid min-h-screen place-items-center text-muted-foreground">
+        <Spinner className="size-6" />
       </div>
     );
   }
 
   const orgs = superAdmin ? (all.data ?? []) : (mine.data ?? []);
+  const signOut = async () => {
+    await authClient.signOut();
+    router.replace('/login');
+  };
+
+  const brand = (
+    <Link href="/" className="flex items-center gap-2.5">
+      <BrandMark />
+      <span className="font-semibold">Postarix</span>
+      {superAdmin ? (
+        <Badge variant="secondary" className="ml-1 uppercase">
+          Admin
+        </Badge>
+      ) : null}
+    </Link>
+  );
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
-        <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
-          <span className="grid size-8 place-items-center rounded-lg bg-accent text-white">
-            <Mail className="size-4" aria-hidden />
-          </span>
-          <span className="font-semibold">Postarix</span>
-          {superAdmin ? (
-            <span className="ml-auto rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent-strong">
-              Admin
-            </span>
-          ) : null}
-        </Link>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex">
+        <div className="px-5 py-5">{brand}</div>
 
         <nav aria-label="Organizations" className="flex-1 overflow-y-auto px-3">
-          <p className="px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-ink-muted">Organizations</p>
+          <p className="px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Organizations</p>
           <ul className="space-y-0.5">
             {orgs.map((org) => {
               const active = pathname.startsWith(`/o/${org.id}`);
@@ -56,8 +74,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     href={`/o/${org.id}`}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                      active ? 'bg-accent-soft font-medium text-accent-strong' : 'text-ink hover:bg-surface-muted',
+                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      active
+                        ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                        : 'hover:bg-sidebar-accent/60',
                     )}
                   >
                     <Building2 className="size-4 shrink-0 opacity-70" aria-hidden />
@@ -67,37 +87,69 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               );
             })}
             {orgs.length === 0 && !mine.isLoading ? (
-              <li className="px-2 py-1.5 text-sm text-ink-muted">No organizations yet</li>
+              <li className="px-2 py-1.5 text-sm text-muted-foreground">No organizations yet</li>
             ) : null}
           </ul>
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div className="border-t p-3">
           <Link
             href="/account"
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink hover:bg-surface-muted"
+            aria-current={pathname === '/account' ? 'page' : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent/60',
+              pathname === '/account' && 'bg-sidebar-accent font-medium',
+            )}
           >
             <UserRound className="size-4 opacity-70" aria-hidden />
             <span className="truncate">{session.user.email}</span>
           </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-1 w-full justify-start"
-            onClick={async () => {
-              await authClient.signOut();
-              router.replace('/login');
-            }}
-          >
-            <LogOut className="size-4" aria-hidden />
+          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start" onClick={signOut}>
+            <LogOut aria-hidden />
             Sign out
           </Button>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 px-5 py-8 md:px-10">
-        <div className="mx-auto max-w-6xl">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Small screens: the sidebar becomes a menu. */}
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/90 px-4 py-3 backdrop-blur md:hidden">
+          {brand}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Open menu">
+                <Menu aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+              {orgs.map((org) => (
+                <DropdownMenuItem key={org.id} asChild>
+                  <Link href={`/o/${org.id}`}>
+                    <Building2 aria-hidden />
+                    <span className="truncate">{org.name}</span>
+                  </Link>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/account">
+                  <UserRound aria-hidden />
+                  Your account
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={signOut}>
+                <LogOut aria-hidden />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+
+        <main className="min-w-0 flex-1 px-4 py-8 md:px-10">
+          <div className="mx-auto max-w-6xl">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

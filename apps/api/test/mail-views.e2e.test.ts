@@ -168,4 +168,34 @@ describe('DNS domain verification', () => {
     await admin.agent.post(`/api/orgs/${orgId}/domains/${created.body.id}/verify`).expect(503);
     resolver.resolveTxt = original;
   });
+
+  it('checks the published records live, for members of the organization only', async () => {
+    const created = await admin.agent
+      .post(`/api/orgs/${orgId}/domains`)
+      .send({ name: `check-${Date.now()}.example` })
+      .expect(201);
+    const name = created.body.name as string;
+    const resolver = app.get<DnsResolver>(DNS_RESOLVER);
+    const original = { txt: resolver.resolveTxt, mx: resolver.resolveMx };
+    resolver.resolveTxt = async (host) => {
+      if (host === name) return [[created.body.verificationRecord], ['v=spf1 mx -all']];
+      throw Object.assign(new Error('no data'), { code: 'ENODATA' });
+    };
+    resolver.resolveMx = async () => [{ exchange: 'elsewhere.example.org', priority: 10 }];
+    try {
+      const res = await admin.agent.get(`/api/orgs/${orgId}/domains/${created.body.id}/dns-check`).expect(200);
+      const byPurpose = Object.fromEntries(
+        (res.body.data as { purpose: string; status: string }[]).map((r) => [r.purpose, r.status]),
+      );
+      expect(byPurpose).toMatchObject({ verification: 'ok', spf: 'ok', mx: 'mismatch', dmarc: 'missing' });
+
+      const outsider = await signUp(app, 'dns-outsider');
+      const outsiderOrg = await createOrg(outsider, 'DnsOutsider');
+      await outsider.agent.get(`/api/orgs/${orgId}/domains/${created.body.id}/dns-check`).expect(404);
+      await outsider.agent.get(`/api/orgs/${outsiderOrg}/domains/${created.body.id}/dns-check`).expect(404);
+    } finally {
+      resolver.resolveTxt = original.txt;
+      resolver.resolveMx = original.mx;
+    }
+  });
 });

@@ -19,6 +19,7 @@ import {
   type DomainDto,
   domainIdSchema,
 } from './domains.dto.js';
+import type { DnsRecordCheckDto } from './dns-check.js';
 import { DomainsService } from './domains.service.js';
 
 @Controller('orgs/:orgId/domains')
@@ -54,6 +55,15 @@ export class DomainsController {
     @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
   ): Promise<{ data: DnsRecordDto[] }> {
     return { data: await this.domains.dnsRecords(ctx, id) };
+  }
+
+  /** Live check of the domain's DNS records (any member may look). */
+  @Get(':id/dns-check')
+  async dnsCheck(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+  ): Promise<{ data: DnsRecordCheckDto[] }> {
+    return { data: await this.domains.dnsCheck(ctx, id) };
   }
 
   @Post(':id/verify')

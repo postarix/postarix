@@ -1,11 +1,22 @@
 'use client';
 
-import { Alert, Button, Card, Dialog, EmptyState, Field, Input, PageHeader } from '@postarix/ui';
+import { Button } from '@postarix/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { FieldGroup } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { Building2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
+import { AppDialog } from '@/components/app-dialog';
+import { EmptyState } from '@/components/empty-state';
+import { FormField } from '@/components/form-field';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { authClient, useSession } from '@/lib/auth-client';
 import { isSuperAdmin, keys, useAllOrganizations, useMyOrganizations } from '@/lib/queries';
 
@@ -43,20 +54,22 @@ function CreateOrganizationDialog({ open, onClose }: { open: boolean; onClose: (
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="New organization" description="A company, a family or a single person.">
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        <Field label="Name">{(props) => <Input {...props} name="name" required maxLength={100} autoFocus />}</Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            Create
-          </Button>
-        </div>
+    <AppDialog open={open} onClose={onClose} title="New organization" description="A company, a family or a single person.">
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <FormField label="Name">{(props) => <Input {...props} name="name" required maxLength={100} autoFocus />}</FormField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Create
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -65,7 +78,8 @@ export default function DashboardPage() {
   const superAdmin = isSuperAdmin(session?.user.role);
   const mine = useMyOrganizations();
   const all = useAllOrganizations(superAdmin);
-  const orgs = superAdmin ? all.data : mine.data;
+  const query = superAdmin ? all : mine;
+  const orgs = query.data;
   const [creating, setCreating] = useState(false);
 
   return (
@@ -76,43 +90,52 @@ export default function DashboardPage() {
         actions={
           superAdmin ? (
             <Button onClick={() => setCreating(true)}>
-              <Plus className="size-4" aria-hidden />
+              <Plus aria-hidden />
               New organization
             </Button>
           ) : null
         }
       />
-      {orgs && orgs.length > 0 ? (
+      {query.isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-40 rounded-xl" />
+          ))}
+        </div>
+      ) : orgs && orgs.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orgs.map((org) => (
-            <Link key={org.id} href={`/o/${org.id}`} className="group">
-              <Card className="h-full p-5 transition-shadow group-hover:shadow-md">
-                <p className="font-semibold text-ink">{org.name}</p>
-                <p className="text-xs text-ink-muted">{org.role ? `Your role: ${org.role}` : 'Super-admin access'}</p>
-                <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  {(['domains', 'mailboxes', 'members'] as const).map((key) => (
-                    <div key={key} className="rounded-md bg-surface-muted px-2 py-2">
-                      <dt className="text-[11px] uppercase tracking-wide text-ink-muted">{key}</dt>
-                      <dd className="text-lg font-semibold">{org.counts[key]}</dd>
-                    </div>
-                  ))}
-                </dl>
+            <Link key={org.id} href={`/o/${org.id}`} className="group rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+              <Card className="h-full transition-shadow group-hover:shadow-md">
+                <CardHeader>
+                  <CardTitle>{org.name}</CardTitle>
+                  <CardDescription>{org.role ? `Your role: ${org.role}` : 'Instance administrator access'}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <dl className="grid grid-cols-3 gap-2 text-center">
+                    {(['domains', 'mailboxes', 'members'] as const).map((key) => (
+                      <div key={key} className="rounded-md bg-muted px-2 py-2">
+                        <dt className="text-[11px] tracking-wide text-muted-foreground uppercase">{key}</dt>
+                        <dd className="text-lg font-semibold">{org.counts[key]}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </CardContent>
               </Card>
             </Link>
           ))}
         </div>
       ) : (
-        <Card>
-          <EmptyState
-            title="No organizations yet"
-            description={
-              superAdmin
-                ? 'Create the first organization to add domains and mailboxes.'
-                : 'Ask an administrator to add you to an organization.'
-            }
-            action={superAdmin ? <Button onClick={() => setCreating(true)}>New organization</Button> : null}
-          />
-        </Card>
+        <EmptyState
+          icon={Building2}
+          title="No organizations yet"
+          description={
+            superAdmin
+              ? 'Create the first organization to add domains and mailboxes.'
+              : 'Ask an administrator to add you to an organization.'
+          }
+          action={superAdmin ? <Button onClick={() => setCreating(true)}>New organization</Button> : null}
+        />
       )}
       <CreateOrganizationDialog open={creating} onClose={() => setCreating(false)} />
     </>

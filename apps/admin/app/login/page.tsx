@@ -1,9 +1,17 @@
 'use client';
 
-import { Alert, Button, Card, Field, Input } from '@postarix/ui';
-import { KeyRound, Mail } from 'lucide-react';
+import { Button } from '@postarix/ui/components/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
+import { FieldGroup } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { Separator } from '@postarix/ui/components/separator';
+import { KeyRound } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useState } from 'react';
+import { BrandMark } from '@/components/brand';
+import { FormField } from '@/components/form-field';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
 import { authClient } from '@/lib/auth-client';
 
 function LoginForm() {
@@ -49,67 +57,73 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm p-7">
-      <div className="mb-6 flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-lg bg-accent text-white">
-          <Mail className="size-5" aria-hidden />
-        </span>
-        <div>
-          <p className="text-base font-semibold">Postarix</p>
-          <p className="text-xs text-ink-muted">Administration</p>
+    <Card className="w-full max-w-sm">
+      <CardHeader>
+        <div className="mb-2 flex items-center gap-2.5">
+          <BrandMark className="size-9" />
+          <div>
+            <CardTitle>Postarix</CardTitle>
+            <CardDescription>Administration</CardDescription>
+          </div>
         </div>
-      </div>
-
-      {error ? (
-        <div className="mb-4">
-          <Alert>{error}</Alert>
-        </div>
-      ) : null}
-
-      {step === 'password' ? (
-        <form onSubmit={signIn} className="space-y-4">
-          <Field label="Email">
-            {(props) => <Input {...props} name="email" type="email" autoComplete="username" required autoFocus />}
-          </Field>
-          <Field label="Password">
-            {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
-          </Field>
-          <Button type="submit" className="w-full" loading={pending}>
-            Sign in
-          </Button>
-          <Button type="button" variant="secondary" className="w-full" onClick={signInWithPasskey}>
-            <KeyRound className="size-4" aria-hidden />
-            Sign in with a passkey
-          </Button>
-        </form>
-      ) : (
-        <form onSubmit={verifyCode} className="space-y-4">
-          <p className="text-sm text-ink-muted">Enter the 6-digit code from your authenticator app.</p>
-          <Field label="Authentication code">
-            {(props) => (
-              <Input
-                {...props}
-                name="code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9 ]{6,7}"
-                required
-                autoFocus
-              />
-            )}
-          </Field>
-          <Button type="submit" className="w-full" loading={pending}>
-            Verify
-          </Button>
-        </form>
-      )}
+      </CardHeader>
+      <CardContent>
+        {step === 'password' ? (
+          <form onSubmit={signIn}>
+            <FieldGroup>
+              {error ? <Notice>{error}</Notice> : null}
+              <FormField label="Email">
+                {(props) => <Input {...props} name="email" type="email" autoComplete="username" required autoFocus />}
+              </FormField>
+              <FormField label="Password">
+                {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
+              </FormField>
+              <LoadingButton type="submit" className="w-full" loading={pending}>
+                Sign in
+              </LoadingButton>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <Separator className="flex-1" />
+                or
+                <Separator className="flex-1" />
+              </div>
+              <Button type="button" variant="outline" className="w-full" onClick={signInWithPasskey}>
+                <KeyRound aria-hidden />
+                Sign in with a passkey
+              </Button>
+            </FieldGroup>
+          </form>
+        ) : (
+          <form onSubmit={verifyCode}>
+            <FieldGroup>
+              {error ? <Notice>{error}</Notice> : null}
+              <p className="text-sm text-muted-foreground">Enter the 6-digit code from your authenticator app.</p>
+              <FormField label="Authentication code">
+                {(props) => (
+                  <Input
+                    {...props}
+                    name="code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9 ]{6,7}"
+                    required
+                    autoFocus
+                  />
+                )}
+              </FormField>
+              <LoadingButton type="submit" className="w-full" loading={pending}>
+                Verify
+              </LoadingButton>
+            </FieldGroup>
+          </form>
+        )}
+      </CardContent>
     </Card>
   );
 }
 
 export default function LoginPage() {
   return (
-    <main className="grid min-h-screen place-items-center p-4">
+    <main className="grid min-h-screen place-items-center bg-muted/40 p-4">
       <Suspense>
         <LoginForm />
       </Suspense>

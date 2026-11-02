@@ -64,6 +64,6 @@ test('creates and revokes an app password', async ({ page }) => {
   const row = page.getByRole('row', { name: /Thunderbird/ });
   await expect(row.getByText('Never')).toBeVisible();
   await row.getByRole('button', { name: 'Revoke Thunderbird' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Revoke' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByRole('row', { name: /Thunderbird/ })).toHaveCount(0);
 });

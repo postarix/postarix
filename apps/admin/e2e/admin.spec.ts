@@ -38,6 +38,8 @@ test('adds and verifies a domain, and shows its DNS records', async ({ page }) =
   await expect(card.getByRole('button', { name: 'Hide DNS records' })).toBeVisible();
   await expect(card.getByRole('cell', { name: 'DKIM', exact: true })).toBeVisible();
   await expect(card.getByText(/v=DKIM1/)).toBeVisible();
+  // The test domain does not exist in DNS, so the live check reports records as missing.
+  await expect(card.getByRole('row', { name: /DKIM/ }).getByText(/Missing|Could not check/)).toBeVisible();
 });
 
 test('creates, edits and resets a mailbox', async ({ page }) => {

@@ -1,8 +1,15 @@
 'use client';
 
-import { Alert, Button, Card, EmptyState, PageHeader, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { History } from 'lucide-react';
 import { useParams } from 'next/navigation';
+import { EmptyState } from '@/components/empty-state';
+import { ListTable } from '@/components/list-table';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { keys } from '@/lib/queries';
@@ -23,9 +30,7 @@ export default function ActivityPage() {
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       api
-        .get<{ data: AuditEvent[] }>(
-          `/orgs/${orgId}/audit?limit=${PAGE}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`,
-        )
+        .get<{ data: AuditEvent[] }>(`/orgs/${orgId}/audit?limit=${PAGE}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`)
         .then((r) => r.data),
     getNextPageParam: (last) => (last.length === PAGE ? (last.at(-1)?.createdAt ?? null) : null),
   });
@@ -35,45 +40,43 @@ export default function ActivityPage() {
     <>
       <PageHeader title="Activity" description="Every change made in this organization, newest first." />
       {events.isLoading ? (
-        <Spinner />
+        <Skeleton className="h-40 w-full rounded-xl" />
       ) : events.error ? (
-        <Alert>{errorMessage(events.error)}</Alert>
+        <Notice>{errorMessage(events.error)}</Notice>
       ) : rows.length ? (
         <>
-          <Card className="overflow-x-auto">
-            <Table>
-              <thead>
-                <tr>
-                  <Th>When</Th>
-                  <Th>Action</Th>
-                  <Th>Target</Th>
-                  <Th>By</Th>
-                  <Th>IP</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((event) => (
-                  <tr key={event.id}>
-                    <Td className="whitespace-nowrap text-sm text-ink-muted">{formatDate(event.createdAt)}</Td>
-                    <Td className="text-sm">{describe(event)}</Td>
-                    <Td className="text-sm font-medium">{event.targetLabel ?? '—'}</Td>
-                    <Td className="text-sm">{event.actorEmail ?? 'System'}</Td>
-                    <Td className="font-mono text-xs text-ink-muted">{event.ipAddress ?? '—'}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </Card>
+          <ListTable>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-4">When</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>By</TableHead>
+                <TableHead className="pr-4">IP</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((event) => (
+                <TableRow key={event.id}>
+                  <TableCell className="pl-4 text-muted-foreground">{formatDate(event.createdAt)}</TableCell>
+                  <TableCell>{describe(event)}</TableCell>
+                  <TableCell className="font-medium">{event.targetLabel ?? '—'}</TableCell>
+                  <TableCell>{event.actorEmail ?? 'System'}</TableCell>
+                  <TableCell className="pr-4 font-mono text-xs text-muted-foreground">{event.ipAddress ?? '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ListTable>
           {events.hasNextPage ? (
             <div className="mt-4 flex justify-center">
-              <Button variant="secondary" loading={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>
+              <LoadingButton variant="outline" loading={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>
                 Load more
-              </Button>
+              </LoadingButton>
             </div>
           ) : null}
         </>
       ) : (
-        <EmptyState title="Nothing has happened yet" />
+        <EmptyState icon={History} title="Nothing has happened yet" />
       )}
     </>
   );

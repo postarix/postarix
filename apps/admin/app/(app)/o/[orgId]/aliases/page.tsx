@@ -1,11 +1,26 @@
 'use client';
 
-import { Alert, Badge, Button, Card, Dialog, EmptyState, Field, Input, PageHeader, Select, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import { Checkbox } from '@postarix/ui/components/checkbox';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
+import { Textarea } from '@postarix/ui/components/textarea';
 import { useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { AtSign, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
+import { AddressFields } from '@/components/address-fields';
+import { AppDialog } from '@/components/app-dialog';
 import { ConfirmDialog } from '@/components/confirm';
+import { EmptyState } from '@/components/empty-state';
+import { FormField } from '@/components/form-field';
+import { ListTable } from '@/components/list-table';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { keys, useOrgList } from '@/lib/queries';
 import type { Alias, Domain } from '@/lib/types';
@@ -25,17 +40,7 @@ function useRefresh(orgId: string) {
   };
 }
 
-function AliasDialog({
-  orgId,
-  domains,
-  alias,
-  onClose,
-}: {
-  orgId: string;
-  domains: Domain[];
-  alias: Alias | null;
-  onClose: () => void;
-}) {
+function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domains: Domain[]; alias: Alias | null; onClose: () => void }) {
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -68,52 +73,33 @@ function AliasDialog({
   }
 
   return (
-    <Dialog open onClose={onClose} title={alias ? `Edit ${alias.address}` : 'New alias'} description="Forwards mail to one or more addresses.">
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        {alias ? null : (
-          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-            <Field label="Address">{(props) => <Input {...props} name="localPart" placeholder="sales" required autoFocus />}</Field>
-            <span className="pb-2.5 text-ink-muted">@</span>
-            <Field label="Domain">
-              {(props) => (
-                <Select {...props} name="domainId" required>
-                  {domains.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
-        )}
-        <Field label="Deliver to" hint="One address per line (up to 50). External addresses are allowed.">
-          {(props) => (
-            <textarea
-              {...props}
-              name="destinations"
-              required
-              rows={4}
-              defaultValue={alias?.destinations.join('\n')}
-              className="w-full rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 font-mono text-sm focus:border-accent focus:outline-none"
-            />
-          )}
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="enabled" defaultChecked={alias?.enabled ?? true} className="size-4 accent-[var(--color-accent)]" />
-          Enabled
-        </label>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            {alias ? 'Save' : 'Create alias'}
-          </Button>
-        </div>
+    <AppDialog open onClose={onClose} title={alias ? `Edit ${alias.address}` : 'New alias'} description="Forwards mail to one or more addresses.">
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          {alias ? null : <AddressFields domains={domains} placeholder="sales" />}
+          <FormField label="Deliver to" hint="One address per line (up to 50). External addresses are allowed.">
+            {(props) => (
+              <Textarea {...props} name="destinations" required rows={4} defaultValue={alias?.destinations.join('\n')} className="font-mono" />
+            )}
+          </FormField>
+          <Field orientation="horizontal">
+            <Checkbox id="alias-enabled" name="enabled" defaultChecked={alias?.enabled ?? true} />
+            <FieldLabel htmlFor="alias-enabled" className="font-normal">
+              Enabled
+            </FieldLabel>
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              {alias ? 'Save' : 'Create alias'}
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -130,60 +116,58 @@ export default function AliasesPage() {
     <>
       <PageHeader
         title="Aliases"
-        description="Addresses that forward mail elsewhere. Mailbox owners can also send as an alias that delivers to them."
+        description="Addresses that forward mail elsewhere. A mailbox can also send as an alias of this organization that delivers to it."
         actions={
           <Button onClick={() => setEditing('new')} disabled={activeDomains.length === 0}>
-            <Plus className="size-4" aria-hidden />
+            <Plus aria-hidden />
             New alias
           </Button>
         }
       />
       {aliases.isLoading ? (
-        <Spinner />
+        <Skeleton className="h-40 w-full rounded-xl" />
       ) : aliases.error ? (
-        <Alert>{errorMessage(aliases.error)}</Alert>
+        <Notice>{errorMessage(aliases.error)}</Notice>
       ) : aliases.data?.length ? (
-        <Card className="overflow-x-auto">
-          <Table>
-            <thead>
-              <tr>
-                <Th>Alias</Th>
-                <Th>Delivers to</Th>
-                <Th>Status</Th>
-                <Th className="text-right">
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {aliases.data.map((alias) => (
-                <tr key={alias.id}>
-                  <Td className="font-medium">{alias.address}</Td>
-                  <Td>
-                    <ul className="space-y-0.5 text-sm">
-                      {alias.destinations.map((d) => (
-                        <li key={d}>{d}</li>
-                      ))}
-                    </ul>
-                  </Td>
-                  <Td>{alias.enabled ? <Badge tone="success">Enabled</Badge> : <Badge>Disabled</Badge>}</Td>
-                  <Td>
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" aria-label={`Edit ${alias.address}`} onClick={() => setEditing(alias)}>
-                        <Pencil className="size-4" aria-hidden />
-                      </Button>
-                      <Button size="sm" variant="ghost" aria-label={`Delete ${alias.address}`} onClick={() => setDeleting(alias)}>
-                        <Trash2 className="size-4" aria-hidden />
-                      </Button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
+        <ListTable>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-4">Alias</TableHead>
+              <TableHead>Delivers to</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-4 text-right">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {aliases.data.map((alias) => (
+              <TableRow key={alias.id}>
+                <TableCell className="pl-4 font-medium">{alias.address}</TableCell>
+                <TableCell>
+                  <ul className="space-y-0.5 text-sm">
+                    {alias.destinations.map((d) => (
+                      <li key={d}>{d}</li>
+                    ))}
+                  </ul>
+                </TableCell>
+                <TableCell>{alias.enabled ? <Badge variant="success">Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>}</TableCell>
+                <TableCell className="pr-4">
+                  <div className="flex justify-end gap-1">
+                    <Button size="icon-sm" variant="ghost" aria-label={`Edit ${alias.address}`} onClick={() => setEditing(alias)}>
+                      <Pencil aria-hidden />
+                    </Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Delete ${alias.address}`} onClick={() => setDeleting(alias)}>
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </ListTable>
       ) : (
-        <EmptyState title="No aliases yet" />
+        <EmptyState icon={AtSign} title="No aliases yet" description="Forward an address such as sales@ to one or more people." />
       )}
       {editing ? (
         <AliasDialog orgId={orgId} domains={activeDomains} alias={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />

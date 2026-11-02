@@ -6,7 +6,7 @@ Self-hosted email platform (a modern alternative to mailcow). Read `docs/ARCHITE
 
 - Mail core: Postfix + Cyrus IMAP + Rspamd + Unbound + CrowdSec (ClamAV optional). Their code is never modified, only configured. Our images build on Debian trixie-slim.
 - Backend: NestJS + Better Auth (plugins organization, twoFactor, passkey, admin; sso arrives in Phase 5).
-- Admin: Next.js. Webmail: React + Vite SPA over JMAP.
+- Admin: Next.js. Webmail: React + Vite SPA over JMAP. UI components: shadcn/ui in `packages/ui` (add new ones with the shadcn CLI there).
 - Data: PostgreSQL (Drizzle ORM, versioned migrations in `apps/api/drizzle/`) + Valkey. Queues: BullMQ.
 - Runtime: Node.js 22+, ESM across the monorepo. TypeScript 6.
 - Monorepo: pnpm workspaces + Turborepo. License AGPL-3.0-only.

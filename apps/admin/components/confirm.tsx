@@ -1,10 +1,20 @@
 'use client';
 
-import { Alert, Button, Dialog } from '@postarix/ui';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@postarix/ui/components/alert-dialog';
 import { type ReactNode, useState } from 'react';
 import { errorMessage } from '@/lib/api';
+import { LoadingButton } from './loading-button';
+import { Notice } from './notice';
 
-/** Confirmation dialog for destructive actions. */
+/** shadcn AlertDialog for destructive actions; stays open and shows the error if the action fails. */
 export function ConfirmDialog({
   open,
   onClose,
@@ -23,35 +33,43 @@ export function ConfirmDialog({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Dialog open={open} onClose={onClose} title={title} description={description}>
-      {error ? (
-        <div className="mb-4">
-          <Alert>{error}</Alert>
-        </div>
-      ) : null}
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="danger"
-          loading={pending}
-          onClick={async () => {
-            setPending(true);
-            setError(null);
-            try {
-              await onConfirm();
-              onClose();
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setPending(false);
-            }
-          }}
-        >
-          {confirmLabel}
-        </Button>
-      </div>
-    </Dialog>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          setError(null);
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? <Notice>{error}</Notice> : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <LoadingButton
+            variant="destructive"
+            loading={pending}
+            onClick={async () => {
+              setPending(true);
+              setError(null);
+              try {
+                await onConfirm();
+                onClose();
+              } catch (e) {
+                setError(errorMessage(e));
+              } finally {
+                setPending(false);
+              }
+            }}
+          >
+            {confirmLabel}
+          </LoadingButton>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
