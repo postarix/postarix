@@ -44,3 +44,32 @@ export const domains = pgTable(
 );
 
 export type DomainRow = typeof domains.$inferSelect;
+
+export const dkimKeyStatuses = ['active', 'retired'] as const;
+
+/**
+ * DKIM signing keys. Reached only through their domain, which is tenant-scoped.
+ * Private keys are stored encrypted (see src/dkim/dkim-crypto.ts).
+ */
+export const dkimKeys = pgTable(
+  'dkim_keys',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    domainId: uuid()
+      .notNull()
+      .references(() => domains.id, { onDelete: 'cascade' }),
+    selector: text().notNull(),
+    publicKey: text().notNull(),
+    privateKeyEncrypted: text().notNull(),
+    status: text({ enum: dkimKeyStatuses }).notNull().default('active'),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('dkim_keys_domain_id_selector_unique').on(table.domainId, table.selector),
+    uniqueIndex('dkim_keys_one_active_per_domain')
+      .on(table.domainId)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
+
+export type DkimKeyRow = typeof dkimKeys.$inferSelect;

@@ -15,6 +15,7 @@ import { RequireOrgRole, Tenant, type TenantContext } from '../tenancy/tenant-co
 import {
   type CreateDomainInput,
   createDomainSchema,
+  type DnsRecordDto,
   type DomainDto,
   domainIdSchema,
 } from './domains.dto.js';
@@ -45,6 +46,14 @@ export class DomainsController {
     @Body(new ZodValidationPipe(createDomainSchema)) body: CreateDomainInput,
   ): Promise<DomainDto> {
     return this.domains.create(ctx, body);
+  }
+
+  @Get(':id/dns-records')
+  async dnsRecords(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+  ): Promise<{ data: DnsRecordDto[] }> {
+    return { data: await this.domains.dnsRecords(ctx, id) };
   }
 
   @Post(':id/verify')

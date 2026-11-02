@@ -42,3 +42,10 @@ export function toDomainDto(row: DomainRow): DomainDto {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
+
+export interface DnsRecordDto {
+  purpose: 'verification' | 'mx' | 'spf' | 'dkim' | 'dmarc';
+  type: 'TXT' | 'MX';
+  name: string;
+  value: string;
+}

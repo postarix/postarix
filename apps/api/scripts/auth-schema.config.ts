@@ -21,4 +21,5 @@ export const auth = createAuth({} as Database, {
   CYRUS_ADMIN_USER: 'cyrus',
   DOMAIN_VERIFICATION: 'skip',
   DNS_SERVERS: [],
+  MAIL_HOSTNAME: 'localhost',
 });
