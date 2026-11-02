@@ -14,6 +14,12 @@ services:
       traefik.http.routers.postarix-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.postarix-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       traefik.http.services.postarix-api.loadbalancer.server.port: "3000"
+      # Mail app setup and MTA-STS, on the mail host and on every hosted domain's
+      # autoconfig.* / mta-sts.* names (they need certificates: add them to your resolver).
+      traefik.http.routers.postarix-discovery.rule: PathPrefix(`/.well-known/autoconfig/`) || Path(`/mail/config-v1.1.xml`) || PathRegexp(`(?i)^/autodiscover/autodiscover\.xml$`) || Path(`/.well-known/mta-sts.txt`)
+      traefik.http.routers.postarix-discovery.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.postarix-discovery.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.postarix-discovery.service: postarix-api
 
   admin:
     networks: [traefik]

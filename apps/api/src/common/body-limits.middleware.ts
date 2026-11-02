@@ -16,7 +16,7 @@ function hasBody(req: express.Request): boolean {
  * including the Better Auth handler (which reuses an already-parsed body
  * instead of reading the raw stream with no limit).
  *
- * Only JSON and URL-encoded forms are accepted; any other body is rejected
+ * Only JSON, URL-encoded forms and small XML documents are accepted; any other body is rejected
  * with 415 so nothing downstream ever streams an unbounded payload.
  */
 export function bodyLimits(): Array<RequestHandler | ErrorRequestHandler> {
@@ -42,6 +42,8 @@ export function bodyLimits(): Array<RequestHandler | ErrorRequestHandler> {
   return [
     express.json({ limit: BODY_LIMIT }),
     express.urlencoded({ limit: BODY_LIMIT, extended: false }),
+    // Small XML documents only (Outlook's Autodiscover request).
+    express.text({ type: ['text/xml', 'application/xml'], limit: '16kb' }),
     handleParseErrors,
     rejectUnparsed,
   ];

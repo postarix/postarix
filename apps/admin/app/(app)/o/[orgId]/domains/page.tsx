@@ -31,6 +31,9 @@ const purposeLabel: Record<DnsRecord['purpose'], string> = {
   spf: 'SPF',
   dkim: 'DKIM',
   dmarc: 'DMARC',
+  autoconfig: 'App setup',
+  'mta-sts': 'MTA-STS host',
+  'mta-sts-id': 'MTA-STS policy',
 };
 
 const statusBadge: Record<DnsRecordCheck['status'], { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' }> = {

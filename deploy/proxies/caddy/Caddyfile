@@ -15,6 +15,13 @@ mail.example.com {
 		reverse_proxy api:3000
 	}
 
+	# Mail app setup (autoconfig, Autodiscover) and the MTA-STS policy, for
+	# every hosted domain: point autoconfig.<domain> and mta-sts.<domain> here.
+	@discovery path /.well-known/autoconfig/* /mail/config-v1.1.xml /autodiscover/autodiscover.xml /Autodiscover/Autodiscover.xml /.well-known/mta-sts.txt
+	handle @discovery {
+		reverse_proxy api:3000
+	}
+
 	handle /admin* {
 		reverse_proxy admin:3001
 	}

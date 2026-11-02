@@ -4,6 +4,7 @@ import { Resolver } from 'node:dns/promises';
 export interface DnsResolver {
   resolveTxt(hostname: string): Promise<string[][]>;
   resolveMx(hostname: string): Promise<{ exchange: string; priority: number }[]>;
+  resolveCname(hostname: string): Promise<string[]>;
 }
 
 export function createDnsResolver(servers: readonly string[]): DnsResolver {
@@ -12,6 +13,7 @@ export function createDnsResolver(servers: readonly string[]): DnsResolver {
   return {
     resolveTxt: (hostname) => resolver.resolveTxt(hostname),
     resolveMx: (hostname) => resolver.resolveMx(hostname),
+    resolveCname: (hostname) => resolver.resolveCname(hostname),
   };
 }
 

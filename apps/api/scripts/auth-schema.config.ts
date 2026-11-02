@@ -25,4 +25,5 @@ export const auth = createAuth({} as Database, {
   DOMAIN_VERIFICATION: 'skip',
   DNS_SERVERS: [],
   MAIL_HOSTNAME: 'localhost',
+  MTA_STS_MODE: 'testing',
 });

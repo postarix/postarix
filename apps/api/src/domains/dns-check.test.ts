@@ -16,10 +16,11 @@ const expected: DnsRecordDto[] = [
 
 const noData = () => Promise.reject(Object.assign(new Error('no data'), { code: 'ENODATA' }));
 
-function resolver(txt: Record<string, string[][]>, mx: Record<string, string[]>): DnsResolver {
+function resolver(txt: Record<string, string[][]>, mx: Record<string, string[]>, cname: Record<string, string[]> = {}): DnsResolver {
   return {
     resolveTxt: (name) => (txt[name] ? Promise.resolve(txt[name]) : noData()),
     resolveMx: (name) => (mx[name] ? Promise.resolve(mx[name].map((exchange) => ({ exchange, priority: 10 }))) : noData()),
+    resolveCname: (name) => (cname[name] ? Promise.resolve(cname[name]) : noData()),
   };
 }
 
@@ -75,7 +76,19 @@ describe('checkDnsRecords', () => {
     const failing: DnsResolver = {
       resolveTxt: () => Promise.reject(Object.assign(new Error('timeout'), { code: 'ETIMEOUT' })),
       resolveMx: () => Promise.reject(Object.assign(new Error('servfail'), { code: 'ESERVFAIL' })),
+      resolveCname: () => Promise.reject(Object.assign(new Error('servfail'), { code: 'ESERVFAIL' })),
     };
     expect(new Set(Object.values(await statuses(failing)))).toEqual(new Set(['unknown']));
+  });
+
+  it('checks the autoconfig and MTA-STS records', async () => {
+    const records: DnsRecordDto[] = [
+      { purpose: 'autoconfig', type: 'CNAME', name: 'autoconfig.example.com', value: `${HOST}.` },
+      { purpose: 'mta-sts', type: 'CNAME', name: 'mta-sts.example.com', value: `${HOST}.` },
+      { purpose: 'mta-sts-id', type: 'TXT', name: '_mta-sts.example.com', value: 'v=STSv1; id=abc' },
+    ];
+    const dns = resolver({ '_mta-sts.example.com': [['v=STSv1; id=old']] }, {}, { 'autoconfig.example.com': [`${HOST}.`], 'mta-sts.example.com': ['other.host.'] });
+    const result = Object.fromEntries((await checkDnsRecords(dns, records, HOST)).map((r) => [r.purpose, r.status]));
+    expect(result).toEqual({ autoconfig: 'ok', 'mta-sts': 'mismatch', 'mta-sts-id': 'mismatch' });
   });
 });

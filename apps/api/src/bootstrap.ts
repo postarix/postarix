@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { type INestApplication } from '@nestjs/common';
+import { type INestApplication, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
@@ -57,7 +57,15 @@ export async function createApp(): Promise<INestApplication> {
 
   app.use(originCheck([env.AUTH_URL, ...env.TRUSTED_ORIGINS]));
 
-  app.setGlobalPrefix('api');
+  // Mail software fetches these at fixed paths, outside /api.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      '.well-known/autoconfig/mail/config-v1.1.xml',
+      'mail/config-v1.1.xml',
+      { path: 'autodiscover/autodiscover.xml', method: RequestMethod.POST },
+      '.well-known/mta-sts.txt',
+    ],
+  });
   app.enableShutdownHooks();
   return app;
 }
