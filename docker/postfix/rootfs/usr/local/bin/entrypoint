@@ -63,6 +63,9 @@ watch_certificates() {
 # automatic replies only, never ordinary mail through the server.
 host_re=$(printf '%s' "$MAIL_HOSTNAME" | sed 's/[.]/\\./g')
 printf '/^srs[01][=+-].*@%s$/ postarix_srs_bounces\n' "$host_re" > /etc/postfix/srs_recipients.regexp
+# Checked first, for every client: anything but the null sender is refused;
+# the address itself is then checked like any other (relay_recipient_maps).
+printf '%s\n' '/^<>$/ DUNNO' '/./ REJECT Only delivery reports are accepted for this address' > /etc/postfix/srs_senders.regexp
 
 # --- main.cf --------------------------------------------------------------------
 pg() { echo "pgsql:/etc/postfix/pgsql/$1.cf"; }
@@ -98,13 +101,13 @@ postconf -e \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
   "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient, check_recipient_access regexp:/etc/postfix/srs_recipients.regexp" \
+  "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
   "relay_domains = $MAIL_HOSTNAME" \
   "relay_recipient_maps = $(pg srs_recipients)" \
   "recipient_canonical_maps = $(pg srs_reverse)" \
   "recipient_canonical_classes = envelope_recipient" \
   "smtpd_restriction_classes = postarix_srs_bounces" \
-  "postarix_srs_bounces = check_sender_access inline:{ { <> = OK } }, reject" \
+  "postarix_srs_bounces = check_sender_access regexp:/etc/postfix/srs_senders.regexp" \
   "smtpd_sasl_auth_enable = no" \
   "smtpd_sasl_type = cyrus" \
   "smtpd_sasl_path = smtpd" \
