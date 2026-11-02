@@ -1,0 +1,29 @@
+# Postarix behind Caddy. Replace mail.example.com with your MAIL_HOSTNAME.
+# Caddy must share the Docker network with the stack (postarix_default).
+mail.example.com {
+	encode zstd gzip
+
+	# Internal endpoints never leave the Docker network. This must be a handle
+	# block listed first: Caddy runs handle blocks before a bare respond.
+	@internal path /api/internal /api/internal/*
+	handle @internal {
+		respond 404
+	}
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	@cyrus path /.well-known/caldav /.well-known/carddav /.well-known/jmap /dav/* /jmap/*
+	handle @cyrus {
+		reverse_proxy cyrus:8080
+	}
+
+	handle /.well-known/acme-challenge/* {
+		reverse_proxy certs:80
+	}
+
+	handle {
+		respond "Postarix" 200
+	}
+}
