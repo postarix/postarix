@@ -102,6 +102,11 @@ describe('CyrusEngine', () => {
     expect(server.received).toEqual([
       'LOGIN "cyrus" "pa\\"ss"',
       'CREATE "user/alice@example.com"',
+      'CREATE "user/alice/Drafts@example.com" (USE (\\Drafts))',
+      'CREATE "user/alice/Sent@example.com" (USE (\\Sent))',
+      'CREATE "user/alice/Trash@example.com" (USE (\\Trash))',
+      'CREATE "user/alice/Junk@example.com" (USE (\\Junk))',
+      'CREATE "user/alice/Archive@example.com" (USE (\\Archive))',
       'SETQUOTA "user/alice@example.com" (STORAGE 1024)',
       'LOGOUT',
     ]);

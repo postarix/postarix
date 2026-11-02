@@ -1,0 +1,4 @@
+#!/bin/sh
+# Healthy when the SMTP listener greets us.
+set -e
+printf 'QUIT\r\n' | nc -w 3 127.0.0.1 25 | grep -q '^220 '

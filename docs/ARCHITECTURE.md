@@ -314,13 +314,15 @@ postarix/
 - [x] First multi-tenant resource (domains) with isolation tests.
 
 ### Phase 1 — Working mail
-- Postfix, Cyrus, Rspamd and Unbound containers.
-- Postfix reading domains, mailboxes and aliases from PostgreSQL.
-- `CyrusEngine` (create mailboxes, quotas).
-- Mailboxes, aliases and app passwords in the API.
-- Authentication bridge (saslauthd → API).
-- DNS verification of domains, per-domain DKIM.
-- Certificates (all three modes), proxy templates, CrowdSec.
+- [x] Postfix, Cyrus, Rspamd and Unbound containers.
+- [x] Postfix reading domains, mailboxes and aliases from PostgreSQL.
+- [x] `CyrusEngine` (create mailboxes with default folders, quotas).
+- [x] Mailboxes, aliases and app passwords in the API.
+- [x] Authentication bridge (saslauthd → PAM → API).
+- [x] DNS verification of domains.
+- [x] Integration tests that send and receive real mail through the stack.
+- [ ] Per-domain DKIM signing.
+- [ ] Certificates (all three modes), proxy templates, CrowdSec, DANE.
 - **Milestone:** send and receive mail from Thunderbird.
 
 ### Phase 2 — Admin panel

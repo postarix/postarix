@@ -4,10 +4,11 @@
 // Usage:
 //   ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a long passphrase' ADMIN_NAME='Your Name' \
 //     pnpm --filter @postarix/api create-admin
-import { createAuth } from '../src/auth/auth.js';
-import { loadEnv } from '../src/config/env.js';
-import { createDatabase } from '../src/db/client.js';
-import { createSuperAdmin } from '../src/auth/create-super-admin.js';
+// In a container: docker compose exec api node dist/cli/create-admin.js
+import { createAuth } from '../auth/auth.js';
+import { createSuperAdmin } from '../auth/create-super-admin.js';
+import { loadEnv } from '../config/env.js';
+import { createDatabase } from '../db/client.js';
 
 const { ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME } = process.env;
 if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {

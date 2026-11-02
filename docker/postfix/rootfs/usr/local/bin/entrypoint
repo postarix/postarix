@@ -1,0 +1,110 @@
+#!/bin/sh
+# Renders Postfix configuration from the environment and runs Postfix in the foreground.
+set -eu
+
+: "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
+: "${POSTFIX_DB_PASSWORD:?POSTFIX_DB_PASSWORD is required}"
+export POSTFIX_DB_HOST="${POSTFIX_DB_HOST:-postgres}"
+export POSTFIX_DB_NAME="${POSTFIX_DB_NAME:-postarix}"
+export POSTFIX_DB_USER="${POSTFIX_DB_USER:-postarix_mail}"
+export POSTFIX_DB_PASSWORD
+RSPAMD_MILTER="${RSPAMD_MILTER:-inet:rspamd:11332}"
+CYRUS_LMTP="${CYRUS_LMTP:-inet:cyrus:24}"
+MESSAGE_SIZE_LIMIT="${MESSAGE_SIZE_LIMIT:-52428800}"
+CERT_DIR="${CERT_DIR:-/certs}"
+
+log() { echo "[postfix-entrypoint] $*"; }
+
+# --- PostgreSQL maps (contain the database password: postfix-readable only) ---
+for template in /etc/postfix/pgsql/*.cf.template; do
+  target="${template%.template}"
+  envsubst '${POSTFIX_DB_HOST} ${POSTFIX_DB_USER} ${POSTFIX_DB_PASSWORD} ${POSTFIX_DB_NAME}' \
+    < "$template" > "$target"
+  chown root:postfix "$target"
+  chmod 0640 "$target"
+done
+
+# --- TLS ------------------------------------------------------------------------
+install -d -m 0755 /etc/postfix/tls
+if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
+  install -m 0644 "$CERT_DIR/fullchain.pem" /etc/postfix/tls/fullchain.pem
+  install -m 0600 "$CERT_DIR/privkey.pem" /etc/postfix/tls/privkey.pem
+else
+  log "no certificate in $CERT_DIR; generating a self-signed one (development only)"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
+    -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
+    -keyout /etc/postfix/tls/privkey.pem -out /etc/postfix/tls/fullchain.pem 2>/dev/null
+  chmod 0600 /etc/postfix/tls/privkey.pem
+fi
+
+# --- main.cf --------------------------------------------------------------------
+pg() { echo "pgsql:/etc/postfix/pgsql/$1.cf"; }
+postconf -e \
+  "compatibility_level = 3.6" \
+  "myhostname = $MAIL_HOSTNAME" \
+  "myorigin = \$myhostname" \
+  "mydestination = localhost" \
+  "mynetworks = 127.0.0.0/8 [::1]/128" \
+  "inet_interfaces = all" \
+  "inet_protocols = ipv4" \
+  "maillog_file = /dev/stdout" \
+  "smtpd_banner = \$myhostname ESMTP" \
+  "biff = no" \
+  "append_dot_mydomain = no" \
+  "readme_directory = no" \
+  "alias_maps =" \
+  "alias_database =" \
+  "recipient_delimiter = +" \
+  "message_size_limit = $MESSAGE_SIZE_LIMIT" \
+  "mailbox_size_limit = 0" \
+  "disable_vrfy_command = yes" \
+  "smtpd_helo_required = yes" \
+  "virtual_mailbox_domains = $(pg domains)" \
+  "virtual_mailbox_maps = $(pg mailboxes)" \
+  "virtual_alias_maps = $(pg aliases)" \
+  "virtual_alias_domains =" \
+  "virtual_transport = lmtp:$CYRUS_LMTP" \
+  "smtpd_sender_login_maps = $(pg sender_logins)" \
+  "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination" \
+  "smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
+  "smtpd_sasl_auth_enable = no" \
+  "smtpd_sasl_type = cyrus" \
+  "smtpd_sasl_path = smtpd" \
+  "cyrus_sasl_config_path = /etc/postfix/sasl" \
+  "smtpd_sasl_security_options = noanonymous" \
+  "smtpd_sasl_authenticated_header = no" \
+  "smtpd_tls_chain_files = /etc/postfix/tls/privkey.pem, /etc/postfix/tls/fullchain.pem" \
+  "smtpd_tls_security_level = may" \
+  "smtpd_tls_auth_only = yes" \
+  "smtpd_tls_protocols = >=TLSv1.2" \
+  "smtpd_tls_mandatory_protocols = >=TLSv1.2" \
+  "smtpd_tls_loglevel = 1" \
+  "smtpd_tls_received_header = yes" \
+  "smtp_tls_security_level = may" \
+  "smtp_tls_loglevel = 1" \
+  "smtp_tls_CApath = /etc/ssl/certs" \
+  "smtpd_milters = $RSPAMD_MILTER" \
+  "non_smtpd_milters = $RSPAMD_MILTER" \
+  "milter_protocol = 6" \
+  "milter_default_action = tempfail" \
+  "milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}"
+
+# --- master.cf: submission (587, STARTTLS) and submissions (465, implicit TLS) --
+for service in submission smtps; do
+  postconf -M "$service/inet=$service inet n - n - - smtpd"
+  postconf -P \
+    "$service/inet/syslog_name=postfix/$service" \
+    "$service/inet/smtpd_sasl_auth_enable=yes" \
+    "$service/inet/smtpd_tls_auth_only=yes" \
+    "$service/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
+    "$service/inet/smtpd_sender_restrictions=reject_sender_login_mismatch" \
+    "$service/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
+    "$service/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \
+    "$service/inet/milter_macro_daemon_name=ORIGINATING"
+done
+postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
+postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
+
+postfix check
+log "starting Postfix for $MAIL_HOSTNAME"
+exec postfix start-fg

@@ -1,0 +1,169 @@
+# Postarix: the full mail stack.
+#
+#   cp docker/compose/postarix.env.example docker/compose/postarix.env   # fill in every secret
+#   docker compose -f docker/compose/postarix.yml --env-file docker/compose/postarix.env up -d --build
+#
+# Mail ports (25, 465, 587, 143, 993, 995, 4190) are published directly.
+# HTTP services (api, Cyrus JMAP/DAV) are meant to sit behind your reverse
+# proxy; see deploy/proxies. /api/internal/* must never be proxied.
+name: postarix
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *restart
+    image: ${POSTGRES_IMAGE:-postgres:18-alpine}
+    environment:
+      POSTGRES_USER: postarix
+      POSTGRES_DB: postarix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTFIX_DB_PASSWORD: ${POSTFIX_DB_PASSWORD:?set POSTFIX_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ../postgres/10-postarix-mail-role.sh:/docker-entrypoint-initdb.d/10-postarix-mail-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postarix -d postarix"]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 20
+
+  valkey:
+    <<: *restart
+    image: ${VALKEY_IMAGE:-valkey/valkey:8-alpine}
+    command: ["sh", "-c", "exec valkey-server --appendonly yes --save 60 1 --requirepass \"$$VALKEY_PASSWORD\""]
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD}
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$VALKEY_PASSWORD\" valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  unbound:
+    <<: *restart
+    image: postarix/unbound:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../unbound
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+
+  rspamd:
+    <<: *restart
+    image: postarix/rspamd:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../rspamd
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    environment:
+      RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD:?set RSPAMD_CONTROLLER_PASSWORD}
+      RSPAMD_GREYLIST: ${RSPAMD_GREYLIST:-true}
+      REDIS_SERVERS: valkey:6379
+      REDIS_PASSWORD: ${VALKEY_PASSWORD}
+      DNS_RESOLVER: unbound
+    volumes:
+      - rspamd-data:/var/lib/rspamd
+    depends_on:
+      unbound:
+        condition: service_started
+      valkey:
+        condition: service_healthy
+
+  api:
+    <<: *restart
+    image: postarix/api:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-trixie-slim}
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgresql://postarix:${POSTGRES_PASSWORD}@postgres:5432/postarix
+      AUTH_URL: ${AUTH_URL:?set AUTH_URL (public URL of the API)}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      MAIL_ENGINE: cyrus
+      CYRUS_HOST: cyrus
+      CYRUS_PORT: 1143
+      CYRUS_SECURITY: starttls
+      # Internal hop to the "cyrus" container, whose certificate names the public host.
+      CYRUS_TLS_VERIFY: "false"
+      CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD:?set CYRUS_ADMIN_PASSWORD}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
+      DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  cyrus:
+    <<: *restart
+    image: postarix/cyrus:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../cyrus
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    hostname: ${MAIL_HOSTNAME:?set MAIL_HOSTNAME}
+    environment:
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      POSTARIX_API_URL: http://api:3000
+    ports:
+      - "${IMAP_PORT:-143}:143"
+      - "${IMAPS_PORT:-993}:993"
+      - "${POP3S_PORT:-995}:995"
+      - "${SIEVE_PORT:-4190}:4190"
+    volumes:
+      - cyrus-lib:/var/lib/cyrus
+      - cyrus-spool:/var/spool/cyrus
+      - cyrus-sieve:/var/spool/sieve
+      - saslauthd-run:/run/saslauthd
+      - certs:/certs:ro
+    depends_on:
+      api:
+        condition: service_started
+
+  postfix:
+    <<: *restart
+    image: postarix/postfix:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../postfix
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    hostname: ${MAIL_HOSTNAME}
+    environment:
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      POSTFIX_DB_PASSWORD: ${POSTFIX_DB_PASSWORD}
+      MESSAGE_SIZE_LIMIT: ${MESSAGE_SIZE_LIMIT:-52428800}
+    ports:
+      - "${SMTP_PORT:-25}:25"
+      - "${SUBMISSIONS_PORT:-465}:465"
+      - "${SUBMISSION_PORT:-587}:587"
+    volumes:
+      - postfix-spool:/var/spool/postfix
+      - saslauthd-run:/run/saslauthd
+      - certs:/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rspamd:
+        condition: service_healthy
+      cyrus:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  valkey-data:
+  rspamd-data:
+  cyrus-lib:
+  cyrus-spool:
+  cyrus-sieve:
+  postfix-spool:
+  saslauthd-run:
+  certs:
