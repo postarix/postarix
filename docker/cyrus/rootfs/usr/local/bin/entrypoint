@@ -25,11 +25,17 @@ printf 'x-postarix-internal-token: %s\n' "$INTERNAL_API_TOKEN" > /etc/postarix/m
 umask 022
 
 # --- TLS ------------------------------------------------------------------------
-install -d -o cyrus -g mail -m 0750 /etc/cyrus-tls
-if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
-  install -o cyrus -g mail -m 0644 "$CERT_DIR/fullchain.pem" /etc/cyrus-tls/fullchain.pem
-  install -o cyrus -g mail -m 0600 "$CERT_DIR/privkey.pem" /etc/cyrus-tls/privkey.pem
-else
+# Certificates come from the shared /certs volume (managed by the certs service).
+install_certificates() {
+  install -d -o cyrus -g mail -m 0750 /etc/cyrus-tls
+  if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
+    install -o cyrus -g mail -m 0600 "$CERT_DIR/privkey.pem" /etc/cyrus-tls/privkey.pem
+    install -o cyrus -g mail -m 0644 "$CERT_DIR/fullchain.pem" /etc/cyrus-tls/fullchain.pem
+    return 0
+  fi
+  return 1
+}
+if ! install_certificates; then
   log "no certificate in $CERT_DIR; generating a self-signed one (development only)"
   openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
     -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
@@ -50,7 +56,8 @@ install -d -o cyrus -g mail -m 0750 /var/lib/cyrus /var/spool/cyrus /var/spool/c
 chown -R cyrus:mail /var/lib/cyrus /var/spool/cyrus /var/spool/sieve
 
 # --- Logging: Cyrus logs to syslog; forward it to stdout ----------------------
-busybox syslogd -n -O - &
+rm -f /dev/log /run/rsyslogd.pid
+rsyslogd -n -f /etc/rsyslog-postarix.conf -i /run/rsyslogd.pid &
 
 # --- saslauthd (shared with Postfix through the /run/saslauthd volume) -------
 # -r passes "user@realm" to PAM. No credential cache (-c): revocations apply at once.
@@ -58,6 +65,16 @@ mkdir -p /run/saslauthd
 chmod 0755 /run/saslauthd
 rm -f /run/saslauthd/mux /run/saslauthd/saslauthd.pid
 saslauthd -a pam -r -m /run/saslauthd -n 4
+
+# Reload when the certificate is renewed: SIGHUP makes the master process
+# restart its services, and new connections use the new certificate.
+(
+  while sleep 60; do
+    if [ -s "$CERT_DIR/fullchain.pem" ] && ! cmp -s "$CERT_DIR/fullchain.pem" /etc/cyrus-tls/fullchain.pem; then
+      install_certificates && kill -HUP 1 && log "certificate changed; Cyrus reloaded"
+    fi
+  done
+) &
 
 log "starting Cyrus for $MAIL_HOSTNAME"
 exec /usr/sbin/cyrmaster -D -M /etc/cyrus.conf -C /etc/imapd.conf

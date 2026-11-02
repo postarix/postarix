@@ -56,6 +56,15 @@ describe('Mail flow through the full stack', () => {
       }
     });
 
+    it('accepts logins over STARTTLS on port 143', async () => {
+      const client = await imapLogin(alice.address, PASSWORD, { starttls: true });
+      try {
+        expect(client.secureConnection).toBe(true);
+      } finally {
+        await client.logout();
+      }
+    });
+
     it('rejects wrong passwords and unknown users', async () => {
       expect(await canLogin(alice.address, 'not the password')).toBe(false);
       expect(await canLogin(`nobody@${domain.name}`, PASSWORD)).toBe(false);

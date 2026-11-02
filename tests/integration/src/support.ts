@@ -9,6 +9,7 @@ export const config = {
   submissionPort: Number(process.env.SUBMISSION_PORT ?? 5870),
   submissionsPort: Number(process.env.SUBMISSIONS_PORT ?? 4650),
   imapsPort: Number(process.env.IMAPS_PORT ?? 9930),
+  imapPort: Number(process.env.IMAP_PORT ?? 1430),
   adminEmail: process.env.ADMIN_EMAIL ?? 'admin@postarix.test',
   adminPassword: process.env.ADMIN_PASSWORD ?? 'integration admin password',
 };
@@ -63,11 +64,16 @@ export function smtp(port: number, auth?: { user: string; pass: string }) {
   });
 }
 
-export async function imapLogin(user: string, pass: string): Promise<ImapFlow> {
+export async function imapLogin(
+  user: string,
+  pass: string,
+  options: { starttls?: boolean } = {},
+): Promise<ImapFlow> {
   const client = new ImapFlow({
     host: config.host,
-    port: config.imapsPort,
-    secure: true,
+    port: options.starttls ? config.imapPort : config.imapsPort,
+    secure: !options.starttls,
+    ...(options.starttls ? { doSTARTTLS: true } : {}),
     tls: { rejectUnauthorized: false },
     auth: { user, pass },
     logger: false,

@@ -51,6 +51,10 @@ services:
       context: ../unbound
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    networks:
+      default:
+        # Fixed address so Postfix can use it as its (DNSSEC-validating) resolver.
+        ipv4_address: ${UNBOUND_IP:-172.30.53.53}
 
   rspamd:
     <<: *restart
@@ -72,6 +76,34 @@ services:
         condition: service_started
       valkey:
         condition: service_healthy
+
+  certs:
+    <<: *restart
+    image: postarix/certs:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../certs
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    environment:
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      # selfsigned | acme | external — see docker/certs/README.md
+      CERTS_MODE: ${CERTS_MODE:-selfsigned}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      ACME_DOMAINS: ${ACME_DOMAINS:-}
+      ACME_CHALLENGE: ${ACME_CHALLENGE:-http}
+      ACME_DNS_PROVIDER: ${ACME_DNS_PROVIDER:-}
+      ACME_SERVER: ${ACME_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      CERTS_EXTERNAL_DIR: /external
+      CERTS_EXTERNAL_CERT: ${CERTS_EXTERNAL_CERT:-fullchain.pem}
+      CERTS_EXTERNAL_KEY: ${CERTS_EXTERNAL_KEY:-privkey.pem}
+    env_file:
+      # Credentials for lego's DNS provider (e.g. CLOUDFLARE_DNS_API_TOKEN), if any.
+      - path: ${ACME_DNS_ENV_FILE:-/dev/null}
+        required: false
+    volumes:
+      - certs:/certs
+      - lego-data:/var/lib/lego
+      - ${CERTS_EXTERNAL_PATH:-./external-certs}:/external:ro
 
   api:
     <<: *restart
@@ -132,6 +164,8 @@ services:
     depends_on:
       api:
         condition: service_started
+      certs:
+        condition: service_healthy
 
   postfix:
     <<: *restart
@@ -141,6 +175,11 @@ services:
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
     hostname: ${MAIL_HOSTNAME}
+    # Validated DNS answers (AD bit) enable DANE for outgoing TLS.
+    dns:
+      - ${UNBOUND_IP:-172.30.53.53}
+    dns_opt:
+      - trust-ad
     environment:
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       POSTFIX_DB_PASSWORD: ${POSTFIX_DB_PASSWORD}
@@ -160,6 +199,16 @@ services:
         condition: service_healthy
       cyrus:
         condition: service_healthy
+      certs:
+        condition: service_healthy
+      unbound:
+        condition: service_started
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${POSTARIX_SUBNET:-172.30.53.0/24}
 
 volumes:
   postgres-data:
@@ -171,3 +220,4 @@ volumes:
   postfix-spool:
   saslauthd-run:
   certs:
+  lego-data:

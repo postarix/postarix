@@ -10,7 +10,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
       cyrus-imapd cyrus-caldav cyrus-pop3d cyrus-admin \
       sasl2-bin libsasl2-modules libpam-modules \
-      busybox-syslogd ca-certificates curl openssl gettext-base; \
+      rsyslog ca-certificates curl openssl gettext-base; \
     rm -rf /var/lib/apt/lists/*; \
     # The package ships a sample config; ours replaces it at startup.
     rm -f /etc/imapd.conf /etc/cyrus.conf
