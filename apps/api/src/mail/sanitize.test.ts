@@ -60,6 +60,20 @@ describe('sanitizeEmailHtml', () => {
 });
 
 describe('sanitizeCss', () => {
+  it('drops loads spelled with CSS escapes, image-set() and @font-face', () => {
+    const attempts = [
+      'p{background:\\75rl(https://t.example/x)}',
+      '@\\69mport "https://t.example/x.css";',
+      'p{background-image:image-set("https://t.example/x" 1x)}',
+      'p{background-image:-webkit-image-set("https://t.example/x" 1x)}',
+      '@font-face{font-family:x;src:local(x),u\\rl(https://t.example/f.woff)}',
+    ];
+    for (const css of attempts) {
+      const out = sanitizeCss(css);
+      expect(out, css).not.toMatch(/\\|(?:url|image-set)\s*\(|@import|@font-face/i);
+    }
+  });
+
   it('cannot be broken out of a style element', () => {
     expect(sanitizeCss('p{}</style><script>alert(1)</script>')).not.toMatch(/<\/?style/i);
   });

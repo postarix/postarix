@@ -20,6 +20,19 @@ const ALLOWED_PATHS: Record<'GET' | 'POST', RegExp> = {
   POST: /^(?:|upload\/[^/]+\/?)$/,
 };
 
+/**
+ * The JMAP capabilities and methods the webmail may use. Everything else Cyrus
+ * offers stays out of reach: EmailSubmission (sending goes through
+ * /api/mail/send, which checks the sender and rate limits), Sieve scripts,
+ * vacation responses (Cyrus cannot send them yet), backups, administration.
+ */
+export const ALLOWED_CAPABILITIES = new Set([
+  'urn:ietf:params:jmap:core',
+  'urn:ietf:params:jmap:mail',
+]);
+const ALLOWED_METHODS =
+  /^(?:Core\/echo|Mailbox\/(?:get|changes|query|queryChanges|set)|Email\/(?:get|changes|query|queryChanges|set|copy|import|parse)|Thread\/(?:get|changes)|SearchSnippet\/get|Blob\/(?:copy|get|lookup))$/;
+
 /** Download types a browser may render inline; everything else is an attachment. */
 const INLINE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
 
@@ -85,14 +98,19 @@ export class JmapProxy {
     const abort = new AbortController();
     res.on('close', () => abort.abort());
 
+    let body: ReadableStream<Uint8Array> | Uint8Array | undefined;
+    if (method === 'POST') {
+      body = isUpload ? limitedBody(req, this.env.MAIL_UPLOAD_LIMIT) : checkApiRequest(await readAll(limitedBody(req, API_BODY_LIMIT)));
+    }
+
     const upstream = await this.engine.jmap(address, {
       method,
       path,
       query,
-      contentType: req.headers['content-type'],
+      contentType: isUpload ? req.headers['content-type'] : method === 'POST' ? 'application/json' : undefined,
       accept: req.headers.accept,
       lastEventId: typeof req.headers['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined,
-      body: method === 'POST' ? limitedBody(req, isUpload ? this.env.MAIL_UPLOAD_LIMIT : API_BODY_LIMIT) : undefined,
+      body,
       signal: abort.signal,
     });
 
@@ -123,7 +141,12 @@ export class JmapProxy {
       // Blobs are untrusted content served from our origin: never let them run.
       res.setHeader('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
       const inline = INLINE_TYPES.has(type.split(';')[0]!.trim().toLowerCase());
-      const name = decodeURIComponent(path.split('/')[3] ?? 'download');
+      let name = 'download';
+      try {
+        name = decodeURIComponent(path.split('/')[3] ?? 'download') || 'download';
+      } catch {
+        // Not valid percent-encoding: keep the generic name.
+      }
       res.setHeader('content-disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(name)}`);
     }
 
@@ -144,9 +167,24 @@ export class JmapProxy {
     });
   }
 
-  /** Points the session's URLs at this proxy instead of Cyrus. */
+  /**
+   * Points the session's URLs at this proxy instead of Cyrus, and advertises
+   * only the capabilities the proxy lets through.
+   */
   private rewriteSession(session: Record<string, unknown>): Record<string, unknown> {
     const out = { ...session };
+    const keep = (value: unknown) =>
+      value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => ALLOWED_CAPABILITIES.has(key))) : value;
+    out.capabilities = keep(out.capabilities);
+    out.primaryAccounts = keep(out.primaryAccounts);
+    if (out.accounts && typeof out.accounts === 'object') {
+      out.accounts = Object.fromEntries(
+        Object.entries(out.accounts as Record<string, Record<string, unknown>>).map(([id, account]) => [
+          id,
+          { ...account, accountCapabilities: keep(account.accountCapabilities) },
+        ]),
+      );
+    }
     for (const field of SESSION_URL_FIELDS) {
       const value = out[field];
       if (typeof value === 'string') out[field] = value.replace(/^(?:https?:\/\/[^/]+)?\/jmap\//, this.publicRoot);
@@ -177,6 +215,39 @@ export class JmapProxy {
 }
 
 class BodyTooLarge extends Error {}
+
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream as unknown as AsyncIterable<Uint8Array>) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Checks a JMAP API request against the allowed capabilities and methods, and
+ * returns it re-serialized (so what Cyrus parses is exactly what was checked).
+ */
+export function checkApiRequest(raw: Uint8Array): Uint8Array {
+  let request: unknown;
+  try {
+    request = JSON.parse(Buffer.from(raw).toString('utf8'));
+  } catch {
+    throw new ProxyError(400, 'The request is not valid JSON');
+  }
+  const { using, methodCalls } = (request ?? {}) as { using?: unknown; methodCalls?: unknown };
+  if (!Array.isArray(using) || !Array.isArray(methodCalls)) throw new ProxyError(400, 'Not a JMAP request');
+  for (const capability of using) {
+    if (typeof capability !== 'string' || !ALLOWED_CAPABILITIES.has(capability)) {
+      throw new ProxyError(403, `Capability not available: ${String(capability).slice(0, 100)}`);
+    }
+  }
+  for (const call of methodCalls) {
+    const name: unknown = Array.isArray(call) ? call[0] : undefined;
+    if (typeof name !== 'string' || !ALLOWED_METHODS.test(name)) {
+      throw new ProxyError(403, `Method not available: ${String(name).slice(0, 100)}`);
+    }
+  }
+  return Buffer.from(JSON.stringify(request));
+}
 
 /** The request body as a web stream that fails once it exceeds `limit` bytes. */
 function limitedBody(req: Request, limit: number): ReadableStream<Uint8Array> {

@@ -63,3 +63,10 @@ sieve_extensions: fileinto reject vacation vacation-seconds imap4flags notify en
 
 imapidresponse: no
 syslog_prefix: cyrus
+
+# Cyrus never hands mail to a local sendmail (the image has none that works):
+# outgoing mail goes through Postfix submission. Anything that would make Cyrus
+# send by itself (Sieve redirect, vacation replies) fails at once instead of
+# hanging a worker. Forwarding is done with aliases.
+smtp_backend: host
+smtp_host: 127.0.0.1:1
