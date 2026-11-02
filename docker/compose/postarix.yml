@@ -203,6 +203,7 @@ services:
       - cyrus-sieve:/var/spool/sieve
       - saslauthd-run:/run/saslauthd
       - lmtp-socket:/run/cyrus/lmtp
+      - mail-logs:/var/log/postarix
       - certs:/certs:ro
     networks: [default, proxy]
     depends_on:
@@ -238,6 +239,7 @@ services:
       - postfix-spool:/var/spool/postfix
       - saslauthd-run:/run/saslauthd
       - lmtp-socket:/run/cyrus-lmtp
+      - mail-logs:/var/log/postarix
       - certs:/certs:ro
     depends_on:
       postgres:
@@ -250,6 +252,26 @@ services:
         condition: service_healthy
       unbound:
         condition: service_started
+
+  # Optional (docker compose --profile crowdsec up -d): spots password guessing
+  # and abuse in the Postfix and Cyrus logs. Its decisions are enforced on the
+  # host by the CrowdSec firewall bouncer through the local API published on
+  # 127.0.0.1 only. See docs/CROWDSEC.md.
+  crowdsec:
+    <<: *restart
+    profiles: [crowdsec]
+    image: postarix/crowdsec:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../crowdsec
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    environment:
+      CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY:-}
+    ports:
+      - "127.0.0.1:${CROWDSEC_LAPI_PORT:-8081}:8080"
+    volumes:
+      - mail-logs:/var/log/postarix:ro
+      - crowdsec-data:/var/lib/crowdsec/data
 
 networks:
   default:
@@ -265,6 +287,8 @@ networks:
 
 volumes:
   lmtp-socket:
+  mail-logs:
+  crowdsec-data:
   postgres-data:
   valkey-data:
   rspamd-data:

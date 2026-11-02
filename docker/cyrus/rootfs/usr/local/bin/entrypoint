@@ -73,7 +73,17 @@ chown -R cyrus:mail /var/lib/cyrus /var/spool/cyrus /var/spool/sieve
 
 # --- Logging: Cyrus logs to syslog; forward it to stdout ----------------------
 rm -f /dev/log /run/rsyslogd.pid
+mkdir -p /var/log/postarix
 rsyslogd -n -f /etc/rsyslog-postarix.conf -i /run/rsyslogd.pid &
+# Rotate the shared log file past 20 MB (one old copy); SIGHUP reopens it.
+(
+  while sleep 300; do
+    if [ "$(stat -c %s /var/log/postarix/cyrus.log 2>/dev/null || echo 0)" -gt 20971520 ]; then
+      mv -f /var/log/postarix/cyrus.log /var/log/postarix/cyrus.log.1
+      kill -HUP "$(cat /run/rsyslogd.pid)" 2>/dev/null || true
+    fi
+  done
+) &
 
 # --- saslauthd (shared with Postfix through the /run/saslauthd volume) -------
 # -r passes "user@realm" to PAM. No credential cache (-c): revocations apply at once.
