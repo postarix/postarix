@@ -1,0 +1,100 @@
+{{- $name := include "postarix.name" (list . "api") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "api") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "api") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: api
+          image: {{ include "postarix.image" (list . "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            {{- include "postarix.secretEnv" (list . "POSTGRES_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "VALKEY_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "AUTH_SECRET") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
+            - name: NODE_ENV
+              value: production
+            - name: DATABASE_URL
+              value: "postgresql://postarix:$(POSTGRES_PASSWORD)@{{ include "postarix.postgresHost" . }}:5432/postarix"
+            - name: VALKEY_URL
+              value: "redis://:$(VALKEY_PASSWORD)@{{ include "postarix.valkeyHost" . }}:6379"
+            - name: AUTH_URL
+              value: {{ .Values.publicUrl | quote }}
+            - name: TRUSTED_ORIGINS
+              value: {{ join "," .Values.api.trustedOrigins | quote }}
+            - name: TRUSTED_PROXIES
+              value: {{ join "," .Values.api.trustedProxies | quote }}
+            - name: MAIL_HOSTNAME
+              value: {{ .Values.mailHostname | quote }}
+            - name: DOMAIN_VERIFICATION
+              value: {{ .Values.api.domainVerification | quote }}
+            - name: MAIL_ENGINE
+              value: cyrus
+            - name: CYRUS_HOST
+              value: {{ include "postarix.name" (list . "mail-internal") }}
+            - name: CYRUS_PORT
+              value: "1143"
+            - name: CYRUS_SECURITY
+              value: starttls
+            - name: CYRUS_TLS_SERVERNAME
+              value: {{ .Values.mailHostname | quote }}
+            - name: CYRUS_TLS_CA_FILE
+              value: /certs/fullchain.pem
+            - name: CYRUS_JMAP_URL
+              value: "http://{{ include "postarix.name" (list . "mail-internal") }}:8008"
+            - name: SUBMISSION_HOST
+              value: {{ include "postarix.name" (list . "mail-internal") }}
+            - name: SUBMISSION_PORT
+              value: "10587"
+            - name: RSPAMD_CONTROLLER_URL
+              value: "http://{{ include "postarix.name" (list . "rspamd") }}:11334"
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: certs
+          secret:
+            secretName: {{ .Values.tls.secretName }}
+            items:
+              - { key: tls.crt, path: fullchain.pem }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

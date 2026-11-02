@@ -1,0 +1,106 @@
+# Public name of the mail server (MX target, TLS certificate name).
+mailHostname: mail.example.com
+# Public URL of the web interface (webmail at /, admin at /admin, API at /api).
+publicUrl: https://mail.example.com
+
+image:
+  registry: ""          # e.g. ghcr.io/postarix
+  tag: ""               # defaults to the chart's appVersion
+  pullPolicy: IfNotPresent
+
+# Secrets. Leave existingSecret empty to have the chart create one from the
+# values below (generate each with: openssl rand -base64 36 | tr -d '/+=').
+# The secret must hold: AUTH_SECRET, INTERNAL_API_TOKEN, CYRUS_ADMIN_PASSWORD,
+# POSTGRES_PASSWORD, POSTFIX_DB_PASSWORD, VALKEY_PASSWORD, RSPAMD_CONTROLLER_PASSWORD.
+existingSecret: ""
+secrets:
+  authSecret: ""
+  internalApiToken: ""
+  cyrusAdminPassword: ""
+  postgresPassword: ""
+  postfixDbPassword: ""
+  valkeyPassword: ""
+  rspamdControllerPassword: ""
+
+# TLS certificate for the mail services (IMAP, SMTP, DAV): a kubernetes.io/tls
+# secret, e.g. issued by cert-manager for mailHostname.
+tls:
+  secretName: postarix-mail-tls
+  # Create a cert-manager Certificate for mailHostname with this issuer.
+  certManager:
+    enabled: false
+    issuerName: letsencrypt
+    issuerKind: ClusterIssuer
+
+api:
+  replicas: 2
+  domainVerification: dns
+  trustedOrigins: []
+  # Addresses of the ingress controller pods, allowed to set X-Forwarded-For.
+  trustedProxies: []
+  resources: {}
+
+admin:
+  replicas: 2
+  resources: {}
+
+webmail:
+  replicas: 2
+  resources: {}
+
+# Cyrus and Postfix run in one pod: they share Unix sockets (LMTP delivery,
+# saslauthd logins). One replica per installation; scale out with Cyrus Murder
+# (planned).
+mail:
+  messageSizeLimit: 52428800
+  storage:
+    size: 50Gi
+    storageClass: ""
+  # How the mail ports reach the Internet. They never go through the ingress.
+  service:
+    type: LoadBalancer
+    annotations: {}
+    # Keep the client address visible to Postfix and Cyrus (needed for spam
+    # filtering and login throttling).
+    externalTrafficPolicy: Local
+    loadBalancerIP: ""
+  resources: {}
+
+rspamd:
+  greylist: true
+  storage:
+    size: 2Gi
+    storageClass: ""
+  resources: {}
+
+unbound:
+  # DNSSEC-validating resolver for Rspamd (DNS blocklists, SPF, DKIM, DMARC).
+  resources: {}
+
+postgresql:
+  # Built-in single-instance PostgreSQL. For production, prefer a managed
+  # database or an operator (CloudNativePG…) and set enabled: false + host.
+  enabled: true
+  host: ""
+  image: postgres:18-alpine
+  storage:
+    size: 10Gi
+    storageClass: ""
+
+valkey:
+  enabled: true
+  host: ""
+  image: valkey/valkey:8-alpine
+  storage:
+    size: 2Gi
+    storageClass: ""
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  # TLS secret for publicUrl's host (may be the same as tls.secretName).
+  tlsSecretName: ""
+
+networkPolicies:
+  enabled: true

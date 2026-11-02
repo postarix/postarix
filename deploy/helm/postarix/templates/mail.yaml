@@ -1,0 +1,149 @@
+{{- $name := include "postarix.name" (list . "mail") }}
+{{- $api := include "postarix.name" (list . "api") }}
+# Cyrus and Postfix share Unix sockets (LMTP delivery, saslauthd logins), so
+# they run as two containers of one pod.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mail
+spec:
+  serviceName: {{ include "postarix.name" (list . "mail-internal") }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "mail") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: cyrus
+          image: {{ include "postarix.image" (list . "cyrus") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            - name: MAIL_HOSTNAME
+              value: {{ .Values.mailHostname | quote }}
+            - name: POSTARIX_API_URL
+              value: "http://{{ $api }}:3000"
+            # Reachable from the API only (see the network policy).
+            - name: JMAP_LISTEN_ADDRESS
+              value: 0.0.0.0
+          ports:
+            - { name: imap, containerPort: 143 }
+            - { name: imaps, containerPort: 993 }
+            - { name: pop3s, containerPort: 995 }
+            - { name: sieve, containerPort: 4190 }
+            - { name: imap-admin, containerPort: 1143 }
+            - { name: jmap, containerPort: 8008 }
+            - { name: dav, containerPort: 8080 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/cyrus, subPath: cyrus-lib }
+            - { name: data, mountPath: /var/spool/cyrus, subPath: cyrus-spool }
+            - { name: data, mountPath: /var/spool/sieve, subPath: cyrus-sieve }
+            - { name: saslauthd, mountPath: /run/saslauthd }
+            - { name: lmtp, mountPath: /run/cyrus/lmtp }
+            - { name: certs, mountPath: /certs, readOnly: true }
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck] }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.mail.resources | nindent 12 }}
+        - name: postfix
+          image: {{ include "postarix.image" (list . "postfix") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.secretEnv" (list . "POSTFIX_DB_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            - name: MAIL_HOSTNAME
+              value: {{ .Values.mailHostname | quote }}
+            - name: POSTFIX_DB_HOST
+              value: {{ include "postarix.postgresHost" . }}
+            - name: MESSAGE_SIZE_LIMIT
+              value: {{ .Values.mail.messageSizeLimit | quote }}
+            - name: RSPAMD_MILTER
+              value: "inet:{{ include "postarix.name" (list . "rspamd") }}:11332"
+          ports:
+            - { name: smtp, containerPort: 25 }
+            - { name: smtps, containerPort: 465 }
+            - { name: submission, containerPort: 587 }
+            - { name: api-submit, containerPort: 10587 }
+          volumeMounts:
+            - { name: data, mountPath: /var/spool/postfix, subPath: postfix-spool }
+            - { name: saslauthd, mountPath: /run/saslauthd }
+            - { name: lmtp, mountPath: /run/cyrus-lmtp }
+            - { name: certs, mountPath: /certs, readOnly: true }
+          readinessProbe:
+            tcpSocket: { port: 25 }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.mail.resources | nindent 12 }}
+      volumes:
+        - name: saslauthd
+          emptyDir: {}
+        - name: lmtp
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: {{ .Values.tls.secretName }}
+            items:
+              - { key: tls.crt, path: fullchain.pem }
+              - { key: tls.key, path: privkey.pem }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.mail.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.mail.storage.size }}
+---
+# Mail ports for the Internet. They bypass the ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+  {{- with .Values.mail.service.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.mail.service.type }}
+  {{- if ne .Values.mail.service.type "ClusterIP" }}
+  externalTrafficPolicy: {{ .Values.mail.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- with .Values.mail.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  selector: {{- include "postarix.selector" (list . "mail") | nindent 4 }}
+  ports:
+    - { name: smtp, port: 25, targetPort: smtp }
+    - { name: smtps, port: 465, targetPort: smtps }
+    - { name: submission, port: 587, targetPort: submission }
+    - { name: imap, port: 143, targetPort: imap }
+    - { name: imaps, port: 993, targetPort: imaps }
+    - { name: pop3s, port: 995, targetPort: pop3s }
+    - { name: sieve, port: 4190, targetPort: sieve }
+---
+# Internal services: admin IMAP and JMAP (API only), submission for the
+# webmail (API only), and CalDAV/CardDAV (through the ingress).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postarix.name" (list . "mail-internal") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "mail") | nindent 4 }}
+  ports:
+    - { name: imap-admin, port: 1143, targetPort: imap-admin }
+    - { name: jmap, port: 8008, targetPort: jmap }
+    - { name: dav, port: 8080, targetPort: dav }
+    - { name: api-submit, port: 10587, targetPort: api-submit }

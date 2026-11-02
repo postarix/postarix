@@ -167,3 +167,23 @@ jobs:
           name: webmail-traces
           path: tests/integration/test-results
           retention-days: 7
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: The chart's init script matches the Compose one
+        run: cmp deploy/helm/postarix/files/10-postarix-mail-role.sh docker/postgres/10-postarix-mail-role.sh
+      - name: Lint and render
+        run: |
+          helm lint deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml
+          helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml > /tmp/rendered.yaml
+          helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
+            --set postgresql.enabled=false,postgresql.host=db.example,valkey.enabled=false,valkey.host=cache.example,existingSecret=postarix,networkPolicies.enabled=false,ingress.enabled=false,tls.certManager.enabled=true >> /tmp/rendered.yaml
+      - name: Validate against the Kubernetes schemas
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar -xz kubeconform
+          ./kubeconform -strict -summary -ignore-missing-schemas /tmp/rendered.yaml

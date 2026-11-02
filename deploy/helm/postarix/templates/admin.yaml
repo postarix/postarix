@@ -1,0 +1,41 @@
+{{- $name := include "postarix.name" (list . "admin") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin
+spec:
+  replicas: {{ .Values.admin.replicas }}
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "admin") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "admin") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: admin
+          image: {{ include "postarix.image" (list . "admin") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3001
+          readinessProbe:
+            httpGet: { path: /admin/login, port: http }
+            periodSeconds: 10
+          resources: {{- toYaml .Values.admin.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "admin") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http

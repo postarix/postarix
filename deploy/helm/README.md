@@ -1,5 +1,33 @@
 # Helm chart
 
-Kubernetes deployment for large installations.
+Kubernetes deployment of Postarix: `deploy/helm/postarix`.
 
-See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+```bash
+helm install postarix deploy/helm/postarix -n mail --create-namespace \
+  --set mailHostname=mail.example.com,publicUrl=https://mail.example.com \
+  --set tls.certManager.enabled=true \
+  -f my-secrets.yaml   # the secrets listed in values.yaml
+```
+
+What it runs:
+
+| Workload | Notes |
+|---|---|
+| `api`, `admin`, `webmail` | Stateless; scale with `replicas`. Migrations run on start, serialized by a database lock. |
+| `mail` (StatefulSet) | Cyrus and Postfix in one pod (they share Unix sockets). One replica; mail ports are exposed by a `LoadBalancer` service, never through the ingress. |
+| `rspamd`, `unbound` | Spam filter and its DNSSEC-validating resolver. |
+| `postgres`, `valkey` | Built-in single instances; disable them and point `postgresql.host` / `valkey.host` at managed services for production. |
+
+Differences from the Docker Compose install:
+
+- TLS for the mail services comes from a `kubernetes.io/tls` secret
+  (`tls.secretName`), e.g. issued by cert-manager (`tls.certManager.enabled`).
+- Postfix uses the cluster's DNS, which usually does not validate DNSSEC: DANE
+  for outgoing mail is then inactive (TLS is still used opportunistically).
+- Network policies keep the mail pod's internal ports (admin IMAP, JMAP and
+  webmail submission) reachable from the API only. Your CNI must enforce them.
+- CrowdSec is not included: run it on the nodes that receive mail traffic.
+- The autoconfig/MTA-STS hosts of each hosted domain (`autoconfig.<domain>`,
+  `mta-sts.<domain>`) need ingress rules and certificates of their own.
+
+Backups: see [`docs/BACKUP.md`](../../docs/BACKUP.md).

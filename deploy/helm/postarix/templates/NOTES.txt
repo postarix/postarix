@@ -1,0 +1,13 @@
+Postarix is starting.
+
+1. Point DNS at the cluster:
+   - {{ .Values.mailHostname }}  → the external address of service {{ include "postarix.name" (list . "mail") }} (mail ports)
+   - {{ (urlParse .Values.publicUrl).host }} → your ingress controller (web)
+
+2. Create the first instance administrator:
+   kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "postarix.name" (list . "api") }} -- \
+     env ADMIN_EMAIL=you@example.com ADMIN_PASSWORD='a long passphrase' node dist/cli/create-admin.js
+
+3. Open {{ .Values.publicUrl }}/admin and add your first organization and domain.
+
+Backups: see docs/BACKUP.md (PostgreSQL + the mail pod's volume).

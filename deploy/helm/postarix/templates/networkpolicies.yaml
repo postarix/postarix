@@ -1,0 +1,49 @@
+{{- if .Values.networkPolicies.enabled }}
+# The mail pod's internal ports (admin IMAP 1143, JMAP 8008, webmail
+# submission 10587) only accept the API. Public mail ports and DAV stay open.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list . "mail") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { port: 25 }
+        - { port: 465 }
+        - { port: 587 }
+        - { port: 143 }
+        - { port: 993 }
+        - { port: 995 }
+        - { port: 4190 }
+        - { port: 8080 }
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "api") | nindent 14 }}
+      ports:
+        - { port: 1143 }
+        - { port: 8008 }
+        - { port: 10587 }
+---
+# Data stores and the spam filter accept only Postarix' own pods.
+{{- range $component := list "postgres" "valkey" "rspamd" "unbound" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list $ $component) }}
+  labels: {{- include "postarix.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list $ $component) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $.Release.Name }}
+---
+{{- end }}
+{{- end }}

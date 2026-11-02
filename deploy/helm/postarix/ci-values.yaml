@@ -1,0 +1,9 @@
+# Values used by CI to lint and render the chart. Not for real installations.
+secrets:
+  authSecret: ci-auth-secret-that-is-long-enough-for-better-auth
+  internalApiToken: ci-internal-token-that-is-long-enough
+  cyrusAdminPassword: ci
+  postgresPassword: ci
+  postfixDbPassword: ci
+  valkeyPassword: ci
+  rspamdControllerPassword: ci
