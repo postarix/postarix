@@ -1,0 +1,30 @@
+# Labels for an existing Traefik (v3) attached to the "traefik" Docker network.
+# Usage:
+#   docker compose -f docker/compose/postarix.yml -f deploy/proxies/traefik/compose.traefik.yml up -d
+# Set TRAEFIK_ENTRYPOINT (default: websecure) and TRAEFIK_CERTRESOLVER as in your setup,
+# and TRUSTED_PROXIES to the address range of the traefik network.
+services:
+  api:
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      # Internal endpoints never leave the Docker network (case-insensitive, like Express routing).
+      traefik.http.routers.postarix-api.rule: Host(`${MAIL_HOSTNAME}`) && PathPrefix(`/api/`) && !PathRegexp(`(?i)^/+api/+internal(/|$)`)
+      traefik.http.routers.postarix-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.postarix-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.postarix-api.loadbalancer.server.port: "3000"
+
+  cyrus:
+    networks: [default, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      traefik.http.routers.postarix-dav.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/.well-known/caldav`) || Path(`/.well-known/carddav`) || Path(`/.well-known/jmap`) || PathPrefix(`/dav/`) || PathPrefix(`/jmap/`))
+      traefik.http.routers.postarix-dav.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.postarix-dav.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.postarix-dav.loadbalancer.server.port: "8080"
+
+networks:
+  traefik:
+    external: true

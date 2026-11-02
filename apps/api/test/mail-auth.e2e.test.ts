@@ -49,6 +49,15 @@ describe('App passwords and the mail login bridge', () => {
   });
 
   describe('internal endpoint protection', () => {
+    it('refuses requests that came through a reverse proxy, even with the token', async () => {
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' })
+        .set('x-forwarded-for', '203.0.113.7')
+        .expect(404);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' })
+        .set('forwarded', 'for=203.0.113.7')
+        .expect(404);
+    });
+
     it('requires the shared token', async () => {
       await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }, null).expect(401);
       await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }, 'wrong').expect(401);

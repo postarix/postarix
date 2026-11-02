@@ -270,7 +270,7 @@ Examples: DKIM key rotation, periodic DNS checks for every domain, quarantine cl
 | `api` | ours | Yes |
 | `admin` | ours | Yes |
 | `webmail` | ours | Yes |
-| `certs` | ours | Depends on the certificate mode |
+| `certs` | ours | Yes (self-signed, ACME or external mode) |
 | `caddy` | official | Only in "bundled proxy" mode |
 | `crowdsec` | official | Recommended |
 | `clamd` | official | Optional |
@@ -321,9 +321,16 @@ postarix/
 - [x] Authentication bridge (saslauthd → PAM → API).
 - [x] DNS verification of domains.
 - [x] Integration tests that send and receive real mail through the stack.
-- [ ] Per-domain DKIM signing.
-- [ ] Certificates (all three modes), proxy templates, CrowdSec, DANE.
-- **Milestone:** send and receive mail from Thunderbird.
+- [x] Per-domain DKIM signing (and ARC sealing), DNS record guidance.
+- [x] Certificates (self-signed, ACME, external) with automatic reload.
+- [x] DANE for outgoing mail through the local validating resolver.
+- [x] Reverse proxy templates (Caddy, nginx, Traefik, HAProxy), tested for internal-route leaks.
+- **Milestone:** send and receive mail from a standard client (covered by the integration tests).
+
+CrowdSec moved to Phase 5: blocking at the firewall needs a bouncer on the host,
+which a container cannot provide without host networking. Until then, Postfix
+limits authentication, connection and message rates per client, and the API locks
+out usernames after repeated failures.
 
 ### Phase 2 — Admin panel
 - Organizations, domains, mailboxes, aliases, roles.
@@ -342,6 +349,7 @@ postarix/
 
 ### Phase 5 — Enterprise and scale
 - SSO (OIDC/SAML), passkeys enforceable by policy.
+- CrowdSec with a host firewall bouncer.
 - Replication and Cyrus Murder; Helm chart.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.
@@ -372,6 +380,9 @@ postarix/
 | 2026-11-01 | The repository (code, docs, commits) is in **English**. |
 | 2026-11-01 | Mail-protocol logins go through **saslauthd → PAM (`pam_exec`) → API**. The account password works for mail only while the user has no 2FA; app passwords always work. |
 | 2026-11-01 | Our own images for Postfix, Cyrus, Rspamd and Unbound on **Debian trixie-slim**, so versions and configuration are under our control. |
+| 2026-11-02 | DKIM private keys are stored encrypted with a key derived from `AUTH_SECRET` and published to Valkey, where Rspamd reads them. Changing `AUTH_SECRET` therefore requires re-generating DKIM keys. |
+| 2026-11-02 | Internal endpoints refuse any request carrying `X-Forwarded-For`/`Forwarded`: if a proxy ever exposes them by mistake, they still answer 404. |
+| 2026-11-02 | Cyrus admin rights exist only on an internal port (1143) with its own configuration; the public services have no admins. |
 
 ## Known limitations
 

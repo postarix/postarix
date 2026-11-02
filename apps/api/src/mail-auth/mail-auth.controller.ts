@@ -34,6 +34,13 @@ export class InternalTokenGuard implements CanActivate {
     if (!expected) throw new NotFoundException();
 
     const request = context.switchToHttp().getRequest<Request>();
+    // The login bridge calls us directly inside the Docker network. A request
+    // that went through a reverse proxy means the proxy exposes internal
+    // routes by mistake: refuse it as if the route did not exist.
+    if (request.headers['x-forwarded-for'] !== undefined || request.headers.forwarded !== undefined) {
+      throw new NotFoundException();
+    }
+
     const provided = request.headers[INTERNAL_TOKEN_HEADER];
     if (typeof provided !== 'string') throw new UnauthorizedException();
 
