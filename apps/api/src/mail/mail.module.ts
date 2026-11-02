@@ -6,5 +6,6 @@ import { SendService } from './send.service.js';
 @Module({
   controllers: [MailController],
   providers: [SendService, MessageService],
+  exports: [SendService],
 })
 export class MailModule {}

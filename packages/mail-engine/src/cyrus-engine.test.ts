@@ -3,7 +3,7 @@ import http from 'node:http';
 import net from 'node:net';
 import tls from 'node:tls';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CyrusEngine, jmapUrl } from './cyrus-engine.js';
+import { CyrusEngine, jmapUrl, parseAcl, sharesFromAcl } from './cyrus-engine.js';
 import { ImapConnection, quote } from './imap-connection.js';
 import { MailEngineError } from './types.js';
 
@@ -293,5 +293,19 @@ describe('CyrusEngine JMAP', () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe('collection sharing ACLs', () => {
+  it('reads who a collection is shared with, leaving out the owner, the admin and "anyone"', () => {
+    const acl = parseAcl([
+      'ACL "user/ann/#calendars/Default@example.com" ann@example.com lrswipkxtecdan9 anyone 9 ben@example.com lrw9 cyrus lrswipkxtecdan',
+      'ACL user/ann/#calendars/Default@example.com carl@example.com lrswitedn5679 dora@example.com 9',
+    ]);
+    expect(acl.get('anyone')).toBe('9');
+    expect(sharesFromAcl(acl, 'ann@example.com', 'cyrus')).toEqual([
+      { grantee: 'ben@example.com', access: 'read' },
+      { grantee: 'carl@example.com', access: 'write' },
+    ]);
   });
 });

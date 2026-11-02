@@ -23,6 +23,7 @@ import { jmap } from '@/lib/jmap';
 import { type Label, type RenderedMessage, useCreateLabel, useMessage, useThread, useUpdateEmails } from '@/lib/mail';
 import { mailboxPath, navigate } from '@/lib/router';
 import { Avatar } from './avatar';
+import { InvitationCard } from './invitation-card';
 import { MessageFrame } from './message-frame';
 
 /** An icon-only toolbar button with a tooltip carrying its name. */
@@ -315,6 +316,8 @@ export function MessageView({
         <Conversation threadId={data.threadId} currentId={data.id} pathFor={linkTo} />
 
         <Separator />
+
+        {data.calendar ? <InvitationCard emailId={data.id} /> : null}
 
         {data.blockedImages > 0 ? (
           <Alert className="bg-muted/50">

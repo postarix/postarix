@@ -86,7 +86,17 @@ export interface Calendar {
   color?: string | null;
   sortOrder: number;
   isVisible: boolean;
-  myRights?: { mayWriteAll?: boolean; mayDelete?: boolean };
+  myRights?: { mayReadItems?: boolean; mayWriteAll?: boolean; mayDelete?: boolean };
+}
+
+/** Someone taking part in an event (JSCalendar, RFC 8984 §4.4.6). */
+export interface Participant {
+  '@type'?: 'Participant';
+  name?: string | null;
+  email?: string | null;
+  sendTo?: Record<string, string> | null;
+  roles?: Record<string, boolean> | null;
+  participationStatus?: 'needs-action' | 'accepted' | 'declined' | 'tentative' | 'delegated' | null;
 }
 
 export interface RecurrenceRule {
@@ -115,6 +125,10 @@ export interface CalendarEvent {
   /** For expanded occurrences: the recurrence id and the master event id. */
   recurrenceId?: string | null;
   baseEventId?: Id | null;
+  /** Invited people, the organizer included; set by the server (Postarix' calendar API). */
+  participants?: Record<Id, Participant> | null;
+  /** Where replies go: { imip: "mailto:organizer@…" }. */
+  replyTo?: Record<string, string> | null;
 }
 
 /** A contact (Cyrus' JMAP contacts model, stored as vCard for CardDAV). */

@@ -1,4 +1,5 @@
-import { CAPABILITIES, type Calendar, type CalendarEvent } from '@postarix/jmap-client';
+import { CAPABILITIES, type Calendar, type CalendarEvent, type Participant } from '@postarix/jmap-client';
+import { api } from './api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { jmap } from './jmap';
 
@@ -207,38 +208,114 @@ export const calendarKeys = {
   calendars: ['calendars'] as const,
   events: (from: string, to: string) => ['events', from, to] as const,
   allEvents: ['events'] as const,
+  sharing: ['calendar-sharing'] as const,
+  availability: (emails: string[], from: string, to: string) => ['availability', emails.join(','), from, to] as const,
 };
+
+/** A calendar of the person's own account, or one a colleague shares with them. */
+export interface AccountCalendar extends Calendar {
+  accountId: string;
+  /** The owner's account name (their address) for shared calendars, null for the person's own. */
+  sharedBy: string | null;
+}
+
+/** An event, with the account it belongs to. */
+export type AccountEvent = CalendarEvent & { accountId: string };
+
+/** The person's own account first, then accounts that share calendars with them. */
+async function calendarAccounts(): Promise<{ id: string; name: string; personal: boolean }[]> {
+  const session = await jmap.session(true);
+  return Object.entries(session.accounts)
+    .filter(([, a]) => CAPABILITIES.calendars in a.accountCapabilities)
+    .map(([id, a]) => ({ id, name: a.name, personal: a.isPersonal }))
+    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name));
+}
 
 export function useCalendars() {
   return useQuery({
     queryKey: calendarKeys.calendars,
-    queryFn: async () => (await jmap.call<{ list: Calendar[] }>('Calendar/get', {}, USING_CALENDARS)).list,
+    queryFn: async (): Promise<AccountCalendar[]> => {
+      const accounts = await calendarAccounts();
+      const results = await jmap.batch((b) => {
+        for (const account of accounts) b.add('Calendar/get', { accountId: account.id });
+      }, USING_CALENDARS);
+      return accounts.flatMap((account, i) =>
+        ((results.get(`c${i}`) as { list: Calendar[] } | undefined)?.list ?? []).map((c) => ({
+          ...c,
+          accountId: account.id,
+          sharedBy: account.personal ? null : account.name,
+        })),
+      );
+    },
     staleTime: 5 * 60_000,
   });
 }
 
 export const EVENT_PROPERTIES = [
   'calendarIds', 'title', 'description', 'start', 'timeZone', 'duration', 'showWithoutTime', 'locations', 'recurrenceRules', 'recurrenceId', 'baseEventId', 'uid',
+  'participants', 'replyTo',
 ];
 
-/** Events overlapping [from, to), with recurring events expanded into occurrences. */
-export function useEvents(from: Date, to: Date) {
+/** Events overlapping [from, to) in every calendar the person sees, with recurring events expanded into occurrences. */
+export function useEvents(from: Date, to: Date, accountIds: string[]) {
   return useQuery({
-    queryKey: calendarKeys.events(from.toISOString(), to.toISOString()),
-    queryFn: async () => {
-      const accountId = await jmap.accountId();
+    queryKey: [...calendarKeys.events(from.toISOString(), to.toISOString()), accountIds.join(',')],
+    enabled: accountIds.length > 0,
+    queryFn: async (): Promise<AccountEvent[]> => {
       const results = await jmap.batch((b) => {
-        const q = b.add('CalendarEvent/query', {
-          accountId,
-          filter: { after: utcFilterDate(from), before: utcFilterDate(to) },
-          expandRecurrences: true,
-        });
-        b.add('CalendarEvent/get', { accountId, '#ids': b.ref(q, 'CalendarEvent/query', '/ids'), properties: EVENT_PROPERTIES });
+        for (const accountId of accountIds) {
+          const q = b.add('CalendarEvent/query', {
+            accountId,
+            filter: { after: utcFilterDate(from), before: utcFilterDate(to) },
+            expandRecurrences: true,
+          });
+          b.add('CalendarEvent/get', { accountId, '#ids': b.ref(q, 'CalendarEvent/query', '/ids'), properties: EVENT_PROPERTIES });
+        }
       }, USING_CALENDARS);
-      return (results.get('c1') as { list: CalendarEvent[] }).list;
+      return accountIds.flatMap((accountId, i) =>
+        ((results.get(`c${i * 2 + 1}`) as { list: CalendarEvent[] } | undefined)?.list ?? []).map((e) => ({ ...e, accountId })),
+      );
     },
   });
 }
+
+/** The address a calendar user address ("mailto:…") points to. */
+const mailto = (value: string | null | undefined) => {
+  const match = value ? /^mailto:(.+)$/i.exec(value.trim()) : null;
+  return match ? match[1]!.trim().toLowerCase() : null;
+};
+
+export const participantEmail = (p: Participant) => (p.email ?? mailto(p.sendTo?.imip) ?? '').toLowerCase();
+
+/** The organizer of an event with guests, or null for a plain event. */
+export function organizerOf(event: Pick<CalendarEvent, 'replyTo' | 'participants'>): string | null {
+  const replyTo = mailto(event.replyTo?.imip);
+  if (replyTo) return replyTo;
+  const owner = Object.values(event.participants ?? {}).find((p) => p.roles?.owner);
+  return owner ? participantEmail(owner) || null : null;
+}
+
+export interface Guest {
+  email: string;
+  name: string | null;
+  status: string;
+}
+
+/** Everyone on the event except its organizer. */
+export function guestsOf(event: Pick<CalendarEvent, 'replyTo' | 'participants'>): Guest[] {
+  const organizer = organizerOf(event);
+  return Object.values(event.participants ?? {})
+    .map((p) => ({ email: participantEmail(p), name: p.name ?? null, status: p.participationStatus ?? 'needs-action' }))
+    .filter((g) => g.email && g.email !== organizer);
+}
+
+export const STATUS_LABELS: Record<string, string> = {
+  accepted: 'Going',
+  tentative: 'Maybe',
+  declined: 'Not going',
+  'needs-action': 'Not answered',
+  delegated: 'Delegated',
+};
 
 export interface EventInput {
   calendarId: string;
@@ -305,16 +382,27 @@ export function eventPatch(original: CalendarEvent, before: EventInput, after: E
 export function useSaveEvent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input, edit }: { id: string | null; input: EventInput; edit?: { original: CalendarEvent; before: EventInput; textOnly: boolean } }) => {
+    mutationFn: async ({
+      id,
+      accountId,
+      input,
+      edit,
+    }: {
+      id: string | null;
+      accountId?: string;
+      input: EventInput;
+      edit?: { original: CalendarEvent; before: EventInput; textOnly: boolean };
+    }): Promise<string> => {
       const properties = edit ? eventPatch(edit.original, edit.before, input, edit.textOnly) : eventProperties(input);
-      if (id && Object.keys(properties).length === 0) return;
-      const result = await jmap.call<{ notCreated?: Record<string, { type: string; description?: string }>; notUpdated?: Record<string, { type: string; description?: string }> }>(
-        'CalendarEvent/set',
-        id ? { update: { [id]: properties } } : { create: { e: properties } },
-        USING_CALENDARS,
-      );
+      if (id && Object.keys(properties).length === 0) return id;
+      const result = await jmap.call<{
+        created?: Record<string, { id: string }>;
+        notCreated?: Record<string, { type: string; description?: string }>;
+        notUpdated?: Record<string, { type: string; description?: string }>;
+      }>('CalendarEvent/set', { ...(accountId ? { accountId } : {}), ...(id ? { update: { [id]: properties } } : { create: { e: properties } }) }, USING_CALENDARS);
       const failure = Object.values(result.notCreated ?? {})[0] ?? Object.values(result.notUpdated ?? {})[0];
       if (failure) throw new Error(`Could not save the event (${failure.description ?? failure.type})`);
+      return id ?? result.created!.e!.id;
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.allEvents }),
   });
@@ -323,11 +411,77 @@ export function useSaveEvent() {
 export function useDeleteEvent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const result = await jmap.call<{ notDestroyed?: Record<string, { type: string }> }>('CalendarEvent/set', { destroy: [id] }, USING_CALENDARS);
+    mutationFn: async ({ id, accountId }: { id: string; accountId?: string }) => {
+      const result = await jmap.call<{ notDestroyed?: Record<string, { type: string }> }>(
+        'CalendarEvent/set',
+        { ...(accountId ? { accountId } : {}), destroy: [id] },
+        USING_CALENDARS,
+      );
       const failure = Object.values(result.notDestroyed ?? {})[0];
       if (failure) throw new Error(`Could not delete the event (${failure.type})`);
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.allEvents }),
+  });
+}
+
+/** Sets who is invited to one of the person's own events; the server emails them. */
+export function useSetGuests() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, guests }: { id: string; guests: string[] }) =>
+      api<{ guests: Guest[]; notified: number }>(`/calendar/events/${encodeURIComponent(id)}/guests`, { method: 'PUT', body: { guests } }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.allEvents }),
+  });
+}
+
+/** Deletes one of the person's events with guests, telling them it is cancelled. */
+export function useCancelEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<{ notified: number }>(`/calendar/events/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.allEvents }),
+  });
+}
+
+export interface Availability {
+  data: { email: string; busy: { start: string; end: string }[] }[];
+  /** People whose availability cannot be shown (outside the organization, or unknown). */
+  unavailable: string[];
+}
+
+/** When colleagues are busy between `from` and `to`. */
+export function useAvailability(emails: string[], from: Date, to: Date, enabled: boolean) {
+  const sorted = [...emails].sort();
+  return useQuery({
+    queryKey: calendarKeys.availability(sorted, from.toISOString(), to.toISOString()),
+    enabled: enabled && sorted.length > 0,
+    queryFn: () =>
+      api<Availability>(
+        `/calendar/availability?${new URLSearchParams({ emails: sorted.join(','), from: from.toISOString(), to: to.toISOString() })}`,
+      ),
+    staleTime: 60_000,
+  });
+}
+
+export type ShareAccess = 'read' | 'write';
+export interface SharedCollection {
+  id: string;
+  name: string;
+  shares: { email: string; access: ShareAccess }[];
+}
+
+export function useSharing() {
+  return useQuery({
+    queryKey: calendarKeys.sharing,
+    queryFn: () => api<{ calendars: SharedCollection[]; addressBooks: SharedCollection[] }>('/calendar/sharing'),
+  });
+}
+
+export function useSetSharing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, id, shares }: { kind: 'calendars' | 'address-books'; id: string; shares: SharedCollection['shares'] }) =>
+      api<SharedCollection>(`/calendar/sharing/${kind}/${encodeURIComponent(id)}`, { method: 'PUT', body: { shares } }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.sharing }),
   });
 }

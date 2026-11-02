@@ -131,6 +131,45 @@ export class SendService {
     return { sent: true, movedToSent: await this.moveToSent(jmap, emailId) };
   }
 
+  /**
+   * Sends a message the server composed on the user's behalf (calendar
+   * invitations and replies), from their own mailbox address, under the same
+   * hourly limits as their other mail.
+   */
+  async sendComposed(
+    userId: string,
+    message: { from: string; to: string[]; subject: string; text: string; calendar?: { method: string; content: string } },
+  ): Promise<void> {
+    if (!this.transport) throw new ServiceUnavailableException('Sending is not configured');
+    const recipients = [...new Set(message.to.map((r) => r.trim().toLowerCase()))];
+    if (recipients.length === 0) return;
+    if (recipients.length > MAX_RECIPIENTS) {
+      throw new UnprocessableEntityException(`At most ${MAX_RECIPIENTS} recipients per message`);
+    }
+    const invalid = recipients.find((r) => !recipientSchema.safeParse(r).success);
+    if (invalid !== undefined) throw new UnprocessableEntityException(`Invalid recipient: ${invalid || '(empty)'}`);
+    if (!(await this.messages.tryTake(userId, 1)) || !(await this.recipients.tryTake(userId, recipients.length))) {
+      throw new HttpException('Sending limit reached; try again later', 429);
+    }
+    try {
+      await this.transport.sendMail({
+        envelope: { from: message.from, to: recipients },
+        from: message.from,
+        to: recipients,
+        subject: message.subject,
+        text: message.text,
+        ...(message.calendar ? { icalEvent: { method: message.calendar.method, content: message.calendar.content } } : {}),
+      });
+    } catch (error) {
+      const err = error as { responseCode?: number; response?: string; code?: string };
+      if (err.responseCode && err.responseCode >= 500) {
+        throw new UnprocessableEntityException(`The mail server refused the message: ${err.response ?? err.responseCode}`);
+      }
+      this.logger.error(`Submission failed for ${message.from}: ${err.response ?? err.code ?? String(error)}`);
+      throw new ServiceUnavailableException('Could not send the message; try again later');
+    }
+  }
+
   /** Addresses the user may put in From: their mailbox and their organization's aliases that deliver to it. */
   async identities(userId: string): Promise<{ address: string; addresses: string[] }> {
     const address = await findOwnMailbox(this.db, userId);

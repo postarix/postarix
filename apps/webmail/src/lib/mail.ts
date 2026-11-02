@@ -104,6 +104,8 @@ export interface RenderedMessage {
   truncated: boolean;
   blockedImages: number;
   attachments: { blobId: string; name: string; type: string; size: number }[];
+  /** The message carries calendar data (see useInvitation). */
+  calendar: boolean;
 }
 
 export function useMessage(id: string | null, remoteImages: boolean) {
