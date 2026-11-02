@@ -1,4 +1,5 @@
 import {
+  type JmapRequest,
   type CreateMailboxOptions,
   type EngineHealth,
   type MailboxUsage,
@@ -19,6 +20,8 @@ export class MemoryMailEngine implements MailEngine {
   readonly mailboxes = new Map<string, StoredMailbox>();
   /** When set, the next call fails with this error (to test rollbacks). */
   failNext: MailEngineError | null = null;
+  /** Answers JMAP requests in tests; without it, JMAP is unavailable. */
+  jmapHandler: ((address: string, request: JmapRequest) => Promise<Response>) | null = null;
 
   private checkFailure(): void {
     if (this.failNext) {
@@ -74,4 +77,11 @@ export class MemoryMailEngine implements MailEngine {
   }
 
   async close(): Promise<void> {}
+
+  async jmap(address: string, request: JmapRequest): Promise<Response> {
+    this.checkFailure();
+    this.get(address);
+    if (!this.jmapHandler) throw new MailEngineError('The memory engine has no JMAP server', 'unavailable');
+    return this.jmapHandler(address, request);
+  }
 }

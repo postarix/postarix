@@ -20,8 +20,8 @@ COPY rootfs/ /
 RUN chmod 0755 /usr/local/bin/*
 
 # 143 IMAP (STARTTLS) · 993 IMAPS · 995 POP3S · 4190 ManageSieve
-# 1143 admin IMAP and 8080 HTTP (CalDAV/CardDAV) are internal only; LMTP is a Unix socket.
-EXPOSE 143 993 995 4190 1143 8080
+# 1143 admin IMAP, 8008 JMAP (for the API) and 8080 HTTP (CalDAV/CardDAV) are internal only; LMTP is a Unix socket.
+EXPOSE 143 993 995 4190 1143 8008 8080
 
 VOLUME ["/var/lib/cyrus", "/var/spool/cyrus", "/var/spool/sieve", "/run/saslauthd"]
 

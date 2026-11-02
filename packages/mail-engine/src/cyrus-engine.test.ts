@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import http from 'node:http';
 import net from 'node:net';
 import tls from 'node:tls';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CyrusEngine } from './cyrus-engine.js';
+import { CyrusEngine, jmapUrl } from './cyrus-engine.js';
 import { ImapConnection, quote } from './imap-connection.js';
 import { MailEngineError } from './types.js';
 
@@ -235,5 +236,61 @@ describe('CyrusEngine', () => {
     expect(() => CyrusEngine.mailboxName('a"@example.com')).toThrow();
     expect(() => CyrusEngine.mailboxName('*@example.com')).toThrow(); // IMAP wildcard
     expect(() => CyrusEngine.mailboxName('a%b@example.com')).toThrow();
+  });
+});
+
+describe('CyrusEngine JMAP', () => {
+  it('builds URLs below /jmap/ and refuses to climb out of it', () => {
+    expect(jmapUrl('http://cyrus:8008', '', '').href).toBe('http://cyrus:8008/jmap/');
+    expect(jmapUrl('http://cyrus:8008', 'download/u1/B12/file%20name.pdf', 'accept=application/pdf').href).toBe(
+      'http://cyrus:8008/jmap/download/u1/B12/file%20name.pdf?accept=application/pdf',
+    );
+    for (const bad of ['../admin', 'upload/%2e%2e/x', 'a/%2E./b', '/etc', 'x\\y', 'a%2fb', 'http://evil/', 'a b', 'a?b']) {
+      expect(() => jmapUrl('http://cyrus:8008', bad, ''), bad).toThrow(MailEngineError);
+    }
+  });
+
+  it('sends requests as the mailbox owner, with the password the caller provides', async () => {
+    const seen: { url?: string; auth?: string; body?: string } = {};
+    const server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        Object.assign(seen, {
+          url: req.url,
+          auth: req.headers.authorization,
+          body,
+        });
+        res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as net.AddressInfo;
+    try {
+      const engine = new CyrusEngine({
+        host: '127.0.0.1',
+        port: 1,
+        security: 'none',
+        adminUser: 'cyrus',
+        adminPassword: 'x',
+        jmap: { url: `http://127.0.0.1:${port}`, password: (address) => `token-for-${address}` },
+      });
+      const res = await engine.jmap('alice@example.com', {
+        method: 'POST',
+        path: '',
+        query: '',
+        contentType: 'application/json',
+        body: new TextEncoder().encode('{"using":[]}'),
+      });
+      expect(await res.json()).toEqual({ ok: true });
+      expect(seen).toEqual({
+        url: '/jmap/',
+        auth: `Basic ${Buffer.from('alice@example.com:token-for-alice@example.com').toString('base64')}`,
+        body: '{"using":[]}',
+      });
+      await expect(engine.jmap('not an address', { method: 'GET', path: '', query: '' })).rejects.toThrow(MailEngineError);
+    } finally {
+      server.close();
+    }
   });
 });

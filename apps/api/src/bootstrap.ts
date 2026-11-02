@@ -11,6 +11,7 @@ import { bodyLimits } from './common/body-limits.middleware.js';
 import { originCheck } from './common/origin-check.middleware.js';
 import type { Env } from './config/env.js';
 import { AUTH, ENV } from './core/tokens.js';
+import { JmapProxy } from './jmap/jmap-proxy.js';
 
 /**
  * Creates the Nest application with all HTTP-level wiring. Shared by main.ts
@@ -41,6 +42,10 @@ export async function createApp(): Promise<INestApplication> {
     req.headers[CLIENT_IP_HEADER] = req.ip ?? '';
     next();
   });
+
+  // JMAP for the webmail streams its bodies (uploads, downloads, events), so it
+  // comes before the body parsers and applies its own limits and origin check.
+  app.use('/api/jmap', app.get(JmapProxy).handle);
 
   // Parse and size-limit bodies before anything else, Better Auth included.
   app.use(...bodyLimits());

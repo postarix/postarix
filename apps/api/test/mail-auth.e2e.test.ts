@@ -4,6 +4,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DATABASE } from '../src/core/tokens.js';
 import type { Database } from '../src/db/client.js';
+import { mintJmapToken } from '../src/jmap/jmap-token.js';
 import { createOrg, newAgent, signUp, startApp, type TestUser } from './helpers.js';
 
 const TOKEN = 'internal-test-token-that-is-long-enough';
@@ -141,6 +142,18 @@ describe('App passwords and the mail login bridge', () => {
       await app
         .get<Database>(DATABASE)
         .execute(sql`UPDATE "user" SET two_factor_enabled = false WHERE email = ${address}`);
+    });
+  });
+
+  describe('webmail login tokens', () => {
+    it('are accepted only for HTTP (the JMAP service) and only for their own address', async () => {
+      const secret = process.env.AUTH_SECRET!;
+      const token = mintJmapToken(secret, address);
+      await mailAuth({ username: address, password: token, service: 'http' }).expect(204);
+      await mailAuth({ username: address, password: token, service: 'imap' }).expect(401);
+      await mailAuth({ username: address, password: token, service: 'smtp' }).expect(401);
+      await mailAuth({ username: address, password: mintJmapToken(secret, `other@${domain}`), service: 'http' }).expect(401);
+      await mailAuth({ username: address, password: mintJmapToken('x'.repeat(40), address), service: 'http' }).expect(401);
     });
   });
 

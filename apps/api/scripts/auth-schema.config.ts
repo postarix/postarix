@@ -19,6 +19,7 @@ export const auth = createAuth({} as Database, {
   CYRUS_SECURITY: 'starttls',
   CYRUS_TLS_VERIFY: true,
   CYRUS_ADMIN_USER: 'cyrus',
+  MAIL_UPLOAD_LIMIT: 52_428_800,
   DOMAIN_VERIFICATION: 'skip',
   DNS_SERVERS: [],
   MAIL_HOSTNAME: 'localhost',
