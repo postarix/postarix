@@ -37,6 +37,9 @@ export function MessageList({
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             type="search"
+            // Enabled once the folder is known: the list restarts for each
+            // folder, so anything typed before then would be lost.
+            disabled={!mailbox}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${mailbox?.name ?? 'mail'}`}
