@@ -1,13 +1,14 @@
 'use client';
 
 import { Button } from '@postarix/ui/components/button';
+import { Checkbox } from '@postarix/ui/components/checkbox';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
-import { useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, Trash2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { AppDialog } from '@/components/app-dialog';
@@ -90,6 +91,62 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
   );
 }
 
+/** The organization's rule on second factors (authenticator app or passkey). */
+function SecondFactorRule({ orgId }: { orgId: string }) {
+  const queryClient = useQueryClient();
+  const key = ['org', orgId, 'security'];
+  const security = useQuery({ queryKey: key, queryFn: () => api.get<{ requireSecondFactor: boolean }>(`/orgs/${orgId}/security`) });
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function change(requireSecondFactor: boolean) {
+    setPending(true);
+    setError(null);
+    try {
+      queryClient.setQueryData(key, await api.put(`/orgs/${orgId}/security`, { requireSecondFactor }));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section aria-labelledby="second-factor-title" className="mb-6 rounded-xl border bg-card p-5">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <h2 id="second-factor-title" className="text-base font-semibold">
+              Two-step sign-in
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Ask everyone in the organization for an authenticator app or a passkey. Until they set one up they can only open their account
+              settings, and mail apps need app passwords.
+            </p>
+          </div>
+          {error ? <Notice>{error}</Notice> : null}
+          {security.isLoading ? (
+            <Skeleton className="h-5 w-64" />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="require-second-factor"
+                checked={security.data?.requireSecondFactor ?? false}
+                disabled={pending || !security.data}
+                onCheckedChange={(v) => void change(v === true)}
+              />
+              <label htmlFor="require-second-factor" className="text-sm">
+                Require two-step sign-in for everyone
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function SsoPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const queryClient = useQueryClient();
@@ -103,8 +160,8 @@ export default function SsoPage() {
   return (
     <>
       <PageHeader
-        title="Single sign-on"
-        description="Let people sign in to webmail and this console with your company account. Mail apps keep using app passwords."
+        title="Sign-in"
+        description="How people sign in to webmail and this console: two-step sign-in, and single sign-on with your company account. Mail apps keep using app passwords."
         actions={
           <Button onClick={() => setAdding(true)} disabled={available.length === 0}>
             <Plus aria-hidden />
@@ -112,6 +169,7 @@ export default function SsoPage() {
           </Button>
         }
       />
+      <SecondFactorRule orgId={orgId} />
       {providers.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : providers.error ? (

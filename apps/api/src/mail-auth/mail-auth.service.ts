@@ -1,3 +1,4 @@
+import { SecondFactorPolicy } from '../auth/second-factor-policy.js';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -47,13 +48,15 @@ export class MailAuthService {
     @Inject(AppPasswordsService) private readonly appPasswords: AppPasswordsService,
     @Inject(ENV) private readonly env: Env,
     @Inject(COUNTER_STORE) counters: CounterStore,
+    @Inject(SecondFactorPolicy) private readonly secondFactor: SecondFactorPolicy,
   ) {
     this.limiter = new FailureLimiter(counters, 'mail-login', 10, 15 * 60 * 1000);
   }
 
   /**
    * Validates a mail-protocol login. App passwords with the right scope always
-   * work; the account password only works while the user has no second factor.
+   * work; the account password only works while the user has no second factor
+   * and their organization does not require one.
    *
    * Lockout applies to the account password only. App passwords carry ~120 bits
    * of entropy and cannot be guessed, so they keep working while an attacker
@@ -78,6 +81,8 @@ export class MailAuthService {
 
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;
+    // Under an organization rule requiring a second factor, mail apps use app passwords only.
+    if ((await this.secondFactor.status(account.id)).required) return false;
 
     if (await this.limiter.isBlocked(username)) {
       this.logger.warn(`Account password refused after repeated failures: ${username}`);

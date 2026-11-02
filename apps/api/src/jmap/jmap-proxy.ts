@@ -5,6 +5,7 @@ import { type MailEngine, MailEngineError } from '@postarix/mail-engine';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
 import type { Auth } from '../auth/auth.js';
+import { SECOND_FACTOR_REQUIRED, SecondFactorPolicy } from '../auth/second-factor-policy.js';
 import { originCheck } from '../common/origin-check.middleware.js';
 import type { Env } from '../config/env.js';
 import { AUTH, DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
@@ -45,6 +46,7 @@ class ProxyError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -69,6 +71,7 @@ export class JmapProxy {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(ENV) private readonly env: Env,
+    @Inject(SecondFactorPolicy) private readonly secondFactor: SecondFactorPolicy,
   ) {
     this.checkOrigin = originCheck([env.AUTH_URL, ...env.TRUSTED_ORIGINS]);
     // Path-only, so the URLs work wherever the webmail is served from (behind
@@ -89,6 +92,9 @@ export class JmapProxy {
 
     const session = await this.auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!session) throw new ProxyError(401, 'Sign in first');
+    if (!(await this.secondFactor.satisfied(session.user.id))) {
+      throw new ProxyError(403, 'Your organization requires a second sign-in step. Set it up in your account settings.', SECOND_FACTOR_REQUIRED);
+    }
     const address = await findOwnMailbox(this.db, session.user.id);
     if (!address) throw new ProxyError(404, 'You have no mailbox');
 
@@ -200,7 +206,7 @@ export class JmapProxy {
       return;
     }
     if (error instanceof ProxyError) {
-      res.status(error.status).json({ statusCode: error.status, message: error.message });
+      res.status(error.status).json({ statusCode: error.status, message: error.message, ...(error.code ? { code: error.code } : {}) });
       return;
     }
     if (error instanceof BodyTooLarge) {

@@ -51,6 +51,22 @@ function App() {
     );
   }
   if (mailbox.error) {
+    const secondFactor = mailbox.error instanceof JmapRequestError && mailbox.error.status === 403;
+    if (secondFactor) {
+      return (
+        <Centered>
+          <div className="max-w-sm space-y-2">
+            <p className="text-base font-medium text-foreground">Your organization requires two-step sign-in.</p>
+            <p>Set up an authenticator app or a passkey for your account, then come back.</p>
+            <p>
+              <a className="underline underline-offset-4" href="/admin/account">
+                Open your account settings
+              </a>
+            </p>
+          </div>
+        </Centered>
+      );
+    }
     const noMailbox = mailbox.error instanceof JmapRequestError && mailbox.error.status === 404;
     return (
       <Centered>

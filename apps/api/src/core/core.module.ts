@@ -3,6 +3,7 @@ import { type CounterStore, MemoryCounterStore, ValkeyCounterStore } from './cou
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import type pg from 'pg';
 import { createAuth } from '../auth/auth.js';
+import { SecondFactorPolicy } from '../auth/second-factor-policy.js';
 import { type Env, loadEnv } from '../config/env.js';
 import { createDatabase, type Database, type DatabaseHandle } from '../db/client.js';
 import type { MailEngine } from '@postarix/mail-engine';
@@ -51,6 +52,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       useFactory: (db: Database, env: Env, counters: CounterStore) => createAuth(db, env, counters),
     },
     { provide: MAIL_ENGINE, inject: [ENV], useFactory: (env: Env) => createMailEngine(env) },
+    SecondFactorPolicy,
     {
       provide: DNS_RESOLVER,
       inject: [ENV],
@@ -63,7 +65,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
         env.VALKEY_URL ? new ValkeyDkimPublisher(env.VALKEY_URL) : new MemoryDkimPublisher(),
     },
   ],
-  exports: [ENV, DATABASE, DATABASE_POOL, AUTH, MAIL_ENGINE, DNS_RESOLVER, DKIM_PUBLISHER, COUNTER_STORE, SYSTEM_MAILER],
+  exports: [SecondFactorPolicy, ENV, DATABASE, DATABASE_POOL, AUTH, MAIL_ENGINE, DNS_RESOLVER, DKIM_PUBLISHER, COUNTER_STORE, SYSTEM_MAILER],
 })
 export class CoreModule implements OnApplicationShutdown {
   constructor(
