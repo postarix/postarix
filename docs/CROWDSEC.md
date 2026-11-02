@@ -34,7 +34,7 @@ What it watches:
 Private, loopback and link-local addresses (your LAN, the Docker networks, the
 reverse proxy) are never banned: the image ships its own whitelist
 (`postarix/whitelist`), so a misbehaving app on the LAN cannot lock everyone out.
-Check it is loaded with `cscli parsers list`.
+On start the engine logs `Loaded 1 parser nodes` for `postarix-whitelist.yaml`.
 
 The engine's local API listens on `127.0.0.1:8081` of the host only
 (`CROWDSEC_LAPI_PORT`).
