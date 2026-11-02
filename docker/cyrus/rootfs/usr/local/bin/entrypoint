@@ -13,8 +13,12 @@ log() { echo "[cyrus-entrypoint] $*"; }
 
 # --- Configuration -----------------------------------------------------------
 envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
-# Admin rights exist only in the configuration of the internal admin service.
-{ cat /etc/imapd.conf; echo "admins: cyrus"; } > /etc/imapd-admin.conf
+# Admin rights, and the sasldb that holds the admin password, exist only in the
+# configuration of the internal admin service.
+{
+  sed 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' /etc/imapd.conf
+  echo "admins: cyrus"
+} > /etc/imapd-admin.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf
 
 # --- Login bridge to the API (read by pam_exec as root only) -----------------
@@ -49,8 +53,14 @@ printf '%s' "$CYRUS_ADMIN_PASSWORD" | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /
 chown root:sasl /etc/sasldb2
 chmod 0640 /etc/sasldb2
 
+# Both secrets now live in root-only files; no process started below needs them.
+unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN
+
 # --- Runtime and data directories ---------------------------------------------
 install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket
+# Shared with Postfix (a volume): Postfix must be able to traverse it.
+install -d -o cyrus -g mail -m 0755 /run/cyrus/lmtp
+rm -f /run/cyrus/lmtp/lmtp
 install -d -o cyrus -g mail -m 0750 /var/lib/cyrus /var/spool/cyrus /var/spool/cyrus/mail /var/spool/sieve
 /usr/lib/cyrus/bin/makedirs >/dev/null
 chown -R cyrus:mail /var/lib/cyrus /var/spool/cyrus /var/spool/sieve

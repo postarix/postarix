@@ -4,12 +4,16 @@
 #   docker compose -f docker/compose/postarix.yml --env-file docker/compose/postarix.env up -d --build
 #
 # Mail ports (25, 465, 587, 143, 993, 995, 4190) are published directly.
-# HTTP services (api, Cyrus JMAP/DAV) are meant to sit behind your reverse
-# proxy; see deploy/proxies. /api/internal/* must never be proxied.
+# HTTP services (api, Cyrus CalDAV/CardDAV) are meant to sit behind your reverse
+# proxy, which joins the "proxy" network (postarix_proxy); see deploy/proxies.
+# /api/internal/* must never be proxied. Databases, Valkey, Rspamd and Postfix
+# stay on the "default" network, out of the proxy's reach.
 name: postarix
 
 x-restart: &restart
   restart: unless-stopped
+  # No raw sockets: a compromised container cannot spoof traffic on the network.
+  cap_drop: [NET_RAW]
 
 services:
   postgres:
@@ -100,6 +104,9 @@ services:
       # Credentials for lego's DNS provider (e.g. CLOUDFLARE_DNS_API_TOKEN), if any.
       - path: ${ACME_DNS_ENV_FILE:-/dev/null}
         required: false
+    # Holds DNS provider credentials: kept off the internal network. It only
+    # needs the Internet (ACME) and the proxy (HTTP challenges).
+    networks: [proxy]
     volumes:
       - certs:/certs
       - lego-data:/var/lib/lego
@@ -124,17 +131,24 @@ services:
       CYRUS_HOST: cyrus
       CYRUS_PORT: 1143
       CYRUS_SECURITY: starttls
-      # Internal hop to the "cyrus" container, whose certificate names the public host.
-      CYRUS_TLS_VERIFY: "false"
+      # Cyrus' certificate names the public host; the shared certificate file
+      # pins it even when it is self-signed.
+      CYRUS_TLS_SERVERNAME: ${MAIL_HOSTNAME}
+      CYRUS_TLS_CA_FILE: /certs/fullchain.pem
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD:?set CYRUS_ADMIN_PASSWORD}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
       DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
+    networks: [default, proxy]
+    volumes:
+      - certs:/certs:ro
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      certs:
         condition: service_healthy
 
   cyrus:
@@ -160,7 +174,9 @@ services:
       - cyrus-spool:/var/spool/cyrus
       - cyrus-sieve:/var/spool/sieve
       - saslauthd-run:/run/saslauthd
+      - lmtp-socket:/run/cyrus/lmtp
       - certs:/certs:ro
+    networks: [default, proxy]
     depends_on:
       api:
         condition: service_started
@@ -191,6 +207,7 @@ services:
     volumes:
       - postfix-spool:/var/spool/postfix
       - saslauthd-run:/run/saslauthd
+      - lmtp-socket:/run/cyrus-lmtp
       - certs:/certs:ro
     depends_on:
       postgres:
@@ -209,8 +226,15 @@ networks:
     ipam:
       config:
         - subnet: ${POSTARIX_SUBNET:-172.30.53.0/24}
+  # What the reverse proxy joins: the API, Cyrus (CalDAV/CardDAV) and the
+  # certs service (ACME HTTP challenges) only. Set TRUSTED_PROXIES to its range.
+  proxy:
+    ipam:
+      config:
+        - subnet: ${POSTARIX_PROXY_SUBNET:-172.30.54.0/24}
 
 volumes:
+  lmtp-socket:
   postgres-data:
   valkey-data:
   rspamd-data:

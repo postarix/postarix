@@ -88,6 +88,42 @@ describe('DKIM keys', () => {
     expect(publisher.selectors.has(domain.name)).toBe(false);
   });
 
+  it('verifies the domain even if publishing fails, and publishes on the next attempt', async () => {
+    const domain = await createDomain(`dkim-retry-${Date.now()}.example`);
+    const original = publisher.publish.bind(publisher);
+    publisher.publish = async () => {
+      throw new Error('valkey down');
+    };
+    try {
+      const res = await alice.agent.post(`/api/orgs/${orgA}/domains/${domain.id}/verify`).expect(200);
+      expect(res.body.status).toBe('active');
+      expect(publisher.selectors.has(domain.name)).toBe(false);
+    } finally {
+      publisher.publish = original;
+    }
+    await alice.agent.post(`/api/orgs/${orgA}/domains/${domain.id}/verify`).expect(200);
+    expect(publisher.selectors.has(domain.name)).toBe(true);
+  });
+
+  it('keeps synchronising past a domain whose key cannot be published', async () => {
+    const broken = await createDomain(`dkim-broken-${Date.now()}.example`);
+    const healthy = await createDomain(`dkim-healthy-${Date.now()}.example`);
+    await alice.agent.post(`/api/orgs/${orgA}/domains/${broken.id}/verify`).expect(200);
+    await alice.agent.post(`/api/orgs/${orgA}/domains/${healthy.id}/verify`).expect(200);
+    await publisher.unpublish(healthy.name);
+
+    const original = publisher.publish.bind(publisher);
+    publisher.publish = async (name, selector, pem) => {
+      if (name === broken.name) throw new Error('cannot decrypt');
+      return original(name, selector, pem);
+    };
+    try {
+      await app.get(DkimService).sync();
+    } finally {
+      publisher.publish = original;
+    }
+    expect(publisher.selectors.has(healthy.name)).toBe(true);
+  });
   it('re-publishes active domains and drops stale entries on startup', async () => {
     const domain = await createDomain(`dkim-sync-${Date.now()}.example`);
     await alice.agent.post(`/api/orgs/${orgA}/domains/${domain.id}/verify`).expect(200);
@@ -100,11 +136,12 @@ describe('DKIM keys', () => {
 
     // An entry for a domain that is no longer active is removed by the next sync.
     await publisher.publish('stale.example', 'px000000', 'pem');
-    await app.get(DkimService).onApplicationBootstrap();
+    await app.get(DkimService).sync();
     expect(publisher.selectors.has('stale.example')).toBe(false);
     expect(publisher.keys.has('px000000.stale.example')).toBe(false);
     expect(publisher.selectors.has(domain.name)).toBe(true);
   });
+
 });
 
 describe('DKIM key encryption', () => {

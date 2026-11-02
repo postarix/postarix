@@ -9,7 +9,32 @@ export interface ImapConnectOptions {
   security: ImapSecurity;
   /** Verify the server certificate (disable only for self-signed development setups). */
   rejectUnauthorized?: boolean;
+  /**
+   * Name the certificate must carry, when it differs from `host` (for example
+   * the public mail hostname while connecting to an internal container name).
+   */
+  servername?: string;
+  /**
+   * Extra trusted certificates (PEM), on top of the system roots. A self-signed
+   * server certificate listed here is accepted. Read on every connection, so a
+   * renewed certificate is picked up.
+   */
+  ca?: () => string | undefined;
   timeoutMs?: number;
+}
+
+type TlsOptions = Pick<tls.ConnectionOptions, 'servername' | 'rejectUnauthorized' | 'ca' | 'checkServerIdentity'>;
+
+function tlsOptionsFor(options: ImapConnectOptions): TlsOptions {
+  const name = options.servername ?? options.host;
+  const extra = options.ca?.();
+  return {
+    servername: net.isIP(name) ? undefined : name,
+    rejectUnauthorized: options.rejectUnauthorized ?? true,
+    ...(extra ? { ca: [...tls.rootCertificates, extra] } : {}),
+    // Check the certificate against the expected name, not the address dialled.
+    checkServerIdentity: (_host, cert) => tls.checkServerIdentity(name, cert),
+  };
 }
 
 export interface ImapResponse {
@@ -59,10 +84,7 @@ export class ImapConnection {
 
   static async connect(options: ImapConnectOptions): Promise<ImapConnection> {
     const timeoutMs = options.timeoutMs ?? 10_000;
-    const tlsOptions = {
-      servername: net.isIP(options.host) ? undefined : options.host,
-      rejectUnauthorized: options.rejectUnauthorized ?? true,
-    };
+    const tlsOptions = tlsOptionsFor(options);
 
     const socket = await new Promise<net.Socket | tls.TLSSocket>((resolve, reject) => {
       const onError = (error: Error) => reject(error);
@@ -115,7 +137,7 @@ export class ImapConnection {
 
   private async upgrade(
     host: string,
-    tlsOptions: { servername: string | undefined; rejectUnauthorized: boolean },
+    tlsOptions: TlsOptions,
   ): Promise<void> {
     const plain = this.socket;
     plain.removeAllListeners('data');
