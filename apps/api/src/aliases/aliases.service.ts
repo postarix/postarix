@@ -6,6 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { isUniqueViolation } from '../common/pg-errors.js';
 import type { AliasRow } from '../db/schema/index.js';
@@ -25,6 +26,7 @@ export class AliasesService {
     @Inject(AliasesRepository) private readonly repository: AliasesRepository,
     @Inject(DomainsRepository) private readonly domains: DomainsRepository,
     @Inject(AddressRegistry) private readonly addresses: AddressRegistry,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   async list(ctx: TenantContext): Promise<AliasDto[]> {
@@ -61,6 +63,12 @@ export class AliasesService {
         destinations: input.destinations,
         enabled: input.enabled,
       });
+      await this.audit.record(
+        ctx,
+        'alias.created',
+        { type: 'alias', id: row.id, label: address },
+        { destinations: input.destinations },
+      );
       return toAliasDto(row);
     } catch (error) {
       if (isUniqueViolation(error)) throw new ConflictException('This address is already in use');
@@ -78,11 +86,14 @@ export class AliasesService {
 
     const row = await this.repository.update(ctx, id, changes);
     if (!row) throw new NotFoundException('Alias not found');
+    await this.audit.record(ctx, 'alias.updated', { type: 'alias', id: row.id, label: row.address }, changes);
     return toAliasDto(row);
   }
 
   async remove(ctx: TenantContext, id: string): Promise<void> {
+    const alias = await this.require(ctx, id);
     if (!(await this.repository.delete(ctx, id))) throw new NotFoundException('Alias not found');
+    await this.audit.record(ctx, 'alias.deleted', { type: 'alias', id: alias.id, label: alias.address });
   }
 
   private async require(ctx: TenantContext, id: string): Promise<AliasRow> {

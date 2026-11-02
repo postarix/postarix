@@ -1,0 +1,39 @@
+import type { NextConfig } from 'next';
+
+// Where the Next.js server forwards /api requests. In production the reverse
+// proxy usually routes /api itself; this keeps development and simple setups
+// same-origin (cookies, no CORS).
+const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
+
+const config: NextConfig = {
+  basePath: '/admin',
+  output: 'standalone',
+  reactStrictMode: true,
+  poweredByHeader: false,
+  transpilePackages: ['@postarix/ui'],
+  async rewrites() {
+    return [
+      {
+        // Everything under /api except /api/internal, which must never be reachable.
+        source: '/api/:path((?!internal(?:/|$)).*)',
+        destination: `${apiUrl}/api/:path`,
+        basePath: false,
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'same-origin' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+    ];
+  },
+};
+
+export default config;

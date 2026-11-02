@@ -1,5 +1,4 @@
 # @postarix/ui
 
-UI components shared by the admin panel and the webmail.
-
-See [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+Shared React components and design tokens for the admin panel and the webmail.
+Plain TypeScript source; consumers compile it (Next.js `transpilePackages`, Vite).

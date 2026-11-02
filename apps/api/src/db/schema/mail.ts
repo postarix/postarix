@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -107,3 +108,29 @@ export const appPasswords = pgTable(
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type AliasRow = typeof aliases.$inferSelect;
 export type AppPasswordRow = typeof appPasswords.$inferSelect;
+
+/**
+ * Audit trail of administrative actions. Organization-scoped events carry the
+ * organization ID; instance-level events (e.g. creating organizations) leave it null.
+ */
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text().references(() => organization.id, { onDelete: 'cascade' }),
+    actorUserId: text().references(() => user.id, { onDelete: 'set null' }),
+    /** Snapshot of the actor's email, kept after the user is deleted. */
+    actorEmail: text(),
+    action: text().notNull(),
+    targetType: text().notNull(),
+    targetId: text(),
+    /** Human-readable label of the target at the time (e.g. the address). */
+    targetLabel: text(),
+    details: jsonb().$type<Record<string, unknown>>(),
+    ipAddress: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('audit_events_org_created_idx').on(table.organizationId, table.createdAt)],
+);
+
+export type AuditEventRow = typeof auditEvents.$inferSelect;
