@@ -18,7 +18,7 @@ const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 const ROW = 'flex items-center gap-2 border-b px-5';
 const LABEL = 'w-14 shrink-0 text-sm text-muted-foreground';
-const BARE = 'h-11 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent';
+const BARE = 'h-11 rounded-none border-0 bg-transparent px-0 shadow-none! focus-visible:ring-0 dark:bg-transparent';
 
 export function Composer({
   initial,

@@ -148,6 +148,60 @@
   }
 }
 
+/*
+ * Depth. Controls look slightly raised (a light top edge, a soft drop shadow)
+ * and fields slightly sunken, so what can be pressed reads at a glance. Kept
+ * subtle on purpose: no glossy bevels.
+ */
+@utility depth-raised {
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 0 0 1px rgb(10 14 26 / 0.55),
+    0 1px 2px rgb(10 14 26 / 0.25),
+    0 3px 8px -3px rgb(10 14 26 / 0.35);
+}
+@utility depth-stamp {
+  background-image: linear-gradient(to bottom, #ffd65a, #ffc31f);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    0 0 0 1px #d9a206,
+    0 1px 2px rgb(120 80 0 / 0.25),
+    0 3px 8px -3px rgb(120 80 0 / 0.4);
+}
+@utility depth-soft {
+  background-image: linear-gradient(to bottom, var(--card), color-mix(in oklab, var(--muted) 55%, var(--card)));
+  box-shadow:
+    0 1px 2px rgb(20 27 49 / 0.08),
+    inset 0 -1px 0 rgb(20 27 49 / 0.05),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+@utility depth-sunken {
+  box-shadow: inset 0 1px 2px rgb(20 27 49 / 0.07);
+}
+@utility depth-card {
+  box-shadow:
+    0 1px 2px rgb(20 27 49 / 0.05),
+    0 6px 20px -8px rgb(20 27 49 / 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  .depth-soft {
+    background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02));
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+  .depth-sunken {
+    box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+  }
+  .depth-card {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.3),
+      0 6px 20px -8px rgb(0 0 0 / 0.5);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
