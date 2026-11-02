@@ -1,0 +1,34 @@
+# Values CI uses to install the chart on a kind cluster (with ci-values.yaml)
+# and run the mail tests against it. Not for real installations.
+mailHostname: mail.postarix.test
+# The tests reach the API through a port-forward.
+publicUrl: http://localhost:3000
+image:
+  tag: dev
+  pullPolicy: Never
+api:
+  replicas: 1
+  domainVerification: skip
+  trustedOrigins: [http://localhost:3000]
+admin:
+  replicas: 1
+webmail:
+  replicas: 1
+mail:
+  service:
+    type: ClusterIP
+  storage:
+    size: 2Gi
+  dane:
+    # Looked up in the cluster at install time.
+    clusterDnsIP: ""
+rspamd:
+  greylist: false
+ingress:
+  enabled: false
+postgresql:
+  storage:
+    size: 1Gi
+valkey:
+  storage:
+    size: 1Gi

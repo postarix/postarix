@@ -56,8 +56,19 @@ webmail:
 # Cyrus and Postfix run in one pod: they share Unix sockets (LMTP delivery,
 # saslauthd logins). One replica per installation; scale out with Cyrus Murder
 # (planned).
+# The cluster's DNS domain.
+clusterDomain: cluster.local
+
 mail:
   messageSizeLimit: 52428800
+  # DANE (authenticated TLS to receiving servers that publish TLSA records)
+  # needs DNSSEC validation: the mail pod then resolves through an Unbound
+  # container of its own. It forwards the cluster's names to the cluster DNS,
+  # whose address is looked up at install time (kube-system/kube-dns) unless
+  # set here.
+  dane:
+    enabled: true
+    clusterDnsIP: ""
   storage:
     size: 50Gi
     storageClass: ""

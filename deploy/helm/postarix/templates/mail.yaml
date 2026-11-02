@@ -1,5 +1,14 @@
 {{- $name := include "postarix.name" (list . "mail") }}
 {{- $api := include "postarix.name" (list . "api") }}
+{{- $dane := .Values.mail.dane.enabled }}
+{{- $clusterDns := .Values.mail.dane.clusterDnsIP }}
+{{- if and $dane (not $clusterDns) }}
+{{- $kubeDns := lookup "v1" "Service" "kube-system" "kube-dns" }}
+{{- $clusterDns = dig "spec" "clusterIP" "" $kubeDns }}
+{{- end }}
+{{- if and $dane (not $clusterDns) }}
+{{- fail "mail.dane.enabled needs the cluster DNS address: set mail.dane.clusterDnsIP (kubectl -n kube-system get service kube-dns)" }}
+{{- end }}
 # Cyrus and Postfix share Unix sockets (LMTP delivery, saslauthd logins), so
 # they run as two containers of one pod.
 apiVersion: apps/v1
@@ -20,6 +29,22 @@ spec:
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
     spec:
       terminationGracePeriodSeconds: 60
+      {{- if $dane }}
+      # DANE needs a DNSSEC-validating resolver: the pod resolves through its
+      # own Unbound (below), which forwards the cluster's own names to the
+      # cluster DNS and validates everything else.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [127.0.0.1]
+        searches:
+          - {{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+          - svc.{{ .Values.clusterDomain }}
+          - {{ .Values.clusterDomain }}
+        options:
+          - { name: ndots, value: "5" }
+          # Lets Postfix see the DNSSEC validation result (glibc 2.31+ hides it otherwise).
+          - { name: trust-ad }
+      {{- end }}
       containers:
         - name: cyrus
           image: {{ include "postarix.image" (list . "cyrus") }}
@@ -35,6 +60,9 @@ spec:
             # Reachable from the API only (see the network policy).
             - name: JMAP_LISTEN_ADDRESS
               value: 0.0.0.0
+            # Sieve redirects and vacation replies, through Postfix in this pod.
+            - name: CYRUS_SMTP_HOST
+              value: 127.0.0.1:10588
           ports:
             - { name: imap, containerPort: 143 }
             - { name: imaps, containerPort: 993 }
@@ -83,6 +111,19 @@ spec:
             tcpSocket: { port: 25 }
             periodSeconds: 15
           resources: {{- toYaml .Values.mail.resources | nindent 12 }}
+        {{- if $dane }}
+        - name: unbound
+          image: {{ include "postarix.image" (list . "unbound") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            - name: UNBOUND_FORWARD_ZONES
+              value: "{{ .Values.clusterDomain }}={{ $clusterDns }}"
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck] }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.unbound.resources | nindent 12 }}
+        {{- end }}
       volumes:
         - name: saslauthd
           emptyDir: {}
