@@ -1,0 +1,7 @@
+# Written by the Postfix and Cyrus containers on the shared logs volume, in
+# traditional syslog format.
+filenames:
+  - /var/log/postarix/postfix.log
+  - /var/log/postarix/cyrus.log
+labels:
+  type: syslog

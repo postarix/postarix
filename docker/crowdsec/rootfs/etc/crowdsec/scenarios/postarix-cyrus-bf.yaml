@@ -1,0 +1,13 @@
+# Password guessing on IMAP, POP3 and ManageSieve.
+type: leaky
+name: postarix/cyrus-bf
+description: "Detect password guessing on Cyrus IMAP"
+filter: "evt.Meta.log_type == 'imap_failed_auth'"
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 20s
+blackhole: 5m
+labels:
+  service: imap
+  type: bruteforce
+  remediation: true

@@ -2,6 +2,11 @@
 # Renders Postfix configuration from the environment and runs Postfix in the foreground.
 set -eu
 
+# Shared with CrowdSec through the logs volume.
+LOG_DIR=/var/log/postarix
+LOG_FILE=$LOG_DIR/postfix.log
+mkdir -p "$LOG_DIR"
+
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
 : "${POSTFIX_DB_PASSWORD:?POSTFIX_DB_PASSWORD is required}"
 export POSTFIX_DB_HOST="${POSTFIX_DB_HOST:-postgres}"
@@ -64,7 +69,7 @@ postconf -e \
   "mynetworks = 127.0.0.0/8 [::1]/128" \
   "inet_interfaces = all" \
   "inet_protocols = ipv4" \
-  "maillog_file = /dev/stdout" \
+  "maillog_file = $LOG_FILE" \
   "smtpd_banner = \$myhostname ESMTP" \
   "biff = no" \
   "append_dot_mydomain = no" \
@@ -164,5 +169,18 @@ postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
 
 postfix check
 watch_certificates &
+
+# The log goes to a file on the shared logs volume (read by CrowdSec) and is
+# mirrored to the container output. It is rotated past 20 MB; one old copy is kept.
+touch "$LOG_FILE"
+tail -n 0 -F "$LOG_FILE" 2>/dev/null &
+(
+  while sleep 300; do
+    if [ "$(stat -c %s "$LOG_FILE" 2>/dev/null || echo 0)" -gt 20971520 ]; then
+      postfix logrotate >/dev/null 2>&1 || true
+      ls -1t "$LOG_FILE".* 2>/dev/null | tail -n +2 | xargs -r rm -f
+    fi
+  done
+) &
 log "starting Postfix for $MAIL_HOSTNAME"
 exec postfix start-fg
