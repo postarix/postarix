@@ -1,27 +1,27 @@
-# Cómo contribuir
+# Contributing
 
-¡Gracias por tu interés en Postarix!
+Thanks for your interest in Postarix!
 
-## Antes de empezar
+## Before you start
 
-- Lee [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Explica las decisiones de diseño y por qué se tomaron.
-- Para cambios grandes, abre primero un issue para discutir el enfoque.
+- Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). It explains the design decisions and why they were made.
+- For large changes, open an issue first to discuss the approach.
 
-## Flujo de trabajo
+## Workflow
 
-1. Crea una rama desde `main`: `feat/…`, `fix/…`, `docs/…`, `chore/…`.
-2. Haz commits pequeños siguiendo [Conventional Commits](https://www.conventionalcommits.org/es/):
-   `feat(api): crear endpoint de dominios`, `fix(webmail): …`.
-3. Asegúrate de que pasan `pnpm lint`, `pnpm typecheck` y `pnpm test`.
-4. Abre un pull request describiendo qué cambia y por qué.
+1. Branch off `main`: `feat/…`, `fix/…`, `docs/…`, `chore/…`.
+2. Make small commits following [Conventional Commits](https://www.conventionalcommits.org/):
+   `feat(api): add domains endpoint`, `fix(webmail): …`.
+3. Make sure `pnpm lint`, `pnpm typecheck` and `pnpm test` pass.
+4. Open a pull request describing what changes and why.
 
-## Reglas que no se negocian
+## Non-negotiable rules
 
-- **Aislamiento entre organizaciones.** Toda consulta se filtra por organización en la capa de repositorio, y todo endpoint nuevo incluye una prueba que intenta acceder a datos de otra organización.
-- **Nada de HTML de correo sin sanitizar** fuera del iframe aislado del webmail.
-- **Nada de acceso al socket de Docker** desde ningún servicio.
-- **Nada de secretos en el repositorio.** Usa `.env` (ignorado por git) y documenta las variables en `.env.example`.
+- **Isolation between organizations.** Every query is scoped by organization in the repository layer, and every new endpoint comes with a test that tries to reach another organization's data.
+- **No unsanitized email HTML** outside the webmail's sandboxed iframe.
+- **No Docker socket access** from any service.
+- **No secrets in the repository.** Use `.env` (ignored by git) and document variables in `.env.example`.
 
-## Idioma
+## Language
 
-La documentación de cara al usuario está en español. El código, los nombres de variables y los comentarios técnicos, en inglés.
+Everything in the repository — code, comments, documentation, commit messages — is in English.

@@ -1,33 +1,33 @@
-# Postarix — guía para asistentes de IA
+# Postarix — guide for AI assistants
 
-Plataforma de correo autoalojada (alternativa moderna a mailcow). Lee `docs/ARCHITECTURE.md` antes de proponer cambios de diseño: ahí están las decisiones y el porqué.
+Self-hosted email platform (a modern alternative to mailcow). Read `docs/ARCHITECTURE.md` before proposing design changes: it holds the decisions and the reasoning behind them.
 
-## Decisiones fijas
+## Fixed decisions
 
-- Núcleo: Postfix + Cyrus IMAP + Rspamd + Unbound + CrowdSec (ClamAV opcional). No se modifica su código; se configuran.
-- Backend: NestJS + Better Auth (plugins organization, twoFactor, passkey, admin; sso llega en la Fase 5).
-- Admin: Next.js. Webmail: SPA React + Vite sobre JMAP.
-- Datos: PostgreSQL (Drizzle ORM, migraciones versionadas en `apps/api/drizzle/`) + Valkey. Colas: BullMQ.
-- Runtime: Node.js 22+, ESM en todo el monorepo. TypeScript 6.
-- Monorepo: pnpm workspaces + Turborepo. Licencia AGPL-3.0-only.
+- Mail core: Postfix + Cyrus IMAP + Rspamd + Unbound + CrowdSec (ClamAV optional). Their code is never modified, only configured. Our images build on Debian trixie-slim.
+- Backend: NestJS + Better Auth (plugins organization, twoFactor, passkey, admin; sso arrives in Phase 5).
+- Admin: Next.js. Webmail: React + Vite SPA over JMAP.
+- Data: PostgreSQL (Drizzle ORM, versioned migrations in `apps/api/drizzle/`) + Valkey. Queues: BullMQ.
+- Runtime: Node.js 22+, ESM across the monorepo. TypeScript 6.
+- Monorepo: pnpm workspaces + Turborepo. License AGPL-3.0-only.
 
-## Reglas
+## Rules
 
-- La API nunca habla con Cyrus directamente: usa la interfaz `MailEngine` de `packages/mail-engine`.
-- Toda consulta se filtra por organización en la capa de repositorio. Cada endpoint nuevo lleva una prueba de aislamiento entre organizaciones.
-- La autorización se valida en cada endpoint y server action, nunca solo en middleware.
-- El HTML de los correos se sanitiza en servidor y se muestra en iframe sandbox con CSP.
-- Ningún contenedor accede al socket de Docker.
-- Los puertos de correo no pasan por el reverse proxy.
-- En NestJS, inyección siempre explícita con `@Inject(Token)` en constructores.
-- Rutas de organización: `orgs/:orgId/...` + `OrgAccessGuard`; no miembro → 404. Repositorios reciben `TenantContext` primero.
-- `apps/api/src/db/schema/auth.ts` es generado (`pnpm --filter @postarix/api auth:schema`); no se edita a mano.
-- Tras cambiar el esquema: `pnpm --filter @postarix/api db:generate` y versionar la migración (CI lo verifica).
+- The API never talks to Cyrus directly: it uses the `MailEngine` interface from `packages/mail-engine`.
+- Every query is scoped by organization in the repository layer. Every new endpoint ships with a cross-organization isolation test.
+- Authorization is checked in every endpoint and server action, never only in middleware.
+- Email HTML is sanitized on the server and rendered in a sandboxed iframe with a CSP.
+- No container gets access to the Docker socket.
+- Mail ports do not go through the reverse proxy. `/api/internal/*` is never exposed through it.
+- In NestJS, always inject explicitly with `@Inject(Token)` in constructors.
+- Organization routes: `orgs/:orgId/...` + `OrgAccessGuard`; non-members get 404. Repositories take `TenantContext` first.
+- `apps/api/src/db/schema/auth.ts` is generated (`pnpm --filter @postarix/api auth:schema`); never edit it by hand.
+- After changing the schema: `pnpm --filter @postarix/api db:generate` and commit the migration (CI checks this).
 
-## Comandos
+## Commands
 
-`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` desde la raíz. Las pruebas de la API necesitan PostgreSQL (`TEST_DATABASE_URL`, base terminada en `_test`).
+`pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` from the root. API tests need PostgreSQL (`TEST_DATABASE_URL`, database name ending in `_test`).
 
-## Idioma
+## Language
 
-Documentación de usuario en español. Código, identificadores y comentarios técnicos en inglés. Commits con Conventional Commits.
+Everything in the repository is in English: code, identifiers, comments, docs and commit messages (Conventional Commits).

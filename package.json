@@ -1,7 +1,7 @@
 {
   "name": "postarix",
   "private": true,
-  "description": "Plataforma de correo electrónico autoalojada, moderna y open source",
+  "description": "A modern, self-hosted, open-source email platform",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
