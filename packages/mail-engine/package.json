@@ -1,0 +1,26 @@
+{
+  "name": "@postarix/mail-engine",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@postarix/config": "workspace:*",
+    "@types/node": "^22.19.0",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

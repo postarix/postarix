@@ -8,6 +8,20 @@
       "when": 1793584942765,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793586414421,
+      "tag": "0001_mail",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793586415352,
+      "tag": "0002_mail_views",
+      "breakpoints": true
     }
   ]
 }

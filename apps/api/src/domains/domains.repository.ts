@@ -39,6 +39,15 @@ export class DomainsRepository {
     return row;
   }
 
+  async activate(ctx: TenantContext, id: string): Promise<DomainRow | undefined> {
+    const [row] = await this.db
+      .update(domains)
+      .set({ status: 'active', verifiedAt: new Date() })
+      .where(and(this.scope(ctx), eq(domains.id, id)))
+      .returning();
+    return row;
+  }
+
   async delete(ctx: TenantContext, id: string): Promise<boolean> {
     const deleted = await this.db
       .delete(domains)

@@ -7,5 +7,6 @@ import { DomainsService } from './domains.service.js';
 @Module({
   controllers: [DomainsController],
   providers: [DomainsRepository, DomainsService, OrgAccessGuard],
+  exports: [DomainsRepository],
 })
 export class DomainsModule {}

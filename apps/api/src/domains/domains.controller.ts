@@ -47,6 +47,16 @@ export class DomainsController {
     return this.domains.create(ctx, body);
   }
 
+  @Post(':id/verify')
+  @RequireOrgRole('admin')
+  @HttpCode(200)
+  async verify(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+  ): Promise<DomainDto> {
+    return this.domains.verify(ctx, id);
+  }
+
   @Delete(':id')
   @RequireOrgRole('admin')
   @HttpCode(204)

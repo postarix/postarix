@@ -6,6 +6,7 @@ const base = {
   NODE_ENV: 'production',
   AUTH_URL: 'https://mail.example.com',
   AUTH_SECRET: 'x'.repeat(32),
+  CYRUS_ADMIN_PASSWORD: 'cyrus-admin-secret',
 };
 
 describe('loadEnv', () => {
@@ -27,6 +28,21 @@ describe('loadEnv', () => {
     expect(() => loadEnv(withoutNodeEnv)).toThrow(/NODE_ENV/);
     expect(() => loadEnv({ ...base, NODE_ENV: 'development' })).toThrow(/NODE_ENV/);
     expect(loadEnv({ ...base, NODE_ENV: 'development', AUTH_URL: 'http://localhost:3000' })).toBeTruthy();
+  });
+
+  it('requires the Cyrus admin password unless the memory engine is used', () => {
+    const { CYRUS_ADMIN_PASSWORD: _unused, ...withoutCyrus } = base;
+    expect(() => loadEnv(withoutCyrus)).toThrow(/CYRUS_ADMIN_PASSWORD/);
+    expect(loadEnv({ ...withoutCyrus, MAIL_ENGINE: 'memory' }).MAIL_ENGINE).toBe('memory');
+  });
+
+  it('refuses to skip domain verification in production', () => {
+    expect(() => loadEnv({ ...base, DOMAIN_VERIFICATION: 'skip' })).toThrow(/DOMAIN_VERIFICATION/);
+  });
+
+  it('keeps internal endpoints disabled unless a long token is set', () => {
+    expect(loadEnv(base).INTERNAL_API_TOKEN).toBeUndefined();
+    expect(() => loadEnv({ ...base, INTERNAL_API_TOKEN: 'short' })).toThrow(/INTERNAL_API_TOKEN/);
   });
 
   it('rejects a short secret', () => {
