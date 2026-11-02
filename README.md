@@ -4,7 +4,7 @@
 
 Postarix brings everything you need to run your own email into one system: sending and receiving, spam and virus filtering, webmail, calendar, contacts and an admin panel. It works the same for a single person as for a large company or a provider hosting many organizations.
 
-> **Status: release candidate.** Feature-complete for self-hosting (mail, webmail, calendar, contacts, admin panel, SSO, scaling with Cyrus Murder) and hardened by an internal security review; an external security audit comes before 1.0. Start with [`docs/INSTALL.md`](docs/INSTALL.md).
+> **Status: release candidate.** Feature-complete for self-hosting (mail, webmail, calendar, contacts, admin panel, SSO, scaling with Cyrus Murder) and hardened by an internal security review; an external security audit comes before 1.0. Start with the **[documentation](https://postarix.github.io/postarix/)**: [install on Ubuntu](https://postarix.github.io/postarix/install-ubuntu), [with Dokploy](https://postarix.github.io/postarix/install-dokploy) or [on Kubernetes](https://postarix.github.io/postarix/install#kubernetes).
 
 ## Why Postarix
 
@@ -47,7 +47,7 @@ packages/
 docker/         Images and docker-compose files
 deploy/         Proxy templates and Helm chart
 tests/          Integration tests against the full stack
-docs/           Documentation
+docs/           Documentation (also the VitePress site: pnpm --filter @postarix/docs docs:dev)
 ```
 
 ## Development
