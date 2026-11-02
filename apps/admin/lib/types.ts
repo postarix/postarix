@@ -81,11 +81,14 @@ export interface AppPassword {
 
 export interface SsoProvider {
   id: string;
+  type: 'oidc' | 'saml';
   providerId: string;
   domain: string;
   issuer: string;
   clientId: string;
   callbackUrl: string;
+  entityId: string | null;
+  certificateExpiresAt: string | null;
 }
 
 export interface MailLogEntry {

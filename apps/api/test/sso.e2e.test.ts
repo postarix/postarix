@@ -134,7 +134,12 @@ describe('Single sign-on', () => {
       await bob.agent.post('/api/auth/sso/delete-provider').send({ providerId: providerA.providerId }).expect(404);
       await bob.agent.post('/api/auth/sso/update-provider').send({ providerId: providerA.providerId }).expect(404);
       await bob.agent.post('/api/auth/sso/verify-domain').send({ providerId: providerA.providerId }).expect(404);
-      await bob.agent.post(`/api/auth/sso/saml2/sp/acs/${providerA.providerId}`).send({}).expect(404);
+      await bob.agent.post(`/api/auth/sso/saml2/sp/slo/${providerA.providerId}`).send({}).expect(404);
+      await bob.agent.get(`/api/auth/sso/saml2/logout/${providerA.providerId}`).expect(404);
+      // The SAML endpoint is open (identity providers post to it), but an OpenID Connect provider has no SAML.
+      const acs = await bob.agent.post(`/api/auth/sso/saml2/sp/acs/${providerA.providerId}`).type('form').send({ SAMLResponse: 'x' });
+      expect(acs.status).toBeGreaterThanOrEqual(300);
+      expect((await bob.agent.get('/api/auth/get-session')).body?.user?.email).toBe(bob.email);
     });
   });
 

@@ -45,7 +45,7 @@ export class SsoRepository {
 
   async create(
     ctx: TenantContext,
-    values: { providerId: string; issuer: string; domain: string; oidcConfig: string },
+    values: { providerId: string; issuer: string; domain: string; oidcConfig?: string; samlConfig?: string },
   ): Promise<SsoProviderRow> {
     await this.ensureSystemUser();
     const [row] = await this.db
