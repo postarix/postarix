@@ -78,7 +78,14 @@ export class OrgAccessGuard implements CanActivate {
     if (role === null) throw new NotFoundException();
     if (roleRank(role) < roleRank(minRole)) throw new ForbiddenException();
 
-    request.tenant = { organizationId, userId: session.user.id, role, viaSuperAdmin };
+    request.tenant = {
+      organizationId,
+      userId: session.user.id,
+      userEmail: session.user.email,
+      ipAddress: request.ip ?? null,
+      role,
+      viaSuperAdmin,
+    };
     return true;
   }
 }

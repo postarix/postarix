@@ -12,6 +12,9 @@ export type OrgRole = (typeof orgRoles)[number];
 export interface TenantContext {
   readonly organizationId: string;
   readonly userId: string;
+  /** Recorded in the audit log. */
+  readonly userEmail: string;
+  readonly ipAddress: string | null;
   readonly role: OrgRole;
   /** True when access was granted through the instance super-admin role, not membership. */
   readonly viaSuperAdmin: boolean;

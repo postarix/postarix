@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { type MailEngine, MailEngineError } from '@postarix/mail-engine';
 import { AccountsService } from '../accounts/accounts.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { engineErrorToHttp } from '../common/engine-errors.js';
 import { isUniqueViolation } from '../common/pg-errors.js';
@@ -38,6 +39,7 @@ export class MailboxesService {
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(AddressRegistry) private readonly addresses: AddressRegistry,
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -99,6 +101,12 @@ export class MailboxesService {
       throw engineErrorToHttp(error);
     }
 
+    await this.audit.record(
+      ctx,
+      'mailbox.created',
+      { type: 'mailbox', id: row.id, label: address },
+      { quotaBytes: input.quotaBytes },
+    );
     return toMailboxDto(row);
   }
 
@@ -123,6 +131,7 @@ export class MailboxesService {
     if (input.displayName !== undefined && row.userId) {
       await this.accounts.rename(row.userId, input.displayName || row.address);
     }
+    await this.audit.record(ctx, 'mailbox.updated', { type: 'mailbox', id: row.id, label: row.address }, changes);
     return toMailboxDto(row);
   }
 
@@ -130,6 +139,11 @@ export class MailboxesService {
     const mailbox = await this.require(ctx, id);
     if (!mailbox.userId) throw new NotFoundException('This mailbox has no account');
     await this.accounts.setPassword(mailbox.userId, password);
+    await this.audit.record(ctx, 'mailbox.password_reset', {
+      type: 'mailbox',
+      id: mailbox.id,
+      label: mailbox.address,
+    });
   }
 
   async usage(ctx: TenantContext, id: string): Promise<MailboxUsageDto> {
@@ -155,6 +169,7 @@ export class MailboxesService {
     }
     await this.repository.delete(ctx, id);
     if (mailbox.userId) await this.accounts.delete(mailbox.userId);
+    await this.audit.record(ctx, 'mailbox.deleted', { type: 'mailbox', id: mailbox.id, label: mailbox.address });
   }
 
   private async require(ctx: TenantContext, id: string): Promise<MailboxRow> {

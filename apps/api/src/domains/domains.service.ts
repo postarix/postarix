@@ -10,6 +10,7 @@ import type { Env } from '../config/env.js';
 import type { DnsResolver } from '../core/dns.js';
 import { DNS_RESOLVER, ENV } from '../core/tokens.js';
 import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js';
+import { AuditService } from '../audit/audit.service.js';
 import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto } from './domains.dto.js';
@@ -22,6 +23,7 @@ export class DomainsService {
     @Inject(DNS_RESOLVER) private readonly dns: DnsResolver,
     @Inject(ENV) private readonly env: Env,
     @Inject(DkimService) private readonly dkim: DkimService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
@@ -52,6 +54,7 @@ export class DomainsService {
       await this.repository.delete(ctx, row.id);
       throw error;
     }
+    await this.audit.record(ctx, 'domain.created', { type: 'domain', id: row.id, label: row.name });
     return toDomainDto(row);
   }
 
@@ -115,6 +118,7 @@ export class DomainsService {
       const row = await this.repository.activate(ctx, id);
       if (!row) throw new NotFoundException('Domain not found');
       await this.dkim.publish(row);
+      await this.audit.record(ctx, 'domain.verified', { type: 'domain', id: row.id, label: row.name });
       return toDomainDto(row);
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -150,5 +154,6 @@ export class DomainsService {
     }
     if (!deleted) throw new NotFoundException('Domain not found');
     if (domain.status !== 'pending') await this.dkim.unpublish(domain.name);
+    await this.audit.record(ctx, 'domain.deleted', { type: 'domain', id: domain.id, label: domain.name });
   }
 }
