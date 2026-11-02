@@ -25,8 +25,11 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
 # saslauthd like any other login).
 # It never sends mail itself: EmailSubmission is refused by the API (and the
 # smtp_backend settings inherited from imapd.conf make any attempt fail fast).
+# Its logins go to a saslauthd instance of its own, which the API recognizes
+# and for which it accepts nothing but its tokens (no app passwords).
 sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
-    -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf > /etc/imapd-jmap.conf
+    -e 's/^allowplaintext:.*/allowplaintext: yes/' \
+    -e 's|^sasl_saslauthd_path:.*|sasl_saslauthd_path: /run/saslauthd-jmap/mux|' /etc/imapd.conf > /etc/imapd-jmap.conf
 # The JMAP service listens on the internal network address only.
 sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
@@ -95,6 +98,10 @@ mkdir -p /run/saslauthd
 chmod 0755 /run/saslauthd
 rm -f /run/saslauthd/mux /run/saslauthd/saslauthd.pid
 saslauthd -a pam -r -m /run/saslauthd -n 4
+# The JMAP service's own instance (inside this container only).
+install -d -m 0755 /run/saslauthd-jmap
+rm -f /run/saslauthd-jmap/mux /run/saslauthd-jmap/saslauthd.pid
+POSTARIX_SASL_INSTANCE=jmap saslauthd -a pam -r -m /run/saslauthd-jmap -n 2
 
 # Reload when the certificate is renewed: SIGHUP makes the master process
 # restart its services, and new connections use the new certificate.
