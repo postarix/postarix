@@ -31,6 +31,12 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
   const [open, setOpen] = useState(false);
   const routeKey = JSON.stringify(route);
   useEffect(() => setOpen(false), [routeKey]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [open]);
 
   const signOut = async () => {
     await authClient.signOut();
@@ -105,7 +111,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
       <aside className="hidden w-60 shrink-0 text-sidebar-foreground md:block">{sidebar}</aside>
 
       {open ? (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <aside className="relative h-full w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground shadow-2xl">{sidebar}</aside>
         </div>
@@ -113,7 +119,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 bg-sidebar px-2 py-2 text-white md:hidden">
-          <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu" onClick={() => setOpen(true)}>
+          <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)}>
             {open ? <X aria-hidden /> : <Menu aria-hidden />}
           </Button>
           <Postmark className="size-6" />

@@ -1,5 +1,6 @@
 import type { CalendarEvent } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { cn } from '@postarix/ui/lib/utils';
 import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Repeat } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -52,6 +53,7 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
   const calendars = useCalendars();
   const events = useEvents(from, to);
   const [draft, setDraft] = useState<EventDraft | null>(null);
+  const [dayList, setDayList] = useState<Date | null>(null);
   const todayKey = dayKey(new Date());
 
   const byDay = useMemo(() => {
@@ -126,37 +128,61 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
             ))}
           </div>
           <div className={cn('grid min-h-0 flex-1 grid-cols-7', days.length > 35 ? 'grid-rows-6' : 'grid-rows-5')}>
-            {days.map((day) => {
-              const key = dayKey(day);
-              const list = byDay.get(key) ?? [];
-              const inMonth = day.getMonth() === month;
-              const isToday = key === todayKey;
-              return (
-                <div
-                  key={key}
-                  role="gridcell"
-                  aria-label={new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)}
-                  onClick={() => newAt(day)}
-                  className={cn(
-                    'group flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b p-1.5 transition-colors [&:nth-child(7n)]:border-r-0',
-                    inMonth ? 'hover:bg-muted/50' : 'bg-muted/40 text-muted-foreground/70',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'mb-0.5 ml-auto grid size-6 place-items-center rounded-full text-xs tabular-nums',
-                      isToday ? 'bg-stamp font-semibold text-stamp-foreground' : 'font-medium',
-                    )}
-                  >
-                    {day.getDate()}
-                  </span>
-                  {list.slice(0, 3).map((event) => (
-                    <EventChip key={`${event.id}-${key}`} event={event} onOpen={() => setDraft({ event })} />
-                  ))}
-                  {list.length > 3 ? <span className="px-1.5 text-xs text-muted-foreground">{list.length - 3} more</span> : null}
-                </div>
-              );
-            })}
+            {Array.from({ length: days.length / 7 }, (_, week) => (
+              <div key={week} role="row" className="contents">
+                {days.slice(week * 7, week * 7 + 7).map((day) => {
+                  const key = dayKey(day);
+                  const list = byDay.get(key) ?? [];
+                  const inMonth = day.getMonth() === month;
+                  const isToday = key === todayKey;
+                  const label = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day);
+                  return (
+                    <div
+                      key={key}
+                      role="gridcell"
+                      tabIndex={0}
+                      aria-label={`${label}${list.length ? `, ${list.length} ${list.length === 1 ? 'event' : 'events'}` : ''}. Press Enter to add an event.`}
+                      onClick={() => newAt(day)}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          newAt(day);
+                        }
+                      }}
+                      className={cn(
+                        'group flex min-h-0 cursor-pointer flex-col gap-0.5 overflow-hidden border-r border-b p-1.5 transition-colors [&:nth-child(7n)]:border-r-0',
+                        'focus-visible:relative focus-visible:z-[1] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                        inMonth ? 'hover:bg-muted/50' : 'bg-muted/40 text-muted-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'mb-0.5 ml-auto grid size-6 place-items-center rounded-full text-xs tabular-nums',
+                          isToday ? 'bg-stamp font-semibold text-stamp-foreground' : 'font-medium',
+                        )}
+                      >
+                        {day.getDate()}
+                      </span>
+                      {list.slice(0, 3).map((event) => (
+                        <EventChip key={`${event.id}-${key}`} event={event} onOpen={() => setDraft({ event })} />
+                      ))}
+                      {list.length > 3 ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDayList(day);
+                          }}
+                          className="rounded-md px-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
+                          {list.length - 3} more
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -200,6 +226,27 @@ export function CalendarPage({ date, email, name }: { date: string | null; email
         </div>
       </div>
       {draft ? <EventDialog draft={draft} calendars={calendars.data ?? []} onClose={() => setDraft(null)} /> : null}
+      <Dialog open={dayList !== null} onOpenChange={(open) => (open ? undefined : setDayList(null))}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{dayList ? new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(dayList) : ''}</DialogTitle>
+            <DialogDescription className="sr-only">Every event of the day</DialogDescription>
+          </DialogHeader>
+          <ul className="grid gap-1">
+            {(dayList ? (byDay.get(dayKey(dayList)) ?? []) : []).map((event) => (
+              <li key={event.id}>
+                <EventChip
+                  event={event}
+                  onOpen={() => {
+                    setDayList(null);
+                    setDraft({ event });
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

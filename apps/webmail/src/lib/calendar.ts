@@ -8,11 +8,32 @@ export const userTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZo
 
 const pad = (n: number, width = 2) => String(n).padStart(width, '0');
 
+const knownZones = new Map<string, boolean>();
+/**
+ * The zone if the browser knows it, else undefined (the browser's own zone).
+ * JSCalendar also allows custom zones ("/Custom/W. Europe") that Intl rejects;
+ * showing such an event in local time beats failing to show the calendar.
+ */
+export function usableTimeZone(timeZone: string | null | undefined): string | undefined {
+  if (!timeZone) return undefined;
+  let ok = knownZones.get(timeZone);
+  if (ok === undefined) {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone });
+      ok = true;
+    } catch {
+      ok = false;
+    }
+    knownZones.set(timeZone, ok);
+  }
+  return ok ? timeZone : undefined;
+}
+
 /** "YYYY-MM-DDTHH:MM:SS" of `date` as seen in `timeZone` (or the browser's zone). */
 export function toLocalDateTime(date: Date, timeZone?: string | null): string {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', {
-      timeZone: timeZone ?? undefined,
+      timeZone: usableTimeZone(timeZone),
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -34,7 +55,8 @@ function localToEpoch(local: string): number {
 }
 
 /** The instant at which the wall-clock time `local` happens in `timeZone` (floating = the browser's zone). */
-export function zonedToDate(local: string, timeZone?: string | null): Date {
+export function zonedToDate(local: string, requestedZone?: string | null): Date {
+  const timeZone = usableTimeZone(requestedZone);
   if (!timeZone) {
     const epoch = localToEpoch(local);
     const d = new Date(epoch);
@@ -77,7 +99,17 @@ export interface EventSpan {
 export function eventSpan(event: Pick<CalendarEvent, 'start' | 'timeZone' | 'duration' | 'showWithoutTime'>): EventSpan {
   const allDay = Boolean(event.showWithoutTime);
   const start = zonedToDate(event.start, allDay ? null : event.timeZone);
+  if (allDay) {
+    // Whole days, counted on the calendar: a day is not always 24 hours long.
+    const days = Math.max(1, Math.round(parseDuration(event.duration) / 86_400_000));
+    return { start, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + days), allDay };
+  }
   return { start, end: new Date(start.getTime() + parseDuration(event.duration)), allDay };
+}
+
+/** Calendar days from `a` to `b` (local dates), whatever the daylight-saving changes in between. */
+export function daysBetween(a: Date, b: Date): number {
+  return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate()) - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86_400_000);
 }
 
 /** The days shown for `month` (0-11): full weeks, starting on Monday. */
@@ -96,7 +128,7 @@ export const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-
 /** Whether the event overlaps the local day `day`. */
 export function overlapsDay(span: EventSpan, day: Date): boolean {
   const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
-  const dayEnd = dayStart + 86_400_000;
+  const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
   const end = Math.max(span.end.getTime(), span.start.getTime() + 1);
   return span.start.getTime() < dayEnd && end > dayStart;
 }
@@ -159,7 +191,7 @@ export function eventProperties(input: EventInput): Record<string, unknown> {
   const start = zonedToDate(input.start, input.allDay ? null : zone);
   const end = zonedToDate(input.end, input.allDay ? null : zone);
   const duration = input.allDay
-    ? formatDuration(end.getTime() - start.getTime() + 86_400_000, true) // the end day is included
+    ? `P${Math.max(1, daysBetween(start, end) + 1)}D` // the last day is included
     : formatDuration(end.getTime() - start.getTime(), false);
   return {
     '@type': 'Event',
@@ -175,13 +207,40 @@ export function eventProperties(input: EventInput): Record<string, unknown> {
   };
 }
 
+/**
+ * What to send for an edit: only the fields that changed, so properties the
+ * webmail does not show (other locations, links, alerts, the event's own time
+ * zone…) are kept as they are.
+ */
+export function eventPatch(original: CalendarEvent, before: EventInput, after: EventInput, textOnly: boolean): Record<string, unknown> {
+  const all = eventProperties(after);
+  const patch: Record<string, unknown> = {};
+  if (after.title !== before.title) patch.title = all.title;
+  if (after.description !== before.description) patch.description = all.description;
+  if (after.location !== before.location) {
+    const keys = Object.keys(original.locations ?? {});
+    const name = after.location.trim();
+    if (keys.length === 0) patch.locations = all.locations;
+    else if (name) patch[`locations/${keys[0]}/name`] = name;
+    else if (keys.length === 1) patch.locations = null;
+    else patch[`locations/${keys[0]}`] = null;
+  }
+  if (textOnly) return patch;
+  const timesChanged = after.start !== before.start || after.end !== before.end || after.allDay !== before.allDay;
+  if (timesChanged) {
+    for (const key of ['start', 'timeZone', 'duration', 'showWithoutTime'] as const) patch[key] = all[key];
+  }
+  if (after.repeat !== before.repeat) patch.recurrenceRules = all.recurrenceRules;
+  if (after.calendarId !== before.calendarId) patch.calendarIds = all.calendarIds;
+  return patch;
+}
+
 export function useSaveEvent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input, textOnly }: { id: string | null; input: EventInput; textOnly?: boolean }) => {
-      const all = eventProperties(input);
-      // For a repeating series edited from one occurrence, only the text changes.
-      const properties = textOnly ? { title: all.title, description: all.description, locations: all.locations } : all;
+    mutationFn: async ({ id, input, edit }: { id: string | null; input: EventInput; edit?: { original: CalendarEvent; before: EventInput; textOnly: boolean } }) => {
+      const properties = edit ? eventPatch(edit.original, edit.before, input, edit.textOnly) : eventProperties(input);
+      if (id && Object.keys(properties).length === 0) return;
       const result = await jmap.call<{ notCreated?: Record<string, { type: string; description?: string }>; notUpdated?: Record<string, { type: string; description?: string }> }>(
         'CalendarEvent/set',
         id ? { update: { [id]: properties } } : { create: { e: properties } },

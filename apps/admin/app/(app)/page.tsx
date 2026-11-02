@@ -105,7 +105,7 @@ export default function DashboardPage() {
       ) : orgs && orgs.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {orgs.map((org) => (
-            <Link key={org.id} href={`/o/${org.id}`} className="group rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+            <Link key={org.id} href={`/o/${org.id}`} className="group rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none">
               <Card className="h-full shadow-xs transition-all group-hover:border-ink/30 group-hover:shadow-md">
                 <CardHeader>
                   <CardTitle>{org.name}</CardTitle>

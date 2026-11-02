@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { ApiClient, config, smtp, unique, waitForMessage } from '../src/support.js';
+import { signInToWebmail } from './support.js';
 
 const PASSWORD = 'webmail browser password';
 
@@ -21,14 +22,7 @@ test.beforeAll(async () => {
   xavier = await create('xavier');
 });
 
-async function signIn(page: Page, email: string) {
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/login$/);
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('navigation', { name: 'Folders' })).toBeVisible();
-}
+const signIn = (page: Page, email: string) => signInToWebmail(page, email, PASSWORD);
 
 test('serves the app with a strict CSP', async ({ request }) => {
   const res = await request.get('/');
