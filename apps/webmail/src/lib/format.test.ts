@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAddresses, shortDate } from './format';
+import { formatRecipient, parseAddresses, shortDate } from './format';
 import { parseRoute, mailboxPath } from './router';
 
 describe('parseAddresses', () => {
@@ -27,5 +27,20 @@ describe('router', () => {
     expect(parseRoute('/calendar?date=2026-11-10')).toEqual({ name: 'calendar', date: '2026-11-10' });
     expect(parseRoute('/calendar?date=junk')).toEqual({ name: 'calendar', date: null });
     expect(parseRoute('/contacts/c1?q=ann')).toEqual({ name: 'contacts', contactId: 'c1', search: 'ann' });
+  });
+});
+
+describe('recipients with commas in their names', () => {
+  it('keeps a quoted name together', () => {
+    const field = `${formatRecipient('Acme, Inc.', 'sales@acme.example')}, bob@b.example`;
+    expect(field).toBe('"Acme, Inc." <sales@acme.example>, bob@b.example');
+    expect(parseAddresses(field)).toEqual({
+      addresses: [{ name: 'Acme, Inc.', email: 'sales@acme.example' }, { email: 'bob@b.example' }],
+      invalid: [],
+    });
+  });
+
+  it('drops characters that would break the field', () => {
+    expect(formatRecipient('Eve "<x@y>"', 'eve@e.example')).toBe('"Eve x@y" <eve@e.example>');
   });
 });

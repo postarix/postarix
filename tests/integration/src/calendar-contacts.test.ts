@@ -13,6 +13,9 @@ describe('Calendar and contacts (JMAP through the API, synced over CalDAV/CardDA
   let annAddress: string;
   let benAddress: string;
   let davPassword: string;
+  let benDavPassword: string;
+  const outsider = new ApiClient();
+  let outsiderAddress: string;
 
   const call = async (client: ApiClient, using: string[], methodCalls: MethodResponse[]) =>
     (await client.ok<{ methodResponses: MethodResponse[] }>('POST', '/api/jmap/', { using, methodCalls })).methodResponses;
@@ -35,6 +38,16 @@ describe('Calendar and contacts (JMAP through the API, synced over CalDAV/CardDA
     await ann.signIn(annAddress, PASSWORD);
     await ben.signIn(benAddress, PASSWORD);
     davPassword = (await ann.ok<{ password: string }>('POST', '/api/me/app-passwords', { name: 'Phone', scopes: ['dav'] })).password;
+    benDavPassword = (await ben.ok<{ password: string }>('POST', '/api/me/app-passwords', { name: 'Phone', scopes: ['dav'] })).password;
+
+    // Someone in another organization.
+    const otherOrg = await admin.ok<{ id: string }>('POST', '/api/auth/organization/create', { name: 'Elsewhere', slug: unique('elsewhere') });
+    const otherDomain = await admin.ok<{ id: string; name: string }>('POST', `/api/orgs/${otherOrg.id}/domains`, { name: `${unique('else')}.test` });
+    await admin.ok('POST', `/api/orgs/${otherOrg.id}/domains/${otherDomain.id}/verify`);
+    outsiderAddress = (
+      await admin.ok<{ address: string }>('POST', `/api/orgs/${otherOrg.id}/mailboxes`, { domainId: otherDomain.id, localPart: 'olga', password: PASSWORD })
+    ).address;
+    await outsider.signIn(outsiderAddress, PASSWORD);
   });
 
   it('creates and finds events, and the same event syncs over CalDAV', async () => {
@@ -71,8 +84,35 @@ describe('Calendar and contacts (JMAP through the API, synced over CalDAV/CardDA
     const [[name, result]] = (await call(ben, CALENDARS, [['Calendar/get', { accountId: annAddress }, 'c']])) as [MethodResponse];
     expect(name).toBe('error');
     expect(String(result.type)).toMatch(/accountNotFound|forbidden/);
-    const res = await dav('PROPFIND', `/dav/calendars/user/${annAddress}/`, benAddress, davPassword);
-    expect(res.status).toBe(401);
+    // Ben signs in with his own password: refused because the calendar is Ann's.
+    const res = await dav('PROPFIND', `/dav/calendars/user/${annAddress}/`, benAddress, benDavPassword);
+    expect([403, 404]).toContain(res.status);
+    expect((await dav('PROPFIND', `/dav/calendars/user/${benAddress}/`, benAddress, benDavPassword)).status).toBe(207);
+  });
+
+  it('never puts events in other people’s calendars, in or outside the organization', async () => {
+    const [[, calendars]] = (await call(ann, CALENDARS, [['Calendar/get', { accountId: annAddress }, 'c']])) as [MethodResponse];
+    const calendarId = (calendars.list as { id: string }[])[0]!.id;
+    const invitation = {
+      '@type': 'Event',
+      calendarIds: { [calendarId]: true },
+      title: unique('invite'),
+      start: '2026-11-12T10:00:00',
+      timeZone: 'America/Bogota',
+      duration: 'PT1H',
+      participants: {
+        a: { '@type': 'Participant', email: annAddress, roles: { owner: true } },
+        o: { '@type': 'Participant', email: outsiderAddress, roles: { attendee: true } },
+      },
+    };
+    const refused = await ann.request('POST', '/api/jmap/', { using: CALENDARS, methodCalls: [['CalendarEvent/set', { accountId: annAddress, create: { e: invitation } }, 's']] });
+    expect(refused.status).toBe(403);
+    // And the outsider's calendar stays empty.
+    const [, [, got]] = (await call(outsider, CALENDARS, [
+      ['CalendarEvent/query', { accountId: outsiderAddress, filter: { after: '2026-11-01T00:00:00', before: '2026-12-01T00:00:00' } }, 'q'],
+      ['CalendarEvent/get', { accountId: outsiderAddress, '#ids': { resultOf: 'q', name: 'CalendarEvent/query', path: '/ids' }, properties: ['title'] }, 'g'],
+    ])) as [MethodResponse, MethodResponse];
+    expect(got.list).toEqual([]);
   });
 
   it('stores contacts that sync over CardDAV', async () => {
@@ -89,6 +129,15 @@ describe('Calendar and contacts (JMAP through the API, synced over CalDAV/CardDA
     const res = await dav('PROPFIND', `/dav/addressbooks/user/${annAddress}/Default/`, annAddress, davPassword);
     expect(res.status).toBe(207);
     expect(await res.text()).toMatch(/\.vcf</);
+  });
+
+  it('keeps contacts private from other organizations', async () => {
+    const [[name, result]] = (await call(outsider, CONTACTS, [['Contact/query', { accountId: annAddress }, 'q']])) as [MethodResponse];
+    expect(name).toBe('error');
+    expect(String(result.type)).toMatch(/accountNotFound|forbidden/);
+    const otherDav = (await outsider.ok<{ password: string }>('POST', '/api/me/app-passwords', { name: 'Phone', scopes: ['dav'] })).password;
+    const res = await dav('PROPFIND', `/dav/addressbooks/user/${annAddress}/Default/`, outsiderAddress, otherDav);
+    expect([403, 404]).toContain(res.status);
   });
 
   it('gives DAV app passwords calendars and contacts, but no mail', async () => {

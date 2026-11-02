@@ -32,7 +32,7 @@
   --accent-foreground: #1e2a52;
   --border: #e3e6ee;
   --input: #dadfe9;
-  --ring: #6b82c4;
+  --ring: #5574cc;
 
   /* Brand accents */
   --stamp: #ffc72c;
@@ -46,13 +46,13 @@
   /* The navigation rail is ink; content sits on an inset white panel. */
   --sidebar: #141b31;
   --sidebar-foreground: #c9d0e2;
-  --sidebar-muted: #8089a3;
+  --sidebar-muted: #9aa2ba;
   --sidebar-primary: #ffc72c;
   --sidebar-primary-foreground: #1e2a52;
   --sidebar-accent: #222b47;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #232c48;
-  --sidebar-ring: #6b82c4;
+  --sidebar-ring: #8ea2dc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -81,7 +81,7 @@
     --warning: #f2b544;
     --sidebar: #0a0e1a;
     --sidebar-foreground: #c3cadc;
-    --sidebar-muted: #747d97;
+    --sidebar-muted: #8a93ad;
     --sidebar-accent: #182036;
     --sidebar-border: #182036;
   }

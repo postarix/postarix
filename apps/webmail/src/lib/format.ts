@@ -36,11 +36,36 @@ export function formatBytes(bytes: number): string {
   return `${unit === 0 ? value : value.toFixed(1)} ${units[unit]}`;
 }
 
+/** Splits a recipient field on commas, semicolons and new lines, except inside quotes or <…>. */
+export function splitRecipients(input: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quoted = false;
+  let angle = false;
+  for (const char of input) {
+    if (char === '"' && !angle) quoted = !quoted;
+    else if (char === '<' && !quoted) angle = true;
+    else if (char === '>' && !quoted) angle = false;
+    if (!quoted && !angle && (char === ',' || char === ';' || char === '\n')) {
+      parts.push(current);
+      current = '';
+    } else current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** A recipient as typed in an address field: "Name" <address>, or the bare address. */
+export function formatRecipient(name: string | null | undefined, email: string): string {
+  const clean = (name ?? '').replace(/["\\<>\r\n]/g, '').trim();
+  return clean && clean !== email ? `"${clean}" <${email}>` : email;
+}
+
 /** "a@x, Bob <b@y>; c@z" → addresses. Returns the invalid parts separately. */
 export function parseAddresses(input: string): { addresses: EmailAddress[]; invalid: string[] } {
   const addresses: EmailAddress[] = [];
   const invalid: string[] = [];
-  for (const raw of input.split(/[,;\n]/)) {
+  for (const raw of splitRecipients(input)) {
     const part = raw.trim();
     if (!part) continue;
     const match = /^(?:"?([^"<]*)"?\s*)?<([^<>\s]+@[^<>\s]+)>$/.exec(part);

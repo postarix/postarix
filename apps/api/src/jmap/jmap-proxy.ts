@@ -224,6 +224,37 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> 
   return Buffer.concat(chunks);
 }
 
+/** Event properties that schedule (invite people) or repeat too often to expand safely. */
+const SCHEDULING_PROPERTIES = /^(participants|replyTo|sendSchedulingMessages|organizerCalendarAddress)(\/|$)/;
+const ALLOWED_FREQUENCIES = new Set(['daily', 'weekly', 'monthly', 'yearly']);
+
+/**
+ * Calendar events may not invite people (scheduling is off in Cyrus: invitations
+ * would bypass the mail pipeline) nor repeat more often than daily (expanding
+ * them would be expensive for the shared mail server).
+ */
+function checkCalendarEventSet(args: Record<string, unknown>): void {
+  const objects = [
+    ...Object.values((args.create ?? {}) as Record<string, unknown>),
+    ...Object.values((args.update ?? {}) as Record<string, unknown>),
+  ];
+  for (const object of objects) {
+    if (!object || typeof object !== 'object') continue;
+    for (const [key, value] of Object.entries(object)) {
+      if (SCHEDULING_PROPERTIES.test(key)) throw new ProxyError(403, 'Inviting people to events is not available');
+      if (key === 'recurrenceRules' || key.startsWith('recurrenceRules/') || key === 'excludedRecurrenceRules') {
+        const rules = (Array.isArray(value) ? value : value ? [value] : []) as { frequency?: unknown }[];
+        for (const rule of rules) {
+          const frequency = typeof rule === 'object' && rule ? rule.frequency : rule;
+          if (frequency !== undefined && !ALLOWED_FREQUENCIES.has(String(frequency))) {
+            throw new ProxyError(403, 'Events may repeat at most daily');
+          }
+        }
+      }
+    }
+  }
+}
+
 /**
  * Checks a JMAP API request against the allowed capabilities and methods, and
  * returns it re-serialized (so what Cyrus parses is exactly what was checked).
@@ -246,6 +277,9 @@ export function checkApiRequest(raw: Uint8Array): Uint8Array {
     const name: unknown = Array.isArray(call) ? call[0] : undefined;
     if (typeof name !== 'string' || !ALLOWED_METHODS.test(name)) {
       throw new ProxyError(403, `Method not available: ${String(name).slice(0, 100)}`);
+    }
+    if (name === 'CalendarEvent/set' && Array.isArray(call) && call[1] && typeof call[1] === 'object') {
+      checkCalendarEventSet(call[1] as Record<string, unknown>);
     }
   }
   return Buffer.from(JSON.stringify(request));
