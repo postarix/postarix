@@ -72,6 +72,13 @@ mail:
   dane:
     enabled: true
     clusterDnsIP: ""
+    # Other zones the mail pod must resolve through a given server, as
+    # "zone=address" (e.g. a private zone of a managed database:
+    # "privatelink.postgres.database.azure.com=10.0.0.2"). Everything else is
+    # resolved from the Internet's root servers with DNSSEC validation, so the
+    # pod needs outbound DNS (port 53) to the Internet. Set enabled: false to
+    # use the cluster DNS instead (DANE then stays off).
+    forwardZones: []
   storage:
     size: 50Gi
     storageClass: ""

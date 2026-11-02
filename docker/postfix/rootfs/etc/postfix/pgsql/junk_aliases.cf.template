@@ -7,9 +7,9 @@ user = ${POSTFIX_DB_USER}
 password = ${POSTFIX_DB_PASSWORD}
 dbname = ${POSTFIX_DB_NAME}
 query = SELECT CASE
-    WHEN EXISTS (SELECT 1 FROM mail.mailboxes mb WHERE mb.address = al.destination)
-      OR EXISTS (SELECT 1 FROM mail.aliases inner_al WHERE inner_al.address = al.destination)
-    THEN split_part(al.destination, '@', 1) || '+Junk@' || split_part(al.destination, '@', 2)
+    WHEN EXISTS (SELECT 1 FROM mail.mailboxes mb WHERE mb.address = regexp_replace(al.destination, '[+][^@]*@', '@'))
+      OR EXISTS (SELECT 1 FROM mail.aliases inner_al WHERE inner_al.address = regexp_replace(al.destination, '[+][^@]*@', '@'))
+    THEN split_part(split_part(al.destination, '@', 1), '+', 1) || '+Junk@' || split_part(al.destination, '@', 2)
     ELSE al.destination
   END
   FROM mail.aliases al
