@@ -41,7 +41,7 @@ export function DeleteOrganization({ org }: { org: OrganizationSummary }) {
 
   return (
     <section aria-labelledby="danger-zone" className="mt-10 rounded-xl border border-destructive/40 p-5">
-      <h3 id="danger-zone" className="font-display text-lg font-semibold">
+      <h3 id="danger-zone" className="text-base font-semibold">
         Delete this organization
       </h3>
       <p className="mt-1 max-w-prose text-sm text-muted-foreground">

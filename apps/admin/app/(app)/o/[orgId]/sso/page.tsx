@@ -122,7 +122,7 @@ export default function SsoPage() {
             <li key={provider.id} data-testid={`sso-${provider.domain}`} className="rounded-xl border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="font-display text-lg font-semibold">{provider.domain}</h3>
+                  <h3 className="text-base font-semibold">{provider.domain}</h3>
                   <p className="truncate text-sm text-muted-foreground">{provider.issuer}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setRemoving(provider)}>
