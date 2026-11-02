@@ -15,6 +15,11 @@ export interface CreateMailboxOptions {
   quotaBytes: number | null;
 }
 
+export interface SieveScriptInfo {
+  name: string;
+  active: boolean;
+}
+
 /** An HTTP request to the engine's JMAP endpoint (RFC 8620), made on behalf of a mailbox owner. */
 export interface JmapRequest {
   method: 'GET' | 'POST';
@@ -49,6 +54,17 @@ export interface MailEngine {
    * (the session resource) are the engine's own; callers rewrite them.
    */
   jmap(address: string, request: JmapRequest): Promise<Response>;
+  /** The mailbox's Sieve scripts (one at most is active). */
+  listSieveScripts(address: string): Promise<SieveScriptInfo[]>;
+  /** A script's text, or null if there is none with that name. */
+  readSieveScript(address: string, name: string): Promise<string | null>;
+  /**
+   * Creates or replaces a script, and makes it the active one when asked.
+   * Rejected scripts (syntax, unknown extensions) raise MailEngineError "rejected".
+   */
+  writeSieveScript(address: string, name: string, content: string, options: { activate: boolean }): Promise<void>;
+  /** Deletes a script (deactivating it first); nothing happens if it does not exist. */
+  deleteSieveScript(address: string, name: string): Promise<void>;
   health(): Promise<EngineHealth>;
   close(): Promise<void>;
 }

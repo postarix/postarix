@@ -25,7 +25,7 @@ log() { echo "[postfix-entrypoint] $*"; }
 # --- PostgreSQL maps (contain the database password: postfix-readable only) ---
 for template in /etc/postfix/pgsql/*.cf.template; do
   target="${template%.template}"
-  envsubst '${POSTFIX_DB_HOST} ${POSTFIX_DB_USER} ${POSTFIX_DB_PASSWORD} ${POSTFIX_DB_NAME}' \
+  envsubst '${POSTFIX_DB_HOST} ${POSTFIX_DB_USER} ${POSTFIX_DB_PASSWORD} ${POSTFIX_DB_NAME} ${MAIL_HOSTNAME}' \
     < "$template" > "$target"
   chown root:postfix "$target"
   chmod 0640 "$target"
@@ -58,6 +58,11 @@ watch_certificates() {
     fi
   done
 }
+
+# Replies to forwarded mail (SRS0 addresses on the server's name): bounces and
+# automatic replies only, never ordinary mail through the server.
+host_re=$(printf '%s' "$MAIL_HOSTNAME" | sed 's/[.]/\\./g')
+printf '/^srs[01][=+-].*@%s$/ postarix_srs_bounces\n' "$host_re" > /etc/postfix/srs_recipients.regexp
 
 # --- main.cf --------------------------------------------------------------------
 pg() { echo "pgsql:/etc/postfix/pgsql/$1.cf"; }
@@ -93,7 +98,13 @@ postconf -e \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
   "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
+  "smtpd_recipient_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient, check_recipient_access regexp:/etc/postfix/srs_recipients.regexp" \
+  "relay_domains = $MAIL_HOSTNAME" \
+  "relay_recipient_maps = $(pg srs_recipients)" \
+  "recipient_canonical_maps = $(pg srs_reverse)" \
+  "recipient_canonical_classes = envelope_recipient" \
+  "smtpd_restriction_classes = postarix_srs_bounces" \
+  "postarix_srs_bounces = check_sender_access inline:{ { <> = OK } }, reject" \
   "smtpd_sasl_auth_enable = no" \
   "smtpd_sasl_type = cyrus" \
   "smtpd_sasl_path = smtpd" \
@@ -151,6 +162,7 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
   # Each port accepts only its own account.
   postconf \
     "postarix_api_sender_restrictions = check_sasl_access inline:{ { postarix-api = OK } { postarix-api@$MAIL_HOSTNAME = OK } }, reject" \
+    "postarix_cyrus_data_restrictions = check_policy_service unix:private/postarix-sieve-owner" \
     "postarix_cyrus_sender_restrictions = check_sasl_access inline:{ { postarix-cyrus = OK } { postarix-cyrus@$MAIL_HOSTNAME = OK } }, reject"
 
   # The API has already checked that the user owns the From address (Rspamd
@@ -176,9 +188,9 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
   # Cyrus sends only vacation replies (null envelope sender) and redirects;
   # Rspamd enforces that (POSTARIX_CYRUS_SENT in rspamd.local.lua, which
   # recognizes this port by its daemon name). Redirected mail keeps its From
-  # header but gets an envelope sender on the server's own name (its own
-  # cleanup service), so SPF passes at the destination; bounces of forwarded
-  # mail are not accepted back.
+  # header but gets an SRS envelope sender on the server's own name (its own
+  # cleanup service), so SPF passes at the destination and bounces go back
+  # to the original sender.
   postconf -M "10588/inet=10588 inet n - n - - smtpd"
   postconf -P \
     "10588/inet/syslog_name=postfix/cyrus-submit" \
@@ -195,13 +207,17 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
     "10588/inet/smtpd_client_auth_rate_limit=0" \
     "10588/inet/smtpd_client_connection_count_limit=0" \
     "10588/inet/smtpd_client_message_rate_limit=1200" \
-    "10588/inet/cleanup_service_name=cyrus-cleanup"
+    "10588/inet/cleanup_service_name=cyrus-cleanup" \
+    "10588/inet/smtpd_data_restrictions=\$postarix_cyrus_data_restrictions"
+  # Names the mailbox whose Sieve script is sending (see the script).
+  postconf -M "postarix-sieve-owner/unix=postarix-sieve-owner unix - n n - 0 spawn user=nobody argv=/usr/local/bin/postarix-sieve-owner"
   postconf -M "cyrus-cleanup/unix=cyrus-cleanup unix n - n - 0 cleanup"
+  # The envelope sender of forwarded mail becomes an SRS0 address on the
+  # server's name (computed in the database: mail.srs_forward). A null sender
+  # (vacation replies) and the server's own addresses are left as they are.
   postconf -P \
-    "cyrus-cleanup/unix/sender_canonical_maps=regexp:/etc/postfix/cyrus_sender.regexp" \
+    "cyrus-cleanup/unix/sender_canonical_maps=$(pg srs_forward)" \
     "cyrus-cleanup/unix/sender_canonical_classes=envelope_sender"
-  # Only real addresses: a vacation reply's null sender must stay null.
-  printf '/^[^@]+@[^@]+$/ sieve-redirect@%s\n' "$MAIL_HOSTNAME" > /etc/postfix/cyrus_sender.regexp
   unset INTERNAL_API_TOKEN
 else
   postconf -MX "10587/inet" 2>/dev/null || true

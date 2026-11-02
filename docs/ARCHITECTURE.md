@@ -241,11 +241,10 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 
 ### 9.2.1 Mail Cyrus sends (Sieve)
 
-Sieve `redirect` and vacation replies are sent by Cyrus' `lmtpd` (its own configuration, `imapd-lmtp.conf`; every other Cyrus service keeps a closed `smtp_host`) to a Postfix port kept for it (10588), where only Cyrus' account can log in. Rspamd recognizes that port by its milter daemon name and lets through only:
+Sieve `redirect` and vacation replies are sent by Cyrus' `lmtpd` (its own configuration, `imapd-lmtp.conf`; every other Cyrus service keeps a closed `smtp_host`) to a Postfix port kept for it (10588), where only Cyrus' account can log in. Cyrus names the mailbox whose script is sending in the `AUTH=` parameter of `MAIL FROM`; a Postfix policy service (`postarix-sieve-owner`) adds it as the topmost header, `X-Postarix-Sieve-Owner`, which Rspamd reads (it recognizes the port by its milter daemon name) and removes. Rspamd lets through only:
 
-- redirects, never DKIM-signed (the original signature still verifies), whose envelope sender Postfix replaces with `sieve-redirect@<MAIL_HOSTNAME>` so SPF passes at the destination (bounces of forwarded mail are not accepted back);
-  A redirect of spam is refused, and so is one whose From is on a hosted domain without a valid DKIM signature of that domain.
-- vacation replies (null envelope sender, `Auto-Submitted: auto-replied`), sent and DKIM-signed only when the message being answered had exactly one hosted recipient and the reply's From is that very address. Rspamd remembers the hosted recipients of each message by Message-ID for two days (hosted domains are a Valkey set the API keeps in sync). Every Cyrus send uses one login, so Rspamd cannot tell whose script wrote a reply; Sieve lets a user choose the From address, and this keeps it to an address the answered message was really sent to.
+- vacation replies (null envelope sender, `Auto-Submitted: auto-replied`) whose From is the sending mailbox's own address; they are DKIM-signed with its domain. Sieve lets a user choose the From address; this keeps it to their own.
+- redirects, never DKIM-signed (the original signature still verifies), at most 100 an hour per mailbox. A redirect of spam is refused, and so is one whose From is on a hosted domain unless that domain DKIM-signed it or one of our users sent that very message (Rspamd remembers Message-ID and From of mail our users send, for two days). Postfix gives redirects an SRS envelope sender on the server's own name (`SRS0=<hash>=<day>=<domain>=<local>@<MAIL_HOSTNAME>`, computed in PostgreSQL by `mail.srs_forward` with a key that never leaves the database), so SPF passes at the destination. Bounces and automatic replies to such an address (null sender only, signature checked, at most 21 days old) go back to the original sender (`mail.srs_reverse`); anything else sent to it is refused.
 
 Port 10588 is capped at 1200 messages a minute for the whole instance.
 
@@ -369,7 +368,7 @@ out the account password after repeated failures (app passwords keep working).
 - [x] Composing, replying, forwarding, attachments, drafts; sending through the API with From ownership checks and Bcc removal.
 - [x] Real-time updates (JMAP push over server-sent events).
 - [x] Browser tests against the full stack in CI.
-- Later: threads view, rich-text composing, Sieve filters and vacation replies, labels.
+- Done later: automatic reply and forwarding (Settings, kept as a Sieve script). Still to come: threads view, rich-text composing, custom filters, labels.
 
 ### Phase 4 — Calendar and contacts
 - [x] Calendar in the webmail over JMAP Calendars (JSCalendar): month view, agenda on small screens, all-day and repeating events, places and notes.
@@ -429,7 +428,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
 | 2026-11-02 | SSO signs in only the owner of an active mailbox of the identity provider's organization (checked on every sign-in). An organization's IdP thus has no more power than its admins, who can already reset those mailboxes' passwords, and never reaches other tenants or instance administrators. Providers are owned by a banned, passwordless system account because Better Auth deletes a provider with its owning user. |
 
-| 2026-11-02 | Cyrus sends Sieve redirects and vacation replies through Postfix (port 10588) with Rspamd rules that bound what may be sent and signed (§9.2.1), instead of not sending at all. Envelope senders of redirects are rewritten to the server's own name rather than SRS: the Cyrus package is built without libsrs2, and a rewrite needs no extra daemon. |
+| 2026-11-02 | Cyrus sends Sieve redirects and vacation replies through Postfix (port 10588) with Rspamd rules that bound what may be sent and signed (§9.2.1), instead of not sending at all. The sending mailbox comes from Cyrus' `AUTH=` parameter through a Postfix policy service. SRS is computed by PostgreSQL functions that Postfix queries, because the Cyrus package is built without libsrs2 and this needs no extra daemon. |
 | 2026-11-02 | Internal secrets are derived per purpose (HMAC-SHA256) from `INTERNAL_API_TOKEN`: the mail-login bridge, the API's submission port and Cyrus' submission port each get their own, so the token itself is never sent over the network (the mail containers still receive it to derive their secrets). The API's submission connection uses STARTTLS. |
 | 2026-11-02 | SSO client secrets are encrypted at rest (AES-256-GCM, key derived from `AUTH_SECRET`) and opened only by the database adapter Better Auth reads providers through. Private identity providers are allowed with `SSO_TRUSTED_ISSUERS`, trusted by Better Auth on the sign-in routes only. |
 | 2026-11-02 | Rate limits, mail-login failure counters and sending quotas live in Valkey, so they hold across API replicas. |
@@ -438,8 +437,4 @@ out the account password after repeated failures (app passwords keep working).
 
 ## Known limitations
 
-- Bounces of mail forwarded by a Sieve `redirect` are not delivered back to the original sender (the envelope sender is the server's, not SRS).
-- A vacation reply is not sent when Rspamd does not know the message it answers (received more than two days earlier, or without a Message-ID), or when that message had several hosted recipients (e.g. a colleague in Cc).
-- Sieve redirects have no per-user rate limit, only the instance-wide cap of port 10588.
-- The webmail has no screen for filters and vacation replies yet: users set them with any ManageSieve client (port 4190), e.g. Thunderbird or a phone app.
 - The internal JMAP service and Cyrus' submission port use plain text inside the internal network (Compose) or inside the mail pod (Kubernetes, loopback); the mail-login bridge to the API crosses the cluster network in plain text with a secret good for that purpose only. Use a CNI with encryption where the pod network is not trusted.

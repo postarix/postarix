@@ -10,18 +10,6 @@ local function is_cyrus(task)
 end
 
 
-local function message_id(value)
-  if not value then
-    return nil
-  end
-  local id = tostring(value):match('<([^>]+)>') or tostring(value)
-  id = string.lower(id:gsub('%s', ''))
-  if id == '' or #id > 250 then
-    return nil
-  end
-  return id
-end
-
 -- Postarix: authenticated (submission) mail must carry exactly one From
 -- address, equal to the envelope sender. Postfix already checks that the
 -- envelope sender belongs to the logged-in user (reject_sender_login_mismatch),
@@ -116,94 +104,81 @@ local function base_address(user, domain)
   return string.lower((user or ''):gsub('%+.*$', '') .. '@' .. (domain or ''))
 end
 
-local function header_count(task, name)
-  return #(task:get_header_full(name) or {})
+local function message_id(value)
+  if not value then
+    return nil
+  end
+  local id = tostring(value):match('<([^>]+)>') or tostring(value)
+  id = string.lower(id:gsub('%s', ''))
+  if id == '' or #id > 250 then
+    return nil
+  end
+  return id
 end
 
--- Postarix: remembers which hosted addresses a message was sent to, by
--- Message-ID, for two days. A vacation reply is checked against it
--- (POSTARIX_CYRUS_SENT). A message with more recipients than are worth
--- remembering is marked, and no vacation reply to it is sent.
-local RCPT_KEY = 'POSTARIX_RCPT:'
-local RCPT_TTL = 172800
-local MAX_RCPT = 100
-local TOO_MANY = '!too-many'
+-- Mail our own users send (logged in, on 587/465 or from the webmail),
+-- remembered by Message-ID with its From address for two days: a Sieve
+-- redirect of it is known to carry a genuine hosted sender.
+local LOCAL_KEY = 'POSTARIX_LOCAL:'
 
 rspamd_config:register_symbol({
-  name = 'POSTARIX_REMEMBER_RCPT',
+  name = 'POSTARIX_REMEMBER_LOCAL',
   type = 'postfilter',
   priority = 1,
   callback = function(task)
-    if not redis_params or not task:get_helo() or is_cyrus(task) then
+    if not redis_params or not task:get_user() or is_cyrus(task) then
       return
     end
     if task:get_metric_action('default') == 'reject' then
       return
     end
     local id = message_id(task:get_header('Message-ID'))
-    if not id then
+    local from = task:get_from('mime')
+    if not id or not from or #from ~= 1 or not from[1].addr then
       return
     end
-    local key = RCPT_KEY .. id
-    local function store(members)
-      local args = { key }
-      for _, m in ipairs(members) do
-        table.insert(args, m)
-      end
-      lua_redis.redis_make_request(task, redis_params, key, true, function(err)
-        if not err then
-          lua_redis.redis_make_request(task, redis_params, key, true, function() end, 'EXPIRE', { key, tostring(RCPT_TTL) })
-        end
-      end, 'SADD', args)
-    end
-    local recipients = task:get_recipients('smtp') or {}
-    if #recipients > MAX_RCPT then
-      return store({ TOO_MANY })
-    end
-    local addresses, domains = {}, { HOSTED_SET }
-    for _, rcpt in ipairs(recipients) do
-      if rcpt.user and rcpt.domain and rcpt.domain ~= '' then
-        table.insert(addresses, base_address(rcpt.user, rcpt.domain))
-        table.insert(domains, string.lower(rcpt.domain))
-      end
-    end
-    if #addresses == 0 then
-      return
-    end
-    lua_redis.redis_make_request(task, redis_params, HOSTED_SET, false, function(err, flags)
-      if err or type(flags) ~= 'table' then
-        return
-      end
-      local hosted = {}
-      for i, address in ipairs(addresses) do
-        if tonumber(flags[i]) == 1 then
-          table.insert(hosted, address)
-        end
-      end
-      if #hosted > 0 then
-        store(hosted)
-      end
-    end, 'SMISMEMBER', domains)
+    lua_redis.redis_make_request(task, redis_params, LOCAL_KEY .. id, true, function() end,
+      'SET', { LOCAL_KEY .. id, string.lower(from[1].addr), 'EX', '172800' })
   end,
 })
 
--- Postarix: what Cyrus may send, and what may be DKIM/ARC-signed. Every Cyrus
--- send uses one login, so Rspamd cannot tell whose Sieve script produced it;
--- the rules below bound what any script can do.
---  * Redirects (exactly one X-Sieve-Action: redirect, non-null envelope;
---    Postfix gives them an envelope sender on the server's name) are never
---    signed. A redirect of spam is refused, and so is one whose From is on a
---    hosted domain without a valid DKIM signature of that domain (it would
---    otherwise carry a forged hosted sender past the inbound checks).
+local function header_count(task, name)
+  return #(task:get_header_full(name) or {})
+end
+
+-- Postarix: what Cyrus may send, and what may be DKIM/ARC-signed. Cyrus logs
+-- in with one account for every mailbox; Postfix names the mailbox whose
+-- Sieve script is sending in X-Postarix-Sieve-Owner, the topmost header
+-- (from the MAIL FROM AUTH= parameter Cyrus sets; see postarix-sieve-owner).
+-- It is removed before the message leaves.
 --  * Vacation replies (exactly one X-Sieve-Action: vacation, Auto-Submitted:
---    auto-replied, null envelope) are sent and signed only when the message
---    being answered had exactly one hosted recipient and the reply's From is
---    that very address. Sieve lets a user choose the From address; this keeps
---    it to an address the answered message was really sent to.
+--    auto-replied, null envelope) must come from the owner's own address, and
+--    are then signed with its domain.
+--  * Redirects (exactly one X-Sieve-Action: redirect, non-null envelope;
+--    Postfix gives them an SRS envelope sender on the server's name) are never
+--    signed, are limited per mailbox, and are refused for spam or for a hosted
+--    From that is neither DKIM-signed by that domain nor known to have been
+--    sent by our users (POSTARIX_CYRUS_REDIRECT).
 --  * Anything else is refused.
+local OWNER_HEADER = 'X-Postarix-Sieve-Owner'
+local REDIRECT_KEY = 'POSTARIX_REDIRECTS:'
+local REDIRECTS_PER_HOUR = 100
+
 local function cyrus_reject(task, reason)
   task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'refused: ' .. reason)
   task:set_pre_result('reject', 'Not sent: ' .. reason, 'postarix')
+end
+
+local function sieve_owner(task)
+  local headers = task:get_header_full(OWNER_HEADER) or {}
+  if #headers ~= 1 or headers[1].order ~= 0 then
+    return nil
+  end
+  local owner = string.lower(tostring(headers[1].value or ''):gsub('^%s+', ''):gsub('%s+$', ''))
+  if not owner:match('^[^%s<>@"]+@[%w.-]+$') then
+    return nil
+  end
+  return owner
 end
 
 rspamd_config:register_symbol({
@@ -214,7 +189,13 @@ rspamd_config:register_symbol({
     if not is_cyrus(task) then
       return
     end
-    task:get_mempool():set_variable('postarix_cyrus', '1')
+    local pool = task:get_mempool()
+    pool:set_variable('postarix_cyrus', '1')
+    task:set_milter_reply({ remove_headers = { [OWNER_HEADER] = 0 } })
+    local owner = sieve_owner(task)
+    if not owner then
+      return cyrus_reject(task, 'the sending mailbox is unknown')
+    end
     if header_count(task, 'X-Sieve-Action') ~= 1 then
       return cyrus_reject(task, 'Cyrus may only send vacation replies and redirects')
     end
@@ -223,8 +204,23 @@ rspamd_config:register_symbol({
     local envelope_addr = envelope and envelope[1] and envelope[1].addr or ''
 
     if action == 'redirect' and envelope_addr ~= '' then
-      task:get_mempool():set_variable('postarix_cyrus_redirect', '1')
-      task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'redirect')
+      if not redis_params then
+        return cyrus_reject(task, 'cannot count forwarded messages')
+      end
+      local key = REDIRECT_KEY .. owner
+      lua_redis.redis_make_request(task, redis_params, key, true, function(err, count)
+        if err then
+          return cyrus_reject(task, 'cannot count forwarded messages')
+        end
+        if tonumber(count) == 1 then
+          lua_redis.redis_make_request(task, redis_params, key, true, function() end, 'EXPIRE', { key, '3600' })
+        end
+        if tonumber(count) > REDIRECTS_PER_HOUR then
+          return cyrus_reject(task, 'too many forwarded messages from this mailbox; try again later')
+        end
+        pool:set_variable('postarix_cyrus_redirect', '1')
+        task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'redirect')
+      end, 'INCR', { key })
       return
     end
     if action ~= 'vacation' or envelope_addr ~= '' then
@@ -233,29 +229,15 @@ rspamd_config:register_symbol({
     if not tostring(task:get_header('Auto-Submitted') or ''):lower():match('^%s*auto%-replied') then
       return cyrus_reject(task, 'a vacation reply must be marked Auto-Submitted')
     end
-
     local from = task:get_from('mime')
     if not from or #from ~= 1 or not from[1].domain or from[1].domain == '' or header_count(task, 'From') ~= 1 then
       return cyrus_reject(task, 'a vacation reply needs exactly one From address')
     end
-    local from_addr = base_address(from[1].user, from[1].domain)
-    local id = message_id(task:get_header('In-Reply-To'))
-    if not id or not redis_params then
-      return cyrus_reject(task, 'the message being answered is unknown')
+    if base_address(from[1].user, from[1].domain) ~= owner then
+      return cyrus_reject(task, 'a vacation reply must come from your own address')
     end
-    lua_redis.redis_make_request(task, redis_params, RCPT_KEY .. id, false, function(err, data)
-      if err or type(data) ~= 'table' or #data == 0 then
-        return cyrus_reject(task, 'the message being answered is unknown')
-      end
-      if #data ~= 1 then
-        return cyrus_reject(task, 'the message being answered had several hosted recipients')
-      end
-      if tostring(data[1]) ~= from_addr then
-        return cyrus_reject(task, 'the From address is not the one the message was sent to')
-      end
-      task:get_mempool():set_variable('postarix_cyrus_sign', '1')
-      task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'vacation')
-    end, 'SMEMBERS', { RCPT_KEY .. id })
+    pool:set_variable('postarix_cyrus_sign', '1')
+    task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'vacation')
   end,
 })
 
@@ -293,13 +275,24 @@ rspamd_config:register_symbol({
       end
       return
     end
+    local from_addr = string.lower(from[1].addr or '')
+    local id = message_id(task:get_header('Message-ID'))
     lua_redis.redis_make_request(task, redis_params, HOSTED_SET, false, function(err, hosted)
       if err then
         return cyrus_reject(task, 'cannot check the sender')
       end
-      if tonumber(hosted) == 1 then
-        return cyrus_reject(task, 'the hosted sender of this message is not authenticated by DKIM')
+      if tonumber(hosted) ~= 1 then
+        return
       end
+      -- A hosted sender: genuine if one of our users sent this very message.
+      if not id then
+        return cyrus_reject(task, 'the hosted sender of this message is not authenticated')
+      end
+      lua_redis.redis_make_request(task, redis_params, LOCAL_KEY .. id, false, function(err2, sent_by)
+        if err2 or sent_by == nil or type(sent_by) == 'userdata' or tostring(sent_by) ~= from_addr then
+          return cyrus_reject(task, 'the hosted sender of this message is not authenticated')
+        end
+      end, 'GET', { LOCAL_KEY .. id })
     end, 'SISMEMBER', { HOSTED_SET, from_domain })
   end,
 })
