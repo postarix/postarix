@@ -16,9 +16,11 @@
 # ENV_FILE (default docker/compose/postarix.env).
 set -euo pipefail
 
-target="${1:?usage: backup.sh <directory>}"
+target="$(realpath -m "${1:?usage: backup.sh <directory>}")"
 cd "$(dirname "$0")/../.."
-COMPOSE=(docker compose -f "${COMPOSE_FILE:-docker/compose/postarix.yml}" --env-file "${ENV_FILE:-docker/compose/postarix.env}")
+# COMPOSE_FILE may list several files separated by ":" (Docker Compose reads it).
+export COMPOSE_FILE="${COMPOSE_FILE:-docker/compose/postarix.yml}"
+COMPOSE=(docker compose --env-file "${ENV_FILE:-docker/compose/postarix.env}")
 
 mkdir -p "$target"
 chmod 700 "$target"
@@ -32,8 +34,11 @@ log "mailbox list"
 
 log "mail store (this can take a while)"
 # Messages are files that are written once, so copying a live store is safe;
-# the mailbox list dumped above is the consistent index to restore from.
-"${COMPOSE[@]}" exec -T cyrus tar -C / -czf - var/spool/cyrus var/spool/sieve var/lib/cyrus >"$target/cyrus.tar.gz"
+# the mailbox list dumped above is the consistent index to restore from, and
+# the restore rebuilds every mailbox's index from the message files. A
+# checkpoint first flushes Cyrus' databases to their files.
+"${COMPOSE[@]}" exec -T -u cyrus cyrus /usr/lib/cyrus/bin/ctl_cyrusdb -c >/dev/null
+"${COMPOSE[@]}" exec -T cyrus tar -C / --exclude=var/lib/cyrus/socket -czf - var/spool/cyrus var/spool/sieve var/lib/cyrus >"$target/cyrus.tar.gz"
 
 log "spam filter data"
 if "${COMPOSE[@]}" exec -T valkey sh -c 'valkey-cli -a "$VALKEY_PASSWORD" --no-auth-warning SAVE >/dev/null && cat /data/dump.rdb' >"$target/valkey.rdb" 2>/dev/null; then

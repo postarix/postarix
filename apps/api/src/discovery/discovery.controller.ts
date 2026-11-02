@@ -32,8 +32,9 @@ export class DiscoveryController {
   }
 
   /** The user's domain: from ?emailaddress=, else from the host (autoconfig.<domain>). */
-  private async autoconfig(req: Request, email: string | undefined): Promise<string> {
-    const fromEmail = email ? domainOfAddress(email) : null;
+  private async autoconfig(req: Request, email: unknown): Promise<string> {
+    // A repeated parameter arrives as an array: only a single address counts.
+    const fromEmail = typeof email === 'string' && email ? domainOfAddress(email) : null;
     const fromHost = req.hostname.toLowerCase().replace(/^autoconfig\./, '');
     const domain = fromEmail ?? fromHost;
     if (!(await this.isHosted(domain))) throw new NotFoundException();
@@ -44,7 +45,8 @@ export class DiscoveryController {
   @Get('.well-known/autoconfig/mail/config-v1.1.xml')
   @Header('content-type', 'application/xml; charset=utf-8')
   @Header('cache-control', 'public, max-age=3600')
-  wellKnownAutoconfig(@Req() req: Request, @Query('emailaddress') email?: string): Promise<string> {
+  @Header('vary', 'host')
+  wellKnownAutoconfig(@Req() req: Request, @Query('emailaddress') email?: unknown): Promise<string> {
     return this.autoconfig(req, email);
   }
 
@@ -52,7 +54,8 @@ export class DiscoveryController {
   @Get('mail/config-v1.1.xml')
   @Header('content-type', 'application/xml; charset=utf-8')
   @Header('cache-control', 'public, max-age=3600')
-  hostAutoconfig(@Req() req: Request, @Query('emailaddress') email?: string): Promise<string> {
+  @Header('vary', 'host')
+  hostAutoconfig(@Req() req: Request, @Query('emailaddress') email?: unknown): Promise<string> {
     return this.autoconfig(req, email);
   }
 

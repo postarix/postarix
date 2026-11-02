@@ -16,16 +16,22 @@ spec:
   {{- end }}
   {{- with .Values.ingress.tlsSecretName }}
   tls:
-    - hosts: [{{ $host | quote }}]
+    - hosts:
+        - {{ $host | quote }}
+        {{- range $.Values.ingress.discoveryDomains }}
+        - {{ printf "autoconfig.%s" . | quote }}
+        - {{ printf "mta-sts.%s" . | quote }}
+        {{- end }}
       secretName: {{ . }}
   {{- end }}
   rules:
     - host: {{ $host | quote }}
       http:
         paths:
-          # /api/internal/* is refused by the API itself to any request that
-          # carries forwarding headers; never route it anywhere else either.
-          {{- range list "/api" "/.well-known/autoconfig" "/mail/config-v1.1.xml" "/autodiscover/autodiscover.xml" "/.well-known/mta-sts.txt" }}
+          # The API's public prefixes, listed one by one so /api/internal/* is
+          # never routed (an Ingress cannot exclude a path). Anything else under
+          # /api reaches the webmail, which refuses /api/internal as well.
+          {{- range list "/api/auth" "/api/jmap" "/api/mail" "/api/me" "/api/orgs" "/api/admin" "/api/health" "/.well-known/autoconfig" "/mail/config-v1.1.xml" "/autodiscover/autodiscover.xml" "/.well-known/mta-sts.txt" }}
           - path: {{ . }}
             pathType: Prefix
             backend:
@@ -45,4 +51,18 @@ spec:
             pathType: Prefix
             backend:
               service: { name: {{ include "postarix.name" (list . "webmail") }}, port: { name: http } }
+    {{- /* Mail apps and receiving servers look these up by the mail domain's own names. */}}
+    {{- range $.Values.ingress.discoveryDomains }}
+    {{- range list (printf "autoconfig.%s" .) (printf "mta-sts.%s" .) }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- range list "/mail/config-v1.1.xml" "/.well-known/autoconfig" "/.well-known/mta-sts.txt" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service: { name: {{ $api }}, port: { name: http } }
+          {{- end }}
+    {{- end }}
+    {{- end }}
 {{- end }}

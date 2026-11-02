@@ -423,6 +423,9 @@ out the account password after repeated failures (app passwords keep working).
 
 - SSO client secrets are stored in PostgreSQL as Better Auth's SSO plugin reads them (not encrypted like DKIM keys).
 - Cyrus never sends mail by itself (`smtp_backend` points at a closed port so attempts fail at once): Sieve `redirect` and vacation replies do not work yet; forwarding is done with aliases.
+- Spam to an alias is filed in the destinations' Inbox, not their Junk folder: the `+Junk` extension is not carried through aliases (`propagate_unmatched_extensions = canonical`), because an alias may point to an outside address.
+- On Kubernetes, the API's internal token is both the mail-login bearer token and the password of the webmail submission port, and it travels unencrypted inside the cluster network; use a CNI with encryption (or a service mesh) where the pod network is not trusted.
+- The SSO issuer allow-list for private addresses reuses `TRUSTED_ORIGINS`; a separate setting is planned.
 - The internal JMAP service authenticates through the same `http` login service as CalDAV/CardDAV, so a DAV app password would work there too. It is reachable only from the internal network (bound to Cyrus' address on it); a dedicated login service is planned.
 
 - Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.

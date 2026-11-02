@@ -31,7 +31,10 @@ What it watches:
 - **Cyrus:** failed IMAP, POP3 and ManageSieve logins (Postarix' own parser and
   scenario: more than 5 failures from one address within a short time).
 
-Private addresses (your LAN, the Docker networks) are never banned.
+Private, loopback and link-local addresses (your LAN, the Docker networks, the
+reverse proxy) are never banned: the image ships its own whitelist
+(`postarix/whitelist`), so a misbehaving app on the LAN cannot lock everyone out.
+Check it is loaded with `cscli parsers list`.
 
 The engine's local API listens on `127.0.0.1:8081` of the host only
 (`CROWDSEC_LAPI_PORT`).

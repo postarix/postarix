@@ -57,6 +57,13 @@
       "when": 1793598361276,
       "tag": "0007_sso_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793608523269,
+      "tag": "0008_sso_provider_cleanup",
+      "breakpoints": true
     }
   ]
 }

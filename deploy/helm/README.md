@@ -28,6 +28,9 @@ Differences from the Docker Compose install:
   webmail submission) reachable from the API only. Your CNI must enforce them.
 - CrowdSec is not included: run it on the nodes that receive mail traffic.
 - The autoconfig/MTA-STS hosts of each hosted domain (`autoconfig.<domain>`,
-  `mta-sts.<domain>`) need ingress rules and certificates of their own.
+  `mta-sts.<domain>`) are routed when the domain is listed in
+  `ingress.discoveryDomains`; the ingress certificate must cover those names.
+- The ingress routes only the API's public paths: `/api/internal/*` is never
+  exposed.
 
 Backups: see [`docs/BACKUP.md`](../../docs/BACKUP.md).

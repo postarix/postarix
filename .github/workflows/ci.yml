@@ -183,6 +183,13 @@ jobs:
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml > /tmp/rendered.yaml
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
             --set postgresql.enabled=false,postgresql.host=db.example,valkey.enabled=false,valkey.host=cache.example,existingSecret=postarix,networkPolicies.enabled=false,ingress.enabled=false,tls.certManager.enabled=true >> /tmp/rendered.yaml
+          helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
+            --set 'ingress.discoveryDomains={example.com}' --set ingress.tlsSecretName=web-tls > /tmp/ingress.yaml
+          # /api/internal must never be routed, and the discovery names must be.
+          ! grep -E 'path: /api/?$|path: /api/internal' /tmp/ingress.yaml
+          grep -q 'host: "autoconfig.example.com"' /tmp/ingress.yaml
+          grep -q 'host: "mta-sts.example.com"' /tmp/ingress.yaml
+          cat /tmp/ingress.yaml >> /tmp/rendered.yaml
       - name: Validate against the Kubernetes schemas
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar -xz kubeconform

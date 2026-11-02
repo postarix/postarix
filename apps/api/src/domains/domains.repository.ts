@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { type DomainRow, domains } from '../db/schema/index.js';
+import { type DomainRow, domains, ssoProvider } from '../db/schema/index.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 
 /**
@@ -48,11 +48,24 @@ export class DomainsRepository {
     return row;
   }
 
+  /**
+   * Deletes the domain together with the organization's single sign-on
+   * provider for it: sign-in finds providers by domain, so a provider left
+   * behind would capture the domain's sign-ins after another organization
+   * verifies it.
+   */
   async delete(ctx: TenantContext, id: string): Promise<boolean> {
-    const deleted = await this.db
-      .delete(domains)
-      .where(and(this.scope(ctx), eq(domains.id, id)))
-      .returning({ id: domains.id });
-    return deleted.length > 0;
+    return this.db.transaction(async (tx) => {
+      const deleted = await tx
+        .delete(domains)
+        .where(and(this.scope(ctx), eq(domains.id, id)))
+        .returning({ id: domains.id, name: domains.name });
+      const row = deleted[0];
+      if (!row) return false;
+      await tx
+        .delete(ssoProvider)
+        .where(and(eq(ssoProvider.organizationId, ctx.organizationId), eq(ssoProvider.domain, row.name)));
+      return true;
+    });
   }
 }

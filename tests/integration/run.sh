@@ -33,3 +33,24 @@ BUILD_FLAG=--build
   || echo "admin already exists"
 
 pnpm --filter @postarix/integration-tests test:integration
+
+# Backup and restore round trip: the stack the tests filled is backed up,
+# destroyed and restored, and must come back with the same accounts and mail.
+if [ -z "${SKIP_BACKUP_TEST:-}" ]; then
+  export COMPOSE_FILE=docker/compose/postarix.yml:docker/compose/test.yml ENV_FILE
+  counts() {
+    "${COMPOSE[@]}" exec -T postgres psql -U postarix -d postarix -tAc 'select count(*) from mailboxes'
+    "${COMPOSE[@]}" exec -T -u cyrus cyrus sh -c \
+      'find /var/spool/cyrus -name "[0-9]*." | wc -l; /usr/lib/cyrus/bin/ctl_mboxlist -d | grep -c "\"name\""'
+  }
+  before=$(counts)
+  backup_dir=$(mktemp -d)
+  deploy/scripts/backup.sh "$backup_dir/backup"
+  "${COMPOSE[@]}" down -v >/dev/null 2>&1
+  "${COMPOSE[@]}" up -d --no-build --wait postgres valkey
+  YES=1 deploy/scripts/restore.sh "$backup_dir/backup"
+  after=$(counts)
+  rm -rf "$backup_dir"
+  echo "before restore: $(echo $before)  after: $(echo $after)  (mailboxes in the database, messages, Cyrus mailboxes)"
+  [ "$before" = "$after" ] || { echo "the restored installation differs from the backed-up one" >&2; exit 1; }
+fi

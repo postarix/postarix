@@ -63,17 +63,26 @@ export class MailLogService {
   ) {}
 
   async list(ctx: TenantContext, limit: number): Promise<MailLogEntryDto[]> {
-    const own = new Set((await this.domains.list(ctx)).map((d) => d.name.toLowerCase()));
-    if (own.size === 0) return [];
+    // Only domains the organization has proven it owns, and only mail from
+    // after it proved it: a pending claim costs nothing, and a domain may have
+    // belonged to another organization before.
+    const since = new Map<string, number>();
+    for (const d of await this.domains.list(ctx)) {
+      if (d.status === 'pending' || !d.verifiedAt) continue;
+      since.set(d.name.toLowerCase(), d.verifiedAt.getTime() / 1000);
+    }
+    if (since.size === 0) return [];
     const out: MailLogEntryDto[] = [];
     for (const row of await this.history()) {
+      const time = row.unix_time ?? 0;
+      const ownAt = (domain: string) => time >= (since.get(domain) ?? Infinity);
       const recipients = (Array.isArray(row.rcpt_smtp) ? row.rcpt_smtp : row.rcpt_smtp ? [row.rcpt_smtp] : []).map((r) => r.toLowerCase());
       const sender = (row.sender_smtp ?? '').toLowerCase();
-      const ownRecipients = recipients.filter((r) => own.has(domainOf(r)));
+      const ownRecipients = recipients.filter((r) => ownAt(domainOf(r)));
       // Sent by one of the organization's accounts (authenticated) from its
       // domains. Rspamd records unauthenticated mail with the user "unknown".
       const authenticated = Boolean(row.user) && row.user !== 'unknown';
-      const outgoing = authenticated && sender.includes('@') && own.has(domainOf(sender));
+      const outgoing = authenticated && sender.includes('@') && ownAt(domainOf(sender));
       if (!outgoing && ownRecipients.length === 0) continue;
       const reasons = Object.entries(row.symbols ?? {})
         .map(([name, s]) => ({ name, score: Math.round((s.score ?? 0) * 100) / 100 }))
@@ -91,7 +100,9 @@ export class MailLogService {
         score: Math.round((row.score ?? 0) * 100) / 100,
         requiredScore: row.required_score ?? 0,
         reasons,
-        ip: outgoing ? null : (row.ip ?? null),
+        // A client address belongs to whoever sent the message: never show an
+        // authenticated sender's address, which may be another organization's user.
+        ip: outgoing || authenticated ? null : (row.ip ?? null),
       });
       if (out.length >= limit) break;
     }

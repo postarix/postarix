@@ -99,8 +99,13 @@ ingress:
   enabled: true
   className: ""
   annotations: {}
-  # TLS secret for publicUrl's host (may be the same as tls.secretName).
+  # TLS secret for publicUrl's host (may be the same as tls.secretName). When
+  # discoveryDomains is set, the certificate must also cover their
+  # autoconfig.<domain> and mta-sts.<domain> names.
   tlsSecretName: ""
+  # Mail domains whose autoconfig.<domain> and mta-sts.<domain> names point at
+  # this ingress (Thunderbird's autoconfig and MTA-STS policies).
+  discoveryDomains: []
 
 networkPolicies:
   enabled: true

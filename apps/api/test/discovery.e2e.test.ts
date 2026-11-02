@@ -35,6 +35,7 @@ describe('Mail client discovery and MTA-STS', () => {
     await server().get('/mail/config-v1.1.xml').set('host', `autoconfig.${hosted}`).expect(200);
     await server().get('/.well-known/autoconfig/mail/config-v1.1.xml').query({ emailaddress: `ann@${pending}` }).expect(404);
     await server().get('/.well-known/autoconfig/mail/config-v1.1.xml').query({ emailaddress: 'ann@elsewhere.example' }).expect(404);
+    await server().get(`/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=a@${hosted}&emailaddress=b@${hosted}`).expect(404);
   });
 
   it('answers Outlook Autodiscover with escaped values', async () => {

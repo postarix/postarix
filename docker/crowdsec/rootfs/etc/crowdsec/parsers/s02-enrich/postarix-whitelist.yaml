@@ -1,0 +1,18 @@
+# Never ban the server's own networks: the Docker networks, the reverse proxy,
+# the webmail and the LAN. Kept here as well as in the package's default
+# whitelist so it does not depend on what the package enables.
+name: postarix/whitelist
+description: "Never ban loopback, private and link-local addresses"
+whitelist:
+  reason: "Postarix internal or private address"
+  ip:
+    - "127.0.0.1"
+    - "::1"
+  cidr:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+    - "100.64.0.0/10"
+    - "169.254.0.0/16"
+    - "fc00::/7"
+    - "fe80::/10"

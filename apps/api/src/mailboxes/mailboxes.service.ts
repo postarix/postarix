@@ -47,6 +47,15 @@ export class MailboxesService {
     return (await this.repository.list(ctx)).map(toMailboxDto);
   }
 
+  /** Addresses of the organization's mailboxes whose accounts administer the instance. */
+  async instanceAdminAddresses(ctx: TenantContext): Promise<string[]> {
+    const out: string[] = [];
+    for (const row of await this.repository.list(ctx)) {
+      if (row.userId && (await this.accounts.find(row.userId))?.instanceAdmin) out.push(row.address);
+    }
+    return out;
+  }
+
   async get(ctx: TenantContext, id: string): Promise<MailboxDto> {
     return toMailboxDto(await this.require(ctx, id));
   }
@@ -121,6 +130,7 @@ export class MailboxesService {
 
   async update(ctx: TenantContext, id: string, input: UpdateMailboxInput): Promise<MailboxDto> {
     const current = await this.require(ctx, id);
+    if (current.userId) await this.assertNotInstanceAdmin(ctx, current.userId);
 
     if (input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes) {
       try {

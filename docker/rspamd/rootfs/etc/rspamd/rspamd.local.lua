@@ -54,7 +54,11 @@ rspamd_config:register_symbol({
   -- Also when an earlier rule decided the action outright (e.g. GTUBE).
   flags = 'ignore_passthrough',
   callback = function(task)
-    if task:get_user() then
+    -- Only mail received over SMTP without logging in: Postfix accepts that
+    -- for hosted domains only (it never relays it). Mail Postfix produced
+    -- itself (bounces, local submissions) arrives without a HELO and may be
+    -- addressed anywhere, so it is left alone.
+    if task:get_user() or not task:get_helo() then
       return
     end
     local action = task:get_metric_action('default')
