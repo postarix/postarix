@@ -64,6 +64,9 @@ export function createAuth(db: Database, env: Env) {
           env.ALLOW_USER_CREATE_ORG || hasInstanceAdminRole((user as { role?: string | null }).role),
         // Accepting an invitation requires a verified email. Email delivery arrives in
         // Phase 1; until then members are added by admins (auth.api.addMember).
+        // Deleting an organization must deprovision its mailboxes (Cyrus), DKIM keys
+        // (Valkey) and accounts first; Better Auth's endpoint would only drop rows.
+        disableOrganizationDeletion: true,
       }),
       twoFactor({ issuer: 'Postarix' }),
       passkey({

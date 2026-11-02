@@ -77,6 +77,24 @@ describe('Postfix views', () => {
     expect(await logins(`team@${active.name}`)).toEqual([`ann@${active.name}`]);
     expect(await logins('outside@external.example')).toEqual([]);
   });
+
+  it('does not grant send-as through an alias owned by another organization', async () => {
+    const other = await signUp(app, 'views-other');
+    const otherOrg = await createOrg(other, 'Views other');
+    const d = await other.agent.post(`/api/orgs/${otherOrg}/domains`).send({ name: `views-o-${Date.now()}.example` });
+    await other.agent.post(`/api/orgs/${otherOrg}/domains/${d.body.id}/verify`).expect(200);
+    await other.agent
+      .post(`/api/orgs/${otherOrg}/aliases`)
+      .send({ domainId: d.body.id, localPart: 'ceo', destinations: [`ann@${active.name}`] })
+      .expect(201);
+
+    // Mail to ceo@ still reaches ann (forwarding works) ...
+    const forwarded = await rows(sql`SELECT destination FROM mail.aliases WHERE address = ${`ceo@${d.body.name}`}`);
+    expect(forwarded.map((r) => r.destination)).toEqual([`ann@${active.name}`]);
+    // ... but ann may not send as ceo@, an address of another organization.
+    const logins = await rows(sql`SELECT login FROM mail.sender_logins WHERE sender = ${`ceo@${d.body.name}`}`);
+    expect(logins).toEqual([]);
+  });
 });
 
 describe('DNS domain verification', () => {

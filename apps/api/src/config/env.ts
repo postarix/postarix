@@ -41,8 +41,16 @@ const envSchema = z
     CYRUS_HOST: z.string().default('cyrus'),
     CYRUS_PORT: z.coerce.number().int().positive().default(143),
     CYRUS_SECURITY: z.enum(['tls', 'starttls', 'none']).default('starttls'),
-    /** Verify Cyrus' certificate. Disable only with self-signed development certificates. */
+    /** Verify Cyrus' certificate. Disable only for local development. */
     CYRUS_TLS_VERIFY: booleanFromString('true'),
+    /** Name Cyrus' certificate must carry when it differs from CYRUS_HOST (the public mail hostname). */
+    CYRUS_TLS_SERVERNAME: z.string().optional(),
+    /**
+     * PEM file with extra trusted certificates, re-read on every connection.
+     * Pointing it at Cyrus' own certificate (the shared certs volume) pins a
+     * self-signed certificate; publicly trusted ones validate either way.
+     */
+    CYRUS_TLS_CA_FILE: z.string().optional(),
     CYRUS_ADMIN_USER: z.string().default('cyrus'),
     CYRUS_ADMIN_PASSWORD: z.string().optional(),
 

@@ -1,4 +1,4 @@
-# Cyrus IMAP: mailboxes, IMAP/POP3, ManageSieve, JMAP, CalDAV and CardDAV.
+# Cyrus IMAP: mailboxes, IMAP/POP3, ManageSieve, CalDAV and CardDAV.
 # Also runs saslauthd, which validates mail logins against the Postarix API
 # (PAM → pam_exec → /api/internal/mail-auth) for both Cyrus and Postfix.
 ARG BASE_IMAGE=debian:trixie-slim
@@ -20,8 +20,8 @@ COPY rootfs/ /
 RUN chmod 0755 /usr/local/bin/*
 
 # 143 IMAP (STARTTLS) · 993 IMAPS · 995 POP3S · 4190 ManageSieve
-# 24 LMTP, 1143 admin IMAP and 8080 HTTP (JMAP/DAV) are internal only.
-EXPOSE 143 993 995 4190 24 1143 8080
+# 1143 admin IMAP and 8080 HTTP (CalDAV/CardDAV) are internal only; LMTP is a Unix socket.
+EXPOSE 143 993 995 4190 1143 8080
 
 VOLUME ["/var/lib/cyrus", "/var/spool/cyrus", "/var/spool/sieve", "/run/saslauthd"]
 

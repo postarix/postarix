@@ -42,24 +42,35 @@ export class MailAuthService {
   /**
    * Validates a mail-protocol login. App passwords with the right scope always
    * work; the account password only works while the user has no second factor.
+   *
+   * Lockout applies to the account password only. App passwords carry ~120 bits
+   * of entropy and cannot be guessed, so they keep working while an attacker
+   * hammers a mailbox: repeated failures cannot lock real clients out.
    */
   async authenticate(attempt: MailLoginAttempt): Promise<boolean> {
     const username = attempt.username.trim().toLowerCase();
     const scope = SERVICE_SCOPES[attempt.service.trim().toLowerCase()];
     if (!scope || username.length === 0 || attempt.password.length === 0) return false;
 
+    const account = await this.findAccount(username);
+    if (!account) return false;
+
+    if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
+    if (account.twoFactorEnabled) return false;
+
     if (this.limiter.isBlocked(username)) {
-      this.logger.warn(`Mail login blocked after repeated failures: ${username}`);
+      this.logger.warn(`Account password refused after repeated failures: ${username}`);
       return false;
     }
-
-    const ok = await this.check(username, attempt.password, scope);
+    // Counted before the (slow) hash check, so parallel attempts cannot slip
+    // past the limit; cleared again on success.
+    this.limiter.recordFailure(username);
+    const ok = await this.accounts.verifyAccountPassword(account.id, attempt.password);
     if (ok) this.limiter.recordSuccess(username);
-    else this.limiter.recordFailure(username);
     return ok;
   }
 
-  private async check(username: string, password: string, scope: AppPasswordScope): Promise<boolean> {
+  private async findAccount(username: string) {
     // Instance-wide lookup by address is the point of this endpoint: mail
     // logins identify the mailbox by its full address.
     const [mailbox] = await this.db
@@ -74,13 +85,10 @@ export class MailAuthService {
         ),
       )
       .limit(1);
-    if (!mailbox?.userId) return false;
+    if (!mailbox?.userId) return null;
 
     const account = await this.accounts.find(mailbox.userId);
-    if (!account || account.banned) return false;
-
-    if (await this.appPasswords.verify(account.id, password, scope)) return true;
-    if (account.twoFactorEnabled) return false;
-    return this.accounts.verifyAccountPassword(account.id, password);
+    if (!account || account.banned) return null;
+    return account;
   }
 }

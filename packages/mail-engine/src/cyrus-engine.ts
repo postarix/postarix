@@ -78,10 +78,17 @@ export class CyrusEngine implements MailEngine {
     const name = quote(CyrusEngine.mailboxName(address));
     await this.withAdmin(async (imap) => {
       await imap.expectOk(`CREATE ${name}`);
-      for (const [folder, use] of DEFAULT_FOLDERS) {
-        await imap.expectOk(`CREATE ${quote(CyrusEngine.folderName(address, folder))} (USE (${use}))`);
+      try {
+        for (const [folder, use] of DEFAULT_FOLDERS) {
+          await imap.expectOk(`CREATE ${quote(CyrusEngine.folderName(address, folder))} (USE (${use}))`);
+        }
+        if (options.quotaBytes !== null) await imap.expectOk(`SETQUOTA ${name} ${storage(options.quotaBytes)}`);
+      } catch (error) {
+        // Never leave a half-created mailbox behind: it would block the address.
+        // A fresh connection is used in case this one is what failed.
+        await this.deleteMailbox(address).catch(() => undefined);
+        throw error;
       }
-      if (options.quotaBytes !== null) await imap.expectOk(`SETQUOTA ${name} ${storage(options.quotaBytes)}`);
     });
   }
 

@@ -26,7 +26,7 @@ export const mailboxes = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     organizationId: text()
       .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+      .references(() => organization.id, { onDelete: 'restrict' }),
     domainId: uuid()
       .notNull()
       .references(() => domains.id, { onDelete: 'no action' }),
@@ -58,7 +58,7 @@ export const aliases = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     organizationId: text()
       .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+      .references(() => organization.id, { onDelete: 'restrict' }),
     domainId: uuid()
       .notNull()
       .references(() => domains.id, { onDelete: 'no action' }),

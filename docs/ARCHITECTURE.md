@@ -195,9 +195,17 @@ interface MailEngine {
 
 ### 8.1 What goes through the proxy and what doesn't
 
-- **Through the reverse proxy (HTTP/HTTPS):** admin, webmail, API, JMAP, CalDAV/CardDAV, autodiscover/autoconfig and the MTA-STS policy.
+- **Through the reverse proxy (HTTP/HTTPS):** admin, webmail, API, CalDAV/CardDAV, autodiscover/autoconfig and the MTA-STS policy. The webmail reaches JMAP through the API; Cyrus' JMAP is not exposed directly, so a DAV-scoped app password cannot read mail.
 - **Straight to the services (no proxy):** 25, 465, 587 (Postfix), 143, 993, 995 (Cyrus), 4190 (ManageSieve). This way Rspamd and CrowdSec see real client IPs, and STARTTLS works without tricks.
 - `/api/internal/*` is never exposed through the proxy.
+
+### 8.1.1 Internal networks
+
+- The reverse proxy joins only the `proxy` network, shared with the API, Cyrus (CalDAV/CardDAV) and the certs service. PostgreSQL, Valkey (which holds DKIM private keys), Rspamd and Postfix are not on it.
+- The certs service, which may hold DNS provider credentials, is on the `proxy` network only.
+- LMTP is pre-authenticated, so Cyrus serves it on a Unix socket in a volume shared with Postfix, never on a TCP port.
+- The API verifies Cyrus' certificate on the admin connection: against the public hostname, with the shared certificate file pinned so self-signed certificates work too.
+- Every container drops `NET_RAW`.
 
 ### 8.2 Supported proxies
 
@@ -226,15 +234,17 @@ In every mode a watcher detects certificate changes and reloads Postfix and Cyru
 
 1. A client connects to port 587 (STARTTLS) or 465 (implicit TLS) and authenticates with SASL.
 2. Postfix asks saslauthd, which asks the API through PAM (`/api/internal/mail-auth`).
-3. Postfix only allows envelope senders the authenticated user owns (`smtpd_sender_login_maps`, from PostgreSQL).
-4. Rspamd signs the message with the domain's DKIM key (read from Valkey) and applies rate limits.
-5. Postfix delivers it, using DANE/MTA-STS when the destination supports them.
+3. Postfix only allows envelope senders the authenticated user owns (`smtpd_sender_login_maps`, from PostgreSQL), and refuses the null sender. A mailbox owns its own address and the aliases of its organization that deliver to it; forwarding from another organization does not grant send-as.
+4. An Rspamd prefilter rejects messages whose `From` header is not exactly the (already checked) envelope sender, so users cannot show someone else's address and DKIM only ever signs a domain the user may send for.
+5. Rspamd signs the message with the domain's DKIM key (read from Valkey) and applies rate limits.
+6. Postfix delivers it, using DANE/MTA-STS when the destination supports them.
 
 ### 9.3 Provisioning
 
-- Creating a mailbox in the API inserts the row, creates (or links) the user's account, then asks `MailEngine` to create the Cyrus mailbox with its quota. If Cyrus fails, the database change is rolled back.
+- Creating a mailbox in the API creates the user's account and the row, then asks `MailEngine` to create the Cyrus mailbox with its folders and quota. If any step fails, the earlier ones are undone (each undo step independently), and the engine removes a mailbox it created only partly.
+- Organizations cannot be deleted through Better Auth: that would drop rows and leave Cyrus mailboxes, accounts and DKIM keys behind. A deprovisioning deletion arrives with the instance tools (Phase 5); the mail tables reference organizations with `ON DELETE RESTRICT` as a safety net.
 - Domains become active only after DNS verification of the `postarix-verification=…` TXT record. A development switch (`DOMAIN_VERIFICATION=skip`) activates them immediately.
-- DKIM keys are generated per domain by the API, stored encrypted in PostgreSQL and published to Valkey for Rspamd.
+- DKIM keys are generated per domain by the API, stored encrypted in PostgreSQL and published to Valkey for Rspamd. The API re-synchronises Valkey at start and every five minutes (one failing domain does not stop the others), and verifying an active domain again re-publishes its key.
 
 ## 10. Background jobs
 
@@ -382,9 +392,12 @@ out usernames after repeated failures.
 | 2026-11-01 | Our own images for Postfix, Cyrus, Rspamd and Unbound on **Debian trixie-slim**, so versions and configuration are under our control. |
 | 2026-11-02 | DKIM private keys are stored encrypted with a key derived from `AUTH_SECRET` and published to Valkey, where Rspamd reads them. Changing `AUTH_SECRET` therefore requires re-generating DKIM keys. |
 | 2026-11-02 | Internal endpoints refuse any request carrying `X-Forwarded-For`/`Forwarded`: if a proxy ever exposes them by mistake, they still answer 404. |
-| 2026-11-02 | Cyrus admin rights exist only on an internal port (1143) with its own configuration; the public services have no admins. |
+| 2026-11-02 | Cyrus admin rights exist only on an internal port (1143) with its own configuration; the public services have no admins. The admin account cannot even log in on the public services (sasldb only in the admin configuration). |
+| 2026-11-02 | The `From` header of submitted mail must equal the envelope sender, which Postfix ties to the login; the null sender is refused on submission. This closes cross-tenant DKIM signing. |
+| 2026-11-02 | Mail-login lockout (10 failures / 15 min) applies to the account password only. App passwords (~120 bits) keep working, so an attacker cannot lock real clients out. Per-IP throttling comes with CrowdSec (Phase 5). |
+| 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
 
 ## Known limitations
 
 - Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.
-- Better Auth's rate limiter lives in memory; it will move to Valkey so it works across instances.
+- Better Auth's rate limiter and the mail-login failure counters live in memory; they will move to Valkey so they work across API instances.

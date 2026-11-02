@@ -14,6 +14,7 @@ describe('App passwords and the mail login bridge', () => {
   let admin: TestUser;
   let orgId: string;
   let domain: string;
+  let domainId: string;
   let address: string;
   let mailboxId: string;
   let owner: ReturnType<typeof newAgent>;
@@ -33,6 +34,7 @@ describe('App passwords and the mail login bridge', () => {
       .send({ name: `auth-${Date.now()}.example` })
       .expect(201);
     domain = created.body.name;
+    domainId = created.body.id;
     await admin.agent.post(`/api/orgs/${orgId}/domains/${created.body.id}/verify`).expect(200);
     const mailbox = await admin.agent
       .post(`/api/orgs/${orgId}/mailboxes`)
@@ -157,11 +159,31 @@ describe('App passwords and the mail login bridge', () => {
       await db.execute(sql`UPDATE "user" SET banned = false WHERE email = ${address}`);
     });
 
-    it('locks a username after repeated failures, even for the right password', async () => {
+    it('locks the account password after repeated failures, but not app passwords', async () => {
+      const created = await owner
+        .post('/api/me/app-passwords')
+        .send({ name: 'Lockout client', scopes: ['imap'] })
+        .expect(201);
       for (let i = 0; i < 10; i++) {
         await mailAuth({ username: address, password: `wrong password ${i}`, service: 'imap' }).expect(401);
       }
+      // The right account password is now refused ...
       await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(401);
+      // ... while existing clients with an app password keep working.
+      await mailAuth({ username: address, password: created.body.password, service: 'imap' }).expect(204);
+    });
+
+    it('counts parallel failures before checking them', async () => {
+      const other = await admin.agent
+        .post(`/api/orgs/${orgId}/mailboxes`)
+        .send({ domainId, localPart: 'parallel', password: MAILBOX_PASSWORD })
+        .expect(201);
+      await Promise.all(
+        Array.from({ length: 20 }, (_, i) =>
+          mailAuth({ username: other.body.address, password: `wrong password ${i}`, service: 'imap' }).expect(401),
+        ),
+      );
+      await mailAuth({ username: other.body.address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(401);
     });
   });
 });
