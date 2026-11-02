@@ -43,3 +43,7 @@ playwright-report/
 
 # Local Valkey/Redis snapshots
 dump.rdb
+
+# Documentation site
+docs/.vitepress/dist/
+docs/.vitepress/cache/

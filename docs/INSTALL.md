@@ -1,7 +1,9 @@
 # Installing Postarix in production
 
 This guide takes a fresh server to a working mail service with Docker
-Compose. For Kubernetes, see the end of this page.
+Compose, on any Linux. Step-by-step versions: [Install on
+Ubuntu](install-ubuntu.md) and [Install with Dokploy](install-dokploy.md). For
+Kubernetes, see the end of this page.
 
 ## 1. Before you start
 
@@ -43,9 +45,9 @@ MTA-STS, autoconfig): the admin panel lists them with the exact values.
 ## 3. Install
 
 ```bash
-sudo mkdir -p /opt/postarix && cd /opt/postarix
-# The release's Compose files (or: git clone --branch v<version> https://github.com/postarix/postarix .)
-curl -fsSL https://github.com/postarix/postarix/releases/download/v<version>/postarix-compose-<version>.tar.gz | sudo tar -xz
+# The release's files (Compose files, scripts, proxy templates)
+sudo git clone --depth 1 --branch v<version> https://github.com/postarix/postarix /opt/postarix
+cd /opt/postarix
 
 # Configuration with fresh random secrets
 sudo deploy/scripts/generate-env.sh mail.example.com you@example.com <version>
@@ -115,7 +117,7 @@ this.
 ```bash
 cd /opt/postarix
 deploy/scripts/backup.sh /srv/backups/postarix-before-<new version>
-# Get the new release's Compose files (as in step 3), keeping postarix.env
+git fetch --depth 1 origin tag v<new version> && git checkout v<new version>
 sudo sed -i 's/^POSTARIX_VERSION=.*/POSTARIX_VERSION=<new version>/' docker/compose/postarix.env
 cd docker/compose
 sudo docker compose -f postarix.yml -f caddy.yml --env-file postarix.env pull
