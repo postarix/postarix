@@ -1,0 +1,3 @@
+# Mail logins are validated by the Postarix API.
+auth     required  pam_exec.so expose_authtok quiet /usr/local/bin/postarix-mail-auth
+account  required  pam_permit.so

@@ -1,0 +1,21 @@
+{
+  "name": "@postarix/integration-tests",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@postarix/config": "workspace:*",
+    "@types/node": "^22.19.0",
+    "@types/nodemailer": "^8.0.2",
+    "imapflow": "^2.10.0",
+    "nodemailer": "^10.3.1",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

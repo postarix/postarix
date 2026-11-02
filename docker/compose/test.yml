@@ -1,0 +1,13 @@
+# Overrides for local runs and the integration tests: development mode,
+# immediate domain activation, no greylisting, and published high ports.
+#   docker compose -f postarix.yml -f test.yml --env-file test.env up -d --build
+services:
+  api:
+    environment:
+      NODE_ENV: development
+      DOMAIN_VERIFICATION: skip
+    ports:
+      - "3000:3000"
+  rspamd:
+    environment:
+      RSPAMD_GREYLIST: "false"

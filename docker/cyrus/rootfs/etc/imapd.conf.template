@@ -1,0 +1,47 @@
+# Generated at container start from /etc/imapd.conf.template.
+configdirectory: /var/lib/cyrus
+proc_path: /run/cyrus/proc
+mboxname_lockpath: /run/cyrus/lock
+defaultpartition: default
+partition-default: /var/spool/cyrus/mail
+sievedir: /var/spool/sieve
+servername: ${MAIL_HOSTNAME}
+
+# One namespace per domain; users log in with their full address.
+virtdomains: userid
+unixhierarchysep: yes
+altnamespace: yes
+lmtp_downcase_rcpt: yes
+hashimapspool: true
+umask: 077
+
+# Authentication: the sasldb holds only the internal admin account; every
+# mailbox login goes through saslauthd to the Postarix API.
+sasl_pwcheck_method: auxprop saslauthd
+sasl_auxprop_plugin: sasldb
+sasl_mech_list: PLAIN LOGIN
+sasl_saslauthd_path: /run/saslauthd/mux
+allowplaintext: no
+allowanonymouslogin: no
+
+# TLS
+tls_server_cert: /etc/cyrus-tls/fullchain.pem
+tls_server_key: /etc/cyrus-tls/privkey.pem
+tls_client_ca_dir: /etc/ssl/certs
+tls_versions: tls1_2 tls1_3
+tls_session_timeout: 1440
+
+# Modern protocols. JMAP needs the conversations database.
+httpmodules: caldav carddav jmap
+conversations: yes
+conversations_db: twoskip
+specialusealways: yes
+
+# Quotas, Sieve
+quota_db: quotalegacy
+sieve_maxscriptsize: 64
+sieve_maxscripts: 5
+sieve_extensions: fileinto reject vacation vacation-seconds imap4flags notify envelope relational regex subaddress copy date index body mailbox mboxmetadata servermetadata variables
+
+imapidresponse: no
+syslog_prefix: cyrus

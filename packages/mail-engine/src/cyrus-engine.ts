@@ -20,6 +20,15 @@ export interface CyrusEngineOptions extends ImapConnectOptions {
 
 const ADDRESS = /^[a-z0-9._+-]+@[a-z0-9.-]+$/;
 
+/** Folders every new mailbox gets, with their RFC 6154 special-use attribute. */
+export const DEFAULT_FOLDERS = [
+  ['Drafts', '\\Drafts'],
+  ['Sent', '\\Sent'],
+  ['Trash', '\\Trash'],
+  ['Junk', '\\Junk'],
+  ['Archive', '\\Archive'],
+] as const;
+
 /**
  * MailEngine backed by Cyrus IMAP. Cyrus must run with `virtdomains: userid`
  * and `unixhierarchysep: yes`, so a user's mailbox is named "user/<address>".
@@ -35,6 +44,13 @@ export class CyrusEngine implements MailEngine {
       throw new MailEngineError(`Invalid mailbox address: ${address}`, 'rejected');
     }
     return `user/${address}`;
+  }
+
+  /** Name of a folder inside a user's mailbox: "user/alice/Sent@example.com" under virtdomains. */
+  static folderName(address: string, folder: string): string {
+    CyrusEngine.mailboxName(address);
+    const at = address.lastIndexOf('@');
+    return `user/${address.slice(0, at)}/${folder}${address.slice(at)}`;
   }
 
   private async withAdmin<T>(run: (connection: ImapConnection) => Promise<T>): Promise<T> {
@@ -62,6 +78,9 @@ export class CyrusEngine implements MailEngine {
     const name = quote(CyrusEngine.mailboxName(address));
     await this.withAdmin(async (imap) => {
       await imap.expectOk(`CREATE ${name}`);
+      for (const [folder, use] of DEFAULT_FOLDERS) {
+        await imap.expectOk(`CREATE ${quote(CyrusEngine.folderName(address, folder))} (USE (${use}))`);
+      }
       if (options.quotaBytes !== null) await imap.expectOk(`SETQUOTA ${name} ${storage(options.quotaBytes)}`);
     });
   }

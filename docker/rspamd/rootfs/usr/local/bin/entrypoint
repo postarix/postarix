@@ -1,0 +1,38 @@
+#!/bin/sh
+# Renders runtime settings (Redis/Valkey, DNS resolver, controller password) and runs Rspamd.
+set -eu
+
+: "${RSPAMD_CONTROLLER_PASSWORD:?RSPAMD_CONTROLLER_PASSWORD is required}"
+REDIS_SERVERS="${REDIS_SERVERS:-valkey:6379}"
+DNS_RESOLVER="${DNS_RESOLVER:-unbound}"
+
+# Rspamd needs IP addresses for its resolver.
+resolver_ip=$(getent hosts "$DNS_RESOLVER" | awk '{print $1; exit}')
+if [ -z "$resolver_ip" ]; then
+  echo "[rspamd-entrypoint] cannot resolve $DNS_RESOLVER; using the system resolver" >&2
+  : > /etc/rspamd/local.d/options.inc
+else
+  printf 'dns {\n  nameserver = ["%s:53"];\n}\n' "$resolver_ip" > /etc/rspamd/local.d/options.inc
+fi
+
+: "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
+umask 027
+printf 'servers = "%s";\npassword = "%s";\n' "$REDIS_SERVERS" "$REDIS_PASSWORD" > /etc/rspamd/local.d/redis.conf
+chgrp _rspamd /etc/rspamd/local.d/redis.conf
+umask 022
+
+# The controller (web UI and API) only ever stores a hash of the password.
+hash=$(rspamadm pw -p "$RSPAMD_CONTROLLER_PASSWORD")
+printf 'bind_socket = "*:11334";\npassword = "%s";\nenable_password = "%s";\n' \
+  "$hash" "$hash" > /etc/rspamd/local.d/worker-controller.inc
+
+# Greylisting can be disabled (e.g. in test environments) with RSPAMD_GREYLIST=false.
+mkdir -p /etc/rspamd/override.d
+if [ "${RSPAMD_GREYLIST:-true}" = "false" ]; then
+  echo 'enabled = false;' > /etc/rspamd/override.d/greylist.conf
+else
+  rm -f /etc/rspamd/override.d/greylist.conf
+fi
+
+install -d -o _rspamd -g _rspamd /var/lib/rspamd /run/rspamd
+exec rspamd -f -u _rspamd -g _rspamd

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Healthy when the resolver answers on its TCP port.
+exec timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/53' 2>/dev/null

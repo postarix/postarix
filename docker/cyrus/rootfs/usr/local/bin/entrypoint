@@ -1,0 +1,63 @@
+#!/bin/sh
+# Prepares configuration, TLS, the admin account and saslauthd, then runs Cyrus.
+set -eu
+
+: "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
+: "${CYRUS_ADMIN_PASSWORD:?CYRUS_ADMIN_PASSWORD is required}"
+: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
+POSTARIX_API_URL="${POSTARIX_API_URL:-http://api:3000}"
+CERT_DIR="${CERT_DIR:-/certs}"
+export MAIL_HOSTNAME
+
+log() { echo "[cyrus-entrypoint] $*"; }
+
+# --- Configuration -----------------------------------------------------------
+envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
+# Admin rights exist only in the configuration of the internal admin service.
+{ cat /etc/imapd.conf; echo "admins: cyrus"; } > /etc/imapd-admin.conf
+chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf
+
+# --- Login bridge to the API (read by pam_exec as root only) -----------------
+umask 077
+mkdir -p /etc/postarix
+printf 'POSTARIX_API_URL=%s\n' "$POSTARIX_API_URL" > /etc/postarix/mail-auth.env
+printf 'x-postarix-internal-token: %s\n' "$INTERNAL_API_TOKEN" > /etc/postarix/mail-auth.headers
+umask 022
+
+# --- TLS ------------------------------------------------------------------------
+install -d -o cyrus -g mail -m 0750 /etc/cyrus-tls
+if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
+  install -o cyrus -g mail -m 0644 "$CERT_DIR/fullchain.pem" /etc/cyrus-tls/fullchain.pem
+  install -o cyrus -g mail -m 0600 "$CERT_DIR/privkey.pem" /etc/cyrus-tls/privkey.pem
+else
+  log "no certificate in $CERT_DIR; generating a self-signed one (development only)"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
+    -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
+    -keyout /etc/cyrus-tls/privkey.pem -out /etc/cyrus-tls/fullchain.pem 2>/dev/null
+  chown cyrus:mail /etc/cyrus-tls/*.pem
+  chmod 0600 /etc/cyrus-tls/privkey.pem
+fi
+
+# --- Internal admin account (sasldb; realm = servername) ---------------------
+printf '%s' "$CYRUS_ADMIN_PASSWORD" | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/sasldb2 cyrus
+chown root:sasl /etc/sasldb2
+chmod 0640 /etc/sasldb2
+
+# --- Runtime and data directories ---------------------------------------------
+install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket
+install -d -o cyrus -g mail -m 0750 /var/lib/cyrus /var/spool/cyrus /var/spool/cyrus/mail /var/spool/sieve
+/usr/lib/cyrus/bin/makedirs >/dev/null
+chown -R cyrus:mail /var/lib/cyrus /var/spool/cyrus /var/spool/sieve
+
+# --- Logging: Cyrus logs to syslog; forward it to stdout ----------------------
+busybox syslogd -n -O - &
+
+# --- saslauthd (shared with Postfix through the /run/saslauthd volume) -------
+# -r passes "user@realm" to PAM. No credential cache (-c): revocations apply at once.
+mkdir -p /run/saslauthd
+chmod 0755 /run/saslauthd
+rm -f /run/saslauthd/mux /run/saslauthd/saslauthd.pid
+saslauthd -a pam -r -m /run/saslauthd -n 4
+
+log "starting Cyrus for $MAIL_HOSTNAME"
+exec /usr/sbin/cyrmaster -D -M /etc/cyrus.conf -C /etc/imapd.conf

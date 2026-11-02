@@ -19,7 +19,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/scripts/**', '**/main.ts', '**/migrate.ts'],
+    files: ['**/scripts/**', '**/cli/**', '**/main.ts', '**/migrate.ts'],
     rules: { 'no-console': 'off' },
   },
   {
