@@ -22,7 +22,9 @@ export function MessageList({
 }) {
   const emails = useEmails(mailbox?.id ?? null, search);
   const [query, setQuery] = useState(search);
-  const list: Email[] = emails.data?.pages.flatMap((p) => p.emails) ?? [];
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const all: Email[] = emails.data?.pages.flatMap((p) => p.emails) ?? [];
+  const list = unreadOnly ? all.filter((e) => !e.keywords.$seen) : all;
   const showRecipients = mailbox?.role === 'sent' || mailbox?.role === 'drafts';
 
   function submit(event: FormEvent) {
@@ -32,17 +34,38 @@ export function MessageList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="px-4 pt-4 pb-2">
-        <h1 className="mb-3 text-2xl font-semibold">{mailbox?.name ?? 'Mail'}</h1>
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <h1 className="flex-1 truncate text-lg font-semibold">{mailbox?.name ?? 'Mail'}</h1>
+        <div role="group" aria-label="Show" className="inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
+          {[
+            { label: 'All', value: false },
+            { label: 'Unread', value: true },
+          ].map((option) => (
+            <button
+              key={option.label}
+              type="button"
+              aria-pressed={unreadOnly === option.value}
+              onClick={() => setUnreadOnly(option.value)}
+              className={cn(
+                'rounded-md px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                unreadOnly === option.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 pt-3 pb-2">
         <form onSubmit={submit} role="search" className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${mailbox?.name ?? 'mail'}`}
             aria-label="Search mail"
-            className="h-10 rounded-full border-transparent bg-card pl-9 shadow-[0_1px_2px_rgb(22_33_61/0.06)] focus-visible:border-ring"
+            className="h-9 bg-background pl-9 shadow-none"
           />
         </form>
         <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
@@ -68,11 +91,11 @@ export function MessageList({
           <p className="p-4 text-sm text-destructive">{errorMessage(emails.error)}</p>
         ) : list.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="font-display text-lg font-semibold">{search ? 'Nothing matches' : 'Nothing here'}</p>
+            <p className="font-medium">{search ? 'Nothing matches' : unreadOnly ? 'All caught up' : 'Nothing here'}</p>
             <p className="mt-1 text-sm text-muted-foreground">{search ? 'Try other words, or search another folder.' : 'Mail that lands in this folder shows up here.'}</p>
           </div>
         ) : (
-          <ul aria-label="Messages">
+          <ul aria-label="Messages" className="space-y-2 px-3 pb-3">
             {list.map((email, index) => {
               const unread = !email.keywords.$seen;
               const selected = email.id === selectedId;
@@ -82,7 +105,7 @@ export function MessageList({
               return (
                 <li key={email.id}>
                   {newGroup ? (
-                    <div className="sticky top-0 z-[1] bg-background/95 px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground backdrop-blur" role="presentation">
+                    <div className="sticky top-0 z-[1] -mx-3 bg-card/90 px-4 pt-2 pb-1.5 text-xs font-medium text-muted-foreground backdrop-blur" role="presentation">
                       {group}
                     </div>
                   ) : null}
@@ -91,27 +114,31 @@ export function MessageList({
                     href={mailboxPath(mailbox.id, email.id, search)}
                     aria-current={selected ? 'true' : undefined}
                     className={cn(
-                      'relative mx-2 mb-0.5 block rounded-lg px-3 py-2.5 transition-colors',
+                      'block rounded-lg border p-3 text-left transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                      selected ? 'bg-stamp-soft' : 'hover:bg-card',
+                      selected ? 'border-primary/15 bg-accent shadow-xs' : 'border-border/70 bg-card hover:bg-muted/60',
                     )}
                   >
-                    {selected ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-stamp" aria-hidden /> : null}
-                    <div className="flex items-baseline gap-2">
-                      <span className={cn('flex-1 truncate text-sm', unread ? 'font-semibold text-foreground' : 'text-foreground/80')}>
+                    <div className="flex items-center gap-2">
+                      {unread ? <span className="size-2 shrink-0 rounded-full bg-ink" aria-label="Unread" /> : null}
+                      <span className={cn('flex-1 truncate text-sm', unread ? 'font-semibold' : 'font-medium text-foreground/85')}>
                         {people || '(no sender)'}
                       </span>
-                      {email.keywords.$flagged ? <Flag className="size-3.5 shrink-0 fill-current text-airmail-red" aria-label="Flagged" /> : null}
-                      {email.hasAttachment ? <Paperclip className="size-3.5 shrink-0 text-muted-foreground" aria-label="Has attachments" /> : null}
-                      <time className={cn('shrink-0 text-xs tabular-nums', unread ? 'font-semibold text-foreground' : 'text-muted-foreground')} dateTime={email.receivedAt}>
+                      {email.keywords.$flagged ? <Flag className="size-3.5 shrink-0 fill-current text-destructive" aria-label="Flagged" /> : null}
+                      <time className={cn('shrink-0 text-xs tabular-nums', unread ? 'font-medium text-foreground' : 'text-muted-foreground')} dateTime={email.receivedAt}>
                         {shortDate(email.receivedAt)}
                       </time>
                     </div>
-                    <p className={cn('flex items-center gap-1.5 truncate text-sm', unread ? 'font-medium text-foreground' : 'text-foreground/75')}>
-                      {unread ? <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-label="Unread" /> : null}
-                      <span className="truncate">{email.subject || '(no subject)'}</span>
+                    <p className={cn('mt-0.5 truncate text-[0.8125rem]', unread ? 'font-medium text-foreground' : 'text-foreground/80')}>
+                      {email.subject || '(no subject)'}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">{email.preview}</p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{email.preview}</p>
+                    {email.hasAttachment ? (
+                      <span className="mt-2 inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground">
+                        <Paperclip className="size-3" aria-label="Has attachments" />
+                        Attachment
+                      </span>
+                    ) : null}
                   </a>
                 </li>
               );

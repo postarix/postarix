@@ -393,7 +393,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Webmail sending goes through the API (From must be in `mail.sender_logins`, Bcc removed) to an internal Postfix port with its own account; Rspamd still requires From = envelope and signs DKIM. |
 | 2026-11-02 | Email HTML is sanitized on the server and shown in a sandboxed iframe (no scripts, opaque origin) with a CSP; remote images are blocked by default and loaded through a signed proxy that only reaches public addresses. |
 | 2026-11-02 | Calendar and contacts in the webmail use **JMAP** (Cyrus' JMAP service loads the CalDAV/CardDAV stores behind it), so the webmail, CalDAV and CardDAV clients share one copy of the data. |
-| 2026-11-02 | Visual identity inspired by the post: ink blue for structure and actions, postal yellow for attention (compose, selection, unread), post-box red for destructive actions; the airmail edge marks composing and signing in. Fonts are self-hosted so the strict CSP stays `font-src 'self'`. |
+| 2026-11-02 | Visual identity: shadcn/ui's quiet neutral system tinted with ink blue (structure, actions) and postal yellow used sparingly (compose, today, the unread count). Navigation sits on an ink rail and content on an inset panel. One self-hosted typeface (Instrument Sans), so the strict CSP stays `font-src 'self'`. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |

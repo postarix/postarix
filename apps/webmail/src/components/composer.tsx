@@ -1,6 +1,5 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
-import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Spinner } from '@postarix/ui/components/spinner';
@@ -16,6 +15,10 @@ import { keys } from '@/lib/mail';
 import { RecipientInput } from './recipient-input';
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+const ROW = 'flex items-center gap-2 border-b px-5';
+const LABEL = 'w-14 shrink-0 text-sm text-muted-foreground';
+const BARE = 'h-11 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent';
 
 export function Composer({
   initial,
@@ -106,78 +109,77 @@ export function Composer({
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent className="airmail-edge flex max-h-[95vh] flex-col pt-8 sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle className="truncate text-xl">{subject.trim() || 'New message'}</DialogTitle>
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader className="border-b px-5 py-3.5 pr-12 text-left">
+          <DialogTitle className="truncate text-base">{subject.trim() || 'New message'}</DialogTitle>
           <DialogDescription className="sr-only">Write and send an email</DialogDescription>
         </DialogHeader>
         <form
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
           onSubmit={(e) => {
             e.preventDefault();
             void run('send');
           }}
         >
-          <FieldGroup className="gap-3">
-            {identities.length > 1 ? (
-              <Field orientation="horizontal">
-                <FieldLabel htmlFor={`${id}-from`} className="w-14 shrink-0 text-muted-foreground">
-                  From
-                </FieldLabel>
-                <NativeSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)}>
-                  {identities.map((address) => (
-                    <NativeSelectOption key={address} value={address}>
-                      {address}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </Field>
+          {identities.length > 1 ? (
+            <div className={ROW}>
+              <label htmlFor={`${id}-from`} className={LABEL}>
+                From
+              </label>
+              <NativeSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)} className={`${BARE} w-full pr-8`}>
+                {identities.map((address) => (
+                  <NativeSelectOption key={address} value={address}>
+                    {address}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+          ) : null}
+          <div className={ROW}>
+            <label htmlFor={`${id}-to`} className={LABEL}>
+              To
+            </label>
+            <RecipientInput id={`${id}-to`} value={to} onChange={setTo} autoFocus={!to} placeholder="Name or address" className={BARE} />
+            {!showCopies ? (
+              <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowCopies(true)}>
+                Cc/Bcc
+              </Button>
             ) : null}
-            <Field orientation="horizontal">
-              <FieldLabel htmlFor={`${id}-to`} className="w-14 shrink-0 text-muted-foreground">
-                To
-              </FieldLabel>
-              <RecipientInput id={`${id}-to`} value={to} onChange={setTo} autoFocus={!to} placeholder="Name or address" />
-              {!showCopies ? (
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCopies(true)}>
-                  Cc/Bcc
-                </Button>
-              ) : null}
-            </Field>
-            {showCopies ? (
-              <>
-                <Field orientation="horizontal">
-                  <FieldLabel htmlFor={`${id}-cc`} className="w-14 shrink-0 text-muted-foreground">
-                    Cc
-                  </FieldLabel>
-                  <RecipientInput id={`${id}-cc`} value={cc} onChange={setCc} />
-                </Field>
-                <Field orientation="horizontal">
-                  <FieldLabel htmlFor={`${id}-bcc`} className="w-14 shrink-0 text-muted-foreground">
-                    Bcc
-                  </FieldLabel>
-                  <RecipientInput id={`${id}-bcc`} value={bcc} onChange={setBcc} />
-                </Field>
-              </>
-            ) : null}
-            <Field orientation="horizontal">
-              <FieldLabel htmlFor={`${id}-subject`} className="w-14 shrink-0 text-muted-foreground">
-                Subject
-              </FieldLabel>
-              <Input id={`${id}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} />
-            </Field>
-          </FieldGroup>
+          </div>
+          {showCopies ? (
+            <>
+              <div className={ROW}>
+                <label htmlFor={`${id}-cc`} className={LABEL}>
+                  Cc
+                </label>
+                <RecipientInput id={`${id}-cc`} value={cc} onChange={setCc} className={BARE} />
+              </div>
+              <div className={ROW}>
+                <label htmlFor={`${id}-bcc`} className={LABEL}>
+                  Bcc
+                </label>
+                <RecipientInput id={`${id}-bcc`} value={bcc} onChange={setBcc} className={BARE} />
+              </div>
+            </>
+          ) : null}
+          <div className={ROW}>
+            <label htmlFor={`${id}-subject`} className={LABEL}>
+              Subject
+            </label>
+            <Input id={`${id}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} className={BARE} />
+          </div>
           <Textarea
             aria-label="Message"
             value={text}
             onChange={(e) => setText(e.target.value)}
             autoFocus={Boolean(to)}
-            className="min-h-64 flex-1 resize-none text-[0.95rem] leading-relaxed"
+            placeholder="Write your message…"
+            className={`${BARE} min-h-72 flex-1 resize-none px-5 py-4 text-[0.95rem] leading-relaxed`}
           />
           {attachments.length || uploading ? (
-            <ul className="flex flex-wrap gap-2" aria-label="Attachments">
+            <ul className="flex flex-wrap gap-2 px-5 pb-3" aria-label="Attachments">
               {attachments.map((a) => (
-                <li key={a.blobId} className="inline-flex items-center gap-2 rounded-md border px-2 py-1 text-sm">
+                <li key={a.blobId} className="inline-flex items-center gap-2 rounded-lg border bg-muted/40 py-1 pr-1 pl-2.5 text-sm">
                   <Paperclip className="size-3.5 text-muted-foreground" aria-hidden />
                   <span className="max-w-48 truncate">{a.name}</span>
                   <span className="text-xs text-muted-foreground">{formatBytes(a.size)}</span>
@@ -200,13 +202,13 @@ export function Composer({
             </ul>
           ) : null}
           {error ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="px-5 pb-3 text-sm text-destructive">
               {error}
             </p>
           ) : null}
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files).then(() => (e.target.value = ''))} />
-          <DialogFooter className="items-center gap-2 sm:justify-between">
-            <Button type="button" variant="ghost" onClick={() => fileInput.current?.click()} disabled={uploading > 0}>
+          <DialogFooter className="sticky bottom-0 items-center gap-2 border-t bg-card px-4 py-3 sm:justify-between">
+            <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => fileInput.current?.click()} disabled={uploading > 0}>
               <Paperclip aria-hidden />
               Attach
             </Button>

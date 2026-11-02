@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@postarix/ui/components/alert';
 import { Button } from '@postarix/ui/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
-import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
+import { Field, FieldGroup, FieldLabel, FieldSeparator } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Postmark } from '@postarix/ui/components/postmark';
@@ -48,14 +48,16 @@ export function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-full place-items-center bg-sidebar p-4">
-      <Card className="airmail-edge w-full max-w-sm gap-5 overflow-hidden pt-9 shadow-2xl">
-        <CardHeader className="gap-3">
-          <Postmark className="size-12" />
-          <div>
-            <CardTitle className="text-3xl font-semibold">Postarix</CardTitle>
-            <CardDescription className="mt-1">Sign in to your mailbox.</CardDescription>
-          </div>
+    <main className="grid min-h-full place-items-center bg-sidebar bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgb(43_76_155/0.45),transparent)] p-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex items-center justify-center gap-2.5">
+          <Postmark className="size-8" />
+          <span className="text-lg font-semibold tracking-tight text-white">Postarix</span>
+        </div>
+      <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
+        <CardHeader className="text-center">
+          <CardTitle className="text-xl font-semibold">{step === 'password' ? 'Welcome back' : 'Two-step verification'}</CardTitle>
+          <CardDescription>{step === 'password' ? 'Sign in to your mailbox.' : 'One more step to keep your account safe.'}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={step === 'password' ? signIn : verify}>
@@ -76,10 +78,11 @@ export function LoginPage() {
                     <FieldLabel htmlFor="password">Password</FieldLabel>
                     <Input id="password" name="password" type="password" autoComplete="current-password" required />
                   </Field>
-                  <Button type="submit" size="lg" disabled={pending}>
+                  <Button type="submit" disabled={pending}>
                     {pending ? <Spinner /> : null}
                     Sign in
                   </Button>
+                  <FieldSeparator>or</FieldSeparator>
                   <Button type="button" variant="outline" onClick={() => void passkey()}>
                     <KeyRound aria-hidden />
                     Sign in with a passkey
@@ -102,6 +105,8 @@ export function LoginPage() {
           </form>
         </CardContent>
       </Card>
+        <p className="mt-6 text-center text-xs text-sidebar-muted">Mail apps sign in with an app password from your account settings.</p>
+      </div>
     </main>
   );
 }

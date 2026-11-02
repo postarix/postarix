@@ -1,5 +1,6 @@
 import { JmapRequestError } from '@postarix/jmap-client';
 import { Spinner } from '@postarix/ui/components/spinner';
+import { TooltipProvider } from '@postarix/ui/components/tooltip';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -84,7 +85,9 @@ function App() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      <TooltipProvider delayDuration={300}>
       <App />
+      </TooltipProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

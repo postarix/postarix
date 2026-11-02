@@ -11,7 +11,7 @@ export function MessageFrame({ html, title }: { html: string; title: string }) {
     const origin = window.location.origin;
     const csp = `default-src 'none'; img-src ${origin} data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'`;
     return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="referrer" content="no-referrer"><base target="_blank"><style>
-html{color-scheme:light}body{margin:0;padding:28px 32px;font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#16213d;background:#fff;overflow-wrap:anywhere}
+html{color-scheme:light}body{margin:0;padding:4px 0 24px;}@media (prefers-color-scheme:dark){body{padding:24px 28px}}body{font:15px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#141b31;background:#fff;overflow-wrap:anywhere}
 img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blockquote{margin:0 0 0 .5em;padding-left:1em;border-left:3px solid #d0d7de;color:#57606a}
 </style></head><body>${html}</body></html>`;
   }, [html]);
@@ -22,7 +22,7 @@ img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap}blo
       srcDoc={srcDoc}
       sandbox="allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
-      className="h-full min-h-[50vh] w-full flex-1 rounded-xl bg-white shadow-[0_1px_2px_rgb(22_33_61/0.06),0_8px_24px_-12px_rgb(22_33_61/0.18)] ring-1 ring-black/5"
+      className="h-full min-h-[50vh] w-full flex-1 bg-white dark:rounded-lg"
     />
   );
 }
