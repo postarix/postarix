@@ -4,13 +4,15 @@ mailHostname: mail.example.com
 publicUrl: https://mail.example.com
 
 image:
-  registry: ""          # e.g. ghcr.io/postarix
+  registry: ghcr.io/postarix
   tag: ""               # defaults to the chart's appVersion
   pullPolicy: IfNotPresent
 
 # Secrets. Leave existingSecret empty to have the chart create one from the
 # values below (generate each with: openssl rand -base64 36 | tr -d '/+=').
-# The secret must hold: AUTH_SECRET, INTERNAL_API_TOKEN, CYRUS_ADMIN_PASSWORD,
+# The secret must hold: AUTH_SECRET, INTERNAL_API_TOKEN, POSTARIX_SECRET_MAIL_AUTH,
+# POSTARIX_SECRET_SUBMISSION, POSTARIX_SECRET_CYRUS_SMTP (and, with mail.murder,
+# POSTARIX_SECRET_MURDER_MUPDATE and POSTARIX_SECRET_MURDER_PROXY), CYRUS_ADMIN_PASSWORD,
 # POSTGRES_PASSWORD, POSTFIX_DB_PASSWORD, VALKEY_PASSWORD, RSPAMD_CONTROLLER_PASSWORD.
 existingSecret: ""
 secrets:
@@ -45,6 +47,8 @@ api:
   ssoTrustedIssuers: []
   # Sender of the server's own notices (default: no-reply@<mailHostname>).
   systemMailFrom: ""
+  # "json" for one JSON object per log line (Loki, Elasticsearch…).
+  logFormat: text
 
   resources: {}
 
@@ -161,6 +165,21 @@ ingress:
   # Mail domains whose autoconfig.<domain> and mta-sts.<domain> names point at
   # this ingress (Thunderbird's autoconfig and MTA-STS policies).
   discoveryDomains: []
+
+# Prometheus metrics from the API on port 9464 (its own, and Rspamd's at
+# /metrics/rspamd). See docs/MONITORING.md.
+metrics:
+  enabled: true
+  # prometheus.io/* annotations on the API pods.
+  podAnnotations: true
+  # For the Prometheus Operator.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+  prometheusRule:
+    enabled: false
+    labels: {}
 
 networkPolicies:
   enabled: true

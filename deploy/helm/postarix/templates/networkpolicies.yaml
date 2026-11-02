@@ -50,6 +50,10 @@ spec:
   ingress:
     - ports:
         - { port: 3000 }
+        {{- if .Values.metrics.enabled }}
+        # Prometheus, wherever it runs in the cluster (the ingress does not route this port).
+        - { port: 9464 }
+        {{- end }}
     - from:
         - podSelector:
             matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 14 }}
@@ -111,8 +115,14 @@ spec:
         - { port: 3905 }
 ---
 {{- end }}
-# Data stores and the spam filter accept only Postarix' own pods.
-{{- $components := list "postgres" "valkey" "rspamd" "unbound" }}
+# Data stores, the spam filter and the virus scanner accept only the pods
+# that use them: a compromised web pod cannot reach the database directly or
+# feed the filter.
+{{- $clients := dict
+      "postgres" (list "api" "mail")
+      "valkey" (list "api" "rspamd")
+      "clamav" (list "rspamd") }}
+{{- $components := list "postgres" "valkey" }}
 {{- if .Values.clamav.enabled }}{{- $components = append $components "clamav" }}{{- end }}
 {{- range $component := $components }}
 apiVersion: networking.k8s.io/v1
@@ -126,9 +136,48 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
+        {{- range $client := get $clients $component }}
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/instance: {{ $.Release.Name }}
+            matchLabels: {{- include "postarix.selector" (list $ $client) | nindent 14 }}
+        {{- end }}
 ---
 {{- end }}
+# Rspamd: the milter (11332) for Postfix in the mail pod, the read-only
+# controller (11334) for the API's filtering history.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list . "rspamd") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list . "rspamd") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 14 }}
+      ports:
+        - { port: 11332 }
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "api") | nindent 14 }}
+      ports:
+        - { port: 11334 }
+---
+# The resolver: Postarix' own pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list . "unbound") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list . "unbound") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}

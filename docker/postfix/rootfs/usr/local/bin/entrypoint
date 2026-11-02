@@ -68,13 +68,15 @@ printf '/^srs[01][=+-].*@%s$/ postarix_srs_bounces\n' "$host_re" > /etc/postfix/
 printf '%s\n' '/^<>$/ DUNNO' '/./ REJECT Only delivery reports are accepted for this address' > /etc/postfix/srs_senders.regexp
 
 # --- main.cf --------------------------------------------------------------------
+# Nobody relays by address (no permit_mynetworks below): not even processes on
+# this host, or on Kubernetes in this pod, may send without logging in.
 pg() { echo "pgsql:/etc/postfix/pgsql/$1.cf"; }
 postconf -e \
   "compatibility_level = 3.6" \
   "myhostname = $MAIL_HOSTNAME" \
   "myorigin = \$myhostname" \
   "mydestination = localhost" \
-  "mynetworks = 127.0.0.0/8 [::1]/128" \
+  "mynetworks = 127.0.0.1/32" \
   "inet_interfaces = all" \
   "inet_protocols = ipv4" \
   "maillog_file = $LOG_FILE" \
@@ -99,9 +101,10 @@ postconf -e \
   "propagate_unmatched_extensions = canonical" \
   "virtual_alias_domains =" \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
+  "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination } }" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
-  "smtpd_relay_restrictions = permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
+  "smtpd_relay_restrictions = permit_sasl_authenticated, reject_unauth_destination" \
+  "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
   "relay_domains = $MAIL_HOSTNAME" \
   "relay_recipient_maps = $(pg srs_recipients)" \
   "recipient_canonical_maps = $(pg srs_reverse)" \
@@ -151,11 +154,17 @@ done
 # --- master.cf: internal submission ports ---------------------------------------
 # 10587: webmail sending by the Postarix API. 10588: mail Cyrus sends by itself
 # (Sieve redirect and vacation replies). Neither is published or on the proxy
-# network. Each logs in with its own account; the passwords are derived from
-# INTERNAL_API_TOKEN for that purpose only (see
-# apps/api/src/config/internal-secrets.ts), so neither is the token itself.
-if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
-  internal_secret() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1; }
+# network. Each logs in with its own account and password, given to this
+# container for that purpose only (POSTARIX_SECRET_SUBMISSION,
+# POSTARIX_SECRET_CYRUS_SMTP; older installations derive them from
+# INTERNAL_API_TOKEN, see apps/api/src/config/internal-secrets.ts).
+internal_secret() {
+  var="POSTARIX_SECRET_$(echo "$1" | tr 'a-z-' 'A-Z_')"
+  value=$(printenv "$var" || true)
+  if [ -n "$value" ]; then printf '%s' "$value"; return; fi
+  printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "${INTERNAL_API_TOKEN:?$var is required}" -r | cut -d' ' -f1
+}
+if [ -n "${POSTARIX_SECRET_SUBMISSION:-}" ] || [ -n "${INTERNAL_API_TOKEN:-}" ]; then
   rm -f /etc/postfix/sasl/sasldb2
   internal_secret submission | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-api
   internal_secret cyrus-smtp | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-cyrus
@@ -221,11 +230,11 @@ if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
   postconf -P \
     "cyrus-cleanup/unix/sender_canonical_maps=$(pg srs_forward)" \
     "cyrus-cleanup/unix/sender_canonical_classes=envelope_sender"
-  unset INTERNAL_API_TOKEN
+  unset INTERNAL_API_TOKEN POSTARIX_SECRET_SUBMISSION POSTARIX_SECRET_CYRUS_SMTP
 else
   postconf -MX "10587/inet" 2>/dev/null || true
   postconf -MX "10588/inet" 2>/dev/null || true
-  log "INTERNAL_API_TOKEN not set: webmail sending (10587) and Sieve sending (10588) are disabled"
+  log "no internal secrets set: webmail sending (10587) and Sieve sending (10588) are disabled"
 fi
 
 postconf -P "submission/inet/smtpd_tls_security_level=encrypt"

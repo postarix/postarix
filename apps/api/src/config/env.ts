@@ -20,6 +20,10 @@ const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
+    /** Port of the Prometheus metrics listener (/metrics). Unset: no metrics. Never route it through the reverse proxy. */
+    METRICS_PORT: z.preprocess((v) => (v === '' ? undefined : v), z.coerce.number().int().positive().optional()),
+    /** "json" writes one JSON object per log line (for Loki, Elasticsearch…). */
+    LOG_FORMAT: z.enum(['text', 'json']).default('text'),
     DATABASE_URL: z.url(),
     /** Public base URL of the API, used by Better Auth for callbacks and cookies. */
     AUTH_URL: z.url(),
@@ -102,6 +106,10 @@ const envSchema = z
      * the internal endpoints are disabled.
      */
     INTERNAL_API_TOKEN: z.string().min(32, 'INTERNAL_API_TOKEN must be at least 32 characters').optional(),
+    /** The mail-login bridge's secret (the Cyrus containers have it too). Default: derived from INTERNAL_API_TOKEN. */
+    POSTARIX_SECRET_MAIL_AUTH: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
+    /** The password of Postfix's internal submission port (Postfix has it too). Default: derived from INTERNAL_API_TOKEN. */
+    POSTARIX_SECRET_SUBMISSION: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
     /**
      * The internal HTTPS listener for the mail-login bridge (/api/internal/*),
      * so mail passwords never cross the network in clear. When the key and
@@ -157,7 +165,7 @@ const envSchema = z
     path: ['CYRUS_JMAP_URL'],
     message: 'must use https in production (mail tokens cross the network)',
   })
-  .refine((env) => env.NODE_ENV !== 'production' || !env.INTERNAL_API_TOKEN || (env.INTERNAL_TLS_CERT_FILE && env.INTERNAL_TLS_KEY_FILE), {
+  .refine((env) => env.NODE_ENV !== 'production' || !(env.INTERNAL_API_TOKEN || env.POSTARIX_SECRET_MAIL_AUTH) || (env.INTERNAL_TLS_CERT_FILE && env.INTERNAL_TLS_KEY_FILE), {
     path: ['INTERNAL_TLS_KEY_FILE'],
     message: 'INTERNAL_TLS_CERT_FILE and INTERNAL_TLS_KEY_FILE are required in production (mail passwords cross the network)',
   })

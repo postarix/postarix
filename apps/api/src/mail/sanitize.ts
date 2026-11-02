@@ -29,16 +29,27 @@ const LAYOUT_ATTRIBUTES = ['style', 'align', 'valign', 'width', 'height', 'bgcol
  * being attempted.
  */
 export function sanitizeCss(css: string): string {
-  return css
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\\/g, '')
-    .replace(/@import[^;]*;?/gi, '')
-    .replace(/@font-face\s*\{[^}]*\}?/gi, '')
-    .replace(/(?:-webkit-)?image-set\s*\(/gi, 'invalid(')
-    .replace(/url\s*\([^)]*\)/gi, 'none')
-    .replace(/expression\s*\(/gi, 'invalid(')
-    .replace(/(-moz-binding|behavior)\s*:/gi, 'x-removed:')
-    .replace(/<\/?\s*style/gi, '');
+  // Repeated until nothing changes, so that removing one piece cannot join
+  // others into something that should have been removed. "<" never belongs in
+  // CSS here: dropping it means no tag can ever be spelled out of a stylesheet
+  // (e.g. a closing </style> assembled from fragments).
+  let current = css;
+  for (let i = 0; i < 10; i++) {
+    const next = current
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\\/g, '')
+      .replace(/</g, '')
+      .replace(/@import[^;]*;?/gi, '')
+      .replace(/@font-face\s*\{[^}]*\}?/gi, '')
+      .replace(/(?:-webkit-)?image-set\s*\(/gi, 'invalid(')
+      .replace(/url\s*\([^)]*\)/gi, 'none')
+      .replace(/expression\s*\(/gi, 'invalid(')
+      .replace(/(-moz-binding|behavior)\s*:/gi, 'x-removed:');
+    if (next === current) return next;
+    current = next;
+  }
+  // Still changing after many passes: hostile input, keep nothing.
+  return '';
 }
 
 /**

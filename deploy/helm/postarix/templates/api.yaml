@@ -14,6 +14,11 @@ spec:
       labels: {{- include "postarix.selector" (list . "api") | nindent 8 }}
       annotations:
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: /metrics
+        {{- end }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -25,21 +30,33 @@ spec:
         - name: api
           image: {{ include "postarix.image" (list . "api") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          securityContext: {{- include "postarix.appSecurity" . | nindent 12 }}
           ports:
             - name: http
               containerPort: 3000
             - name: internal-tls
               containerPort: 3443
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: 9464
+            {{- end }}
           env:
             {{- include "postarix.secretEnv" (list . "POSTGRES_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "VALKEY_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "AUTH_SECRET") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MAIL_AUTH") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_SUBMISSION") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
             - name: NODE_ENV
               value: {{ .Values.api.nodeEnv | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.api.logFormat | quote }}
+            {{- if .Values.metrics.enabled }}
+            - name: METRICS_PORT
+              value: "9464"
+            {{- end }}
             - name: DATABASE_URL
               value: "postgresql://postarix:$(POSTGRES_PASSWORD)@{{ include "postarix.postgresHost" . }}:5432/postarix"
             - name: VALKEY_URL
@@ -117,6 +134,7 @@ kind: Service
 metadata:
   name: {{ $name }}
   labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
 spec:
   selector: {{- include "postarix.selector" (list . "api") | nindent 4 }}
   ports:
@@ -127,3 +145,40 @@ spec:
     - name: internal-tls
       port: 3443
       targetPort: internal-tls
+    {{- if .Values.metrics.enabled }}
+    # Prometheus metrics (/metrics, and Rspamd's at /metrics/rspamd). Never routed by the ingress.
+    - name: metrics
+      port: 9464
+      targetPort: metrics
+    {{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+    - port: metrics
+      path: /metrics/rspamd
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $name }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+spec: {{- .Files.Get "files/alerts.yml" | fromYaml | toYaml | nindent 2 }}
+{{- end }}

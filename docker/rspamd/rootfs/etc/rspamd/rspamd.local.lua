@@ -81,6 +81,13 @@ rspamd_config:register_symbol({
     local remove, add = {}, {}
     for _, rcpt in ipairs(recipients) do
       local user, domain = rcpt.user or '', rcpt.domain or ''
+      -- A bounce to a forwarding (SRS) address is relayed to the original
+      -- sender elsewhere: spam there is refused, never filed or passed on.
+      if user:lower():match('^srs[01][=+-]') then
+        task:set_pre_result('reject', 'Spam is not accepted for forwarding addresses', 'postarix')
+        task:insert_result('POSTARIX_FILE_AS_JUNK', 1.0, 'srs refused')
+        return
+      end
       if user ~= '' and domain ~= '' then
         local base = user:gsub('%+.*$', '')
         table.insert(remove, rcpt.addr)
@@ -163,6 +170,24 @@ end
 local OWNER_HEADER = 'X-Postarix-Sieve-Owner'
 local REDIRECT_KEY = 'POSTARIX_REDIRECTS:'
 local REDIRECTS_PER_HOUR = 100
+-- Vacation replies go to whoever wrote, so forged senders could turn a
+-- mailbox into a backscatter source: they are capped per mailbox too.
+local VACATION_KEY = 'POSTARIX_VACATIONS:'
+local VACATIONS_PER_HOUR = 200
+
+-- Counts one message for a mailbox in an hourly window; calls done(true)
+-- while under the limit, done(false) over it, done(nil) when Valkey fails.
+local function count_hourly(task, key, limit, done)
+  lua_redis.redis_make_request(task, redis_params, key, true, function(err, count)
+    if err or not tonumber(count) then
+      return done(nil)
+    end
+    if tonumber(count) == 1 then
+      lua_redis.redis_make_request(task, redis_params, key, true, function() end, 'EXPIRE', { key, '3600' })
+    end
+    done(tonumber(count) <= limit)
+  end, 'INCR', { key })
+end
 
 local function cyrus_reject(task, reason)
   task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'refused: ' .. reason)
@@ -207,20 +232,16 @@ rspamd_config:register_symbol({
       if not redis_params then
         return cyrus_reject(task, 'cannot count forwarded messages')
       end
-      local key = REDIRECT_KEY .. owner
-      lua_redis.redis_make_request(task, redis_params, key, true, function(err, count)
-        if err then
+      count_hourly(task, REDIRECT_KEY .. owner, REDIRECTS_PER_HOUR, function(ok)
+        if ok == nil then
           return cyrus_reject(task, 'cannot count forwarded messages')
         end
-        if tonumber(count) == 1 then
-          lua_redis.redis_make_request(task, redis_params, key, true, function() end, 'EXPIRE', { key, '3600' })
-        end
-        if tonumber(count) > REDIRECTS_PER_HOUR then
+        if not ok then
           return cyrus_reject(task, 'too many forwarded messages from this mailbox; try again later')
         end
         pool:set_variable('postarix_cyrus_redirect', '1')
         task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'redirect')
-      end, 'INCR', { key })
+      end)
       return
     end
     if action ~= 'vacation' or envelope_addr ~= '' then
@@ -236,8 +257,19 @@ rspamd_config:register_symbol({
     if base_address(from[1].user, from[1].domain) ~= owner then
       return cyrus_reject(task, 'a vacation reply must come from your own address')
     end
-    pool:set_variable('postarix_cyrus_sign', '1')
-    task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'vacation')
+    if not redis_params then
+      return cyrus_reject(task, 'cannot count vacation replies')
+    end
+    count_hourly(task, VACATION_KEY .. owner, VACATIONS_PER_HOUR, function(ok)
+      if ok == nil then
+        return cyrus_reject(task, 'cannot count vacation replies')
+      end
+      if not ok then
+        return cyrus_reject(task, 'too many vacation replies from this mailbox; try again later')
+      end
+      pool:set_variable('postarix_cyrus_sign', '1')
+      task:insert_result('POSTARIX_CYRUS_SENT', 1.0, 'vacation')
+    end)
   end,
 })
 

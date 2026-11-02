@@ -10,7 +10,9 @@
 # then add it to MURDER_BACKENDS (frontend) and CYRUS_BACKENDS (API).
 x-backend: &backend
   restart: unless-stopped
-  image: postarix/cyrus:${POSTARIX_VERSION:-dev}
+  cap_drop: [NET_RAW]
+  security_opt: [no-new-privileges:true]
+  image: ${POSTARIX_REGISTRY:-ghcr.io/postarix}/cyrus:${POSTARIX_VERSION:-dev}
   depends_on:
     api:
       condition: service_started
@@ -22,13 +24,15 @@ x-backend: &backend
 services:
   mupdate:
     restart: unless-stopped
-    image: postarix/cyrus:${POSTARIX_VERSION:-dev}
+    image: ${POSTARIX_REGISTRY:-ghcr.io/postarix}/cyrus:${POSTARIX_VERSION:-dev}
     environment:
       CYRUS_ROLE: mupdate
       CYRUS_SERVERNAME: mupdate
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      POSTARIX_SECRET_MURDER_MUPDATE: ${POSTARIX_SECRET_MURDER_MUPDATE:?run deploy/scripts/derive-secrets.sh}
+    cap_drop: [NET_RAW]
+    security_opt: [no-new-privileges:true]
     volumes:
       - mupdate-lib:/var/lib/cyrus
       - certs:/certs:ro
@@ -45,7 +49,10 @@ services:
       MURDER_MUPDATE_HOST: mupdate
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH}
+      POSTARIX_SECRET_CYRUS_SMTP: ${POSTARIX_SECRET_CYRUS_SMTP}
+      POSTARIX_SECRET_MURDER_MUPDATE: ${POSTARIX_SECRET_MURDER_MUPDATE}
+      POSTARIX_SECRET_MURDER_PROXY: ${POSTARIX_SECRET_MURDER_PROXY:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_API_INTERNAL: api:3443
       # Backends are on the internal network only.
       JMAP_LISTEN_ADDRESS: 0.0.0.0
@@ -74,6 +81,8 @@ services:
       CYRUS_ROLE: frontend
       MURDER_MUPDATE_HOST: mupdate
       MURDER_BACKENDS: cyrus-backend-1 cyrus-backend-2
+      POSTARIX_SECRET_MURDER_MUPDATE: ${POSTARIX_SECRET_MURDER_MUPDATE}
+      POSTARIX_SECRET_MURDER_PROXY: ${POSTARIX_SECRET_MURDER_PROXY}
     depends_on:
       cyrus-backend-1:
         condition: service_healthy

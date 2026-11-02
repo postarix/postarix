@@ -1,0 +1,24 @@
+# Optional: Prometheus with Postarix' scrape configuration and alert rules.
+#   docker compose -f postarix.yml -f caddy.yml -f monitoring.yml --env-file postarix.env up -d
+# Prometheus listens on 127.0.0.1:9090 only (reach it through an SSH tunnel or
+# your own authenticated proxy). See docs/MONITORING.md.
+services:
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    restart: unless-stopped
+    cap_drop: [NET_RAW]
+    security_opt: [no-new-privileges:true]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    volumes:
+      - ../../deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - 127.0.0.1:9090:9090
+    networks: [default]
+
+volumes:
+  prometheus-data:

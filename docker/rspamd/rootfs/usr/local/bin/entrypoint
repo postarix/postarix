@@ -59,10 +59,15 @@ printf 'servers = "%s";\npassword = "%s";\n' "$REDIS_SERVERS" "$REDIS_PASSWORD" 
 chgrp _rspamd /etc/rspamd/local.d/redis.conf
 umask 022
 
-# The controller (web UI and API) only ever stores a hash of the password.
+# The controller (web UI and API) only ever stores hashes of the passwords.
+# RSPAMD_CONTROLLER_PASSWORD (the API's, for the filtering history) is
+# read-only; changes (learning, settings) need RSPAMD_CONTROLLER_ENABLE_PASSWORD,
+# and are disabled when it is unset (a random password nobody knows).
 hash=$(rspamadm pw -p "$RSPAMD_CONTROLLER_PASSWORD")
+enable_hash=$(rspamadm pw -p "${RSPAMD_CONTROLLER_ENABLE_PASSWORD:-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')}")
 printf 'bind_socket = "*:11334";\npassword = "%s";\nenable_password = "%s";\n' \
-  "$hash" "$hash" > /etc/rspamd/local.d/worker-controller.inc
+  "$hash" "$enable_hash" > /etc/rspamd/local.d/worker-controller.inc
+unset RSPAMD_CONTROLLER_PASSWORD RSPAMD_CONTROLLER_ENABLE_PASSWORD
 
 # Greylisting can be disabled (e.g. in test environments) with RSPAMD_GREYLIST=false.
 mkdir -p /etc/rspamd/override.d

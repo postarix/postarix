@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { mailboxes, type MailboxRow, member } from '../db/schema/index.js';
-import type { TenantContext } from '../tenancy/tenant-context.js';
+import type { OrgRole, TenantContext } from '../tenancy/tenant-context.js';
 
 export interface NewMailbox {
   domainId: string;
@@ -25,6 +25,24 @@ export class MailboxesRepository {
 
   list(ctx: TenantContext): Promise<MailboxRow[]> {
     return this.db.select().from(mailboxes).where(this.scope(ctx)).orderBy(asc(mailboxes.address));
+  }
+
+  /** The account's role in the organization, or null if it is not a member. */
+  async roleOf(ctx: TenantContext, userId: string): Promise<OrgRole | null> {
+    const [row] = await this.db
+      .select({ role: member.role })
+      .from(member)
+      .where(and(eq(member.organizationId, ctx.organizationId), eq(member.userId, userId)))
+      .limit(1);
+    return (row?.role as OrgRole | undefined) ?? null;
+  }
+
+  async ownerCount(ctx: TenantContext): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(member)
+      .where(and(eq(member.organizationId, ctx.organizationId), eq(member.role, 'owner')));
+    return row?.n ?? 0;
   }
 
   async findById(ctx: TenantContext, id: string): Promise<MailboxRow | undefined> {

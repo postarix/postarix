@@ -8,6 +8,12 @@ export interface SecondFactorStatus {
   required: boolean;
   /** They have one: an authenticator app (TOTP) or a passkey. */
   enrolled: boolean;
+  /**
+   * This session proves more than a password: opened with a passkey, a second
+   * factor or the identity provider, or the account always asks for an
+   * authenticator code after the password. Only set when a session is given.
+   */
+  strongSession?: boolean;
 }
 
 /** The error code clients receive until they set up a second factor. */
@@ -24,9 +30,11 @@ export const SECOND_FACTOR_REQUIRED = 'SECOND_FACTOR_REQUIRED';
 export class SecondFactorPolicy {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async status(userId: string): Promise<SecondFactorStatus> {
-    const result = await this.db.execute<{ required: boolean; enrolled: boolean }>(sql`
+  async status(userId: string, sessionId?: string): Promise<SecondFactorStatus> {
+    const result = await this.db.execute<{ required: boolean; enrolled: boolean; totp: boolean; strong: boolean }>(sql`
       SELECT
+        COALESCE((SELECT two_factor_enabled FROM "user" WHERE id = ${userId}), false) AS totp,
+        EXISTS (SELECT 1 FROM session_factors WHERE session_id = ${sessionId ?? ''}) AS strong,
         EXISTS (
           SELECT 1 FROM organization_security s
           WHERE s.require_second_factor
@@ -41,12 +49,20 @@ export class SecondFactorPolicy {
         ) AS enrolled
     `);
     const row = result.rows[0];
-    return { required: Boolean(row?.required), enrolled: Boolean(row?.enrolled) };
+    return {
+      required: Boolean(row?.required),
+      enrolled: Boolean(row?.enrolled),
+      ...(sessionId === undefined ? {} : { strongSession: Boolean(row?.totp) || Boolean(row?.strong) }),
+    };
   }
 
-  /** True when the person may use the API normally. */
-  async satisfied(userId: string): Promise<boolean> {
-    const { required, enrolled } = await this.status(userId);
-    return !required || enrolled;
+  /**
+   * True when this session may use the API normally: no rule applies, or the
+   * session was opened with more than a password (a passkey alone does not
+   * help if the person signed in with their password).
+   */
+  async satisfied(userId: string, sessionId: string): Promise<boolean> {
+    const { required, strongSession } = await this.status(userId, sessionId);
+    return !required || Boolean(strongSession);
   }
 }

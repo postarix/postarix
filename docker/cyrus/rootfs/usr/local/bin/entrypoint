@@ -4,7 +4,6 @@ set -eu
 
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
 : "${CYRUS_ADMIN_PASSWORD:?CYRUS_ADMIN_PASSWORD is required}"
-: "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
 # The API's internal HTTPS listener (host:port), for the mail-login bridge.
 POSTARIX_API_INTERNAL="${POSTARIX_API_INTERNAL:-api:3443}"
 CERT_DIR="${CERT_DIR:-/certs}"
@@ -26,15 +25,33 @@ if [ "$CYRUS_ROLE" = frontend ]; then : "${MURDER_BACKENDS:?MURDER_BACKENDS (the
 
 log() { echo "[cyrus-entrypoint] $*"; }
 
-# Secrets for one purpose each, derived from INTERNAL_API_TOKEN (the API
-# derives the same; see apps/api/src/config/internal-secrets.ts).
-internal_secret() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1; }
-MAIL_AUTH_SECRET=$(internal_secret mail-auth)
-CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
+# Secrets for one purpose each (POSTARIX_SECRET_<PURPOSE>): this container
+# gets only the ones it needs. Older installations set INTERNAL_API_TOKEN
+# instead, from which they are derived (as deploy/scripts/derive-secrets.sh
+# and the API do).
+internal_secret() {
+  var="POSTARIX_SECRET_$(echo "$1" | tr 'a-z-' 'A-Z_')"
+  value=$(printenv "$var" || true)
+  if [ -n "$value" ]; then printf '%s' "$value"; return; fi
+  if [ -n "${INTERNAL_API_TOKEN:-}" ]; then
+    printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1
+    return
+  fi
+  echo "$var is required" >&2
+  exit 1
+}
+MAIL_AUTH_SECRET=""
+CYRUS_SMTP_SECRET=""
+MUPDATE_SECRET=""
+PROXY_SECRET=""
+if [ "$CYRUS_ROLE" != mupdate ]; then
+  MAIL_AUTH_SECRET=$(internal_secret mail-auth)
+  CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
+fi
 # Murder: backends publish their mailboxes to mupdate, frontends log in to
 # backends on behalf of users. Internal accounts, never valid on public ports.
-MUPDATE_SECRET=$(internal_secret murder-mupdate)
-PROXY_SECRET=$(internal_secret murder-proxy)
+if [ "$CYRUS_ROLE" != standalone ]; then MUPDATE_SECRET=$(internal_secret murder-mupdate); fi
+if [ "$CYRUS_ROLE" = backend ] || [ "$CYRUS_ROLE" = frontend ]; then PROXY_SECRET=$(internal_secret murder-proxy); fi
 
 # --- Configuration -----------------------------------------------------------
 envsubst '${CYRUS_SERVERNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
@@ -145,6 +162,10 @@ sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
 echo 'jmap_nonstandard_extensions: yes' >> /etc/imapd-jmap.conf
 # The JMAP service listens on the internal network address only.
 sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
+# So does the admin IMAP service (it can read every mailbox), and a
+# frontend's mupdate listener.
+sed -i -e "s/listen=\"0.0.0.0:1143\"/listen=\"${ADMIN_LISTEN_ADDRESS:-0.0.0.0}:1143\"/" \
+  -e "s/listen=\"3905\"/listen=\"${ADMIN_LISTEN_ADDRESS:-0.0.0.0}:3905\"/" /etc/cyrus.conf
 # Readable by Cyrus (group mail) only: in a Murder they hold internal passwords.
 chown root:mail /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 chmod 0640 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
@@ -195,7 +216,8 @@ chown root:sasl /etc/sasldb2
 chmod 0640 /etc/sasldb2
 
 # Both secrets now live in root-only files; no process started below needs them.
-unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET MUPDATE_SECRET PROXY_SECRET
+unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET MUPDATE_SECRET PROXY_SECRET \
+  POSTARIX_SECRET_MAIL_AUTH POSTARIX_SECRET_CYRUS_SMTP POSTARIX_SECRET_MURDER_MUPDATE POSTARIX_SECRET_MURDER_PROXY
 
 # --- Runtime and data directories ---------------------------------------------
 install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket

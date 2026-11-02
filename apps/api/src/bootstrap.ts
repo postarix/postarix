@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { type INestApplication, RequestMethod } from '@nestjs/common';
+import { ConsoleLogger, type INestApplication, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
@@ -12,6 +12,7 @@ import { originCheck } from './common/origin-check.middleware.js';
 import type { Env } from './config/env.js';
 import { AUTH, ENV } from './core/tokens.js';
 import { JmapProxy } from './jmap/jmap-proxy.js';
+import { httpMetrics } from './metrics/metrics.js';
 
 /**
  * Creates the Nest application with all HTTP-level wiring. Shared by main.ts
@@ -21,7 +22,11 @@ export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Better Auth must read the raw request body, so JSON parsing is added after it.
     bodyParser: false,
-    ...(process.env.NODE_ENV === 'test' ? { logger: false as const } : {}),
+    ...(process.env.NODE_ENV === 'test'
+      ? { logger: false as const }
+      : process.env.LOG_FORMAT === 'json'
+        ? { logger: new ConsoleLogger({ json: true, colors: false }) }
+        : {}),
   });
 
   const env = app.get<Env>(ENV);
@@ -31,6 +36,7 @@ export async function createApp(): Promise<INestApplication> {
   app.set('trust proxy', env.TRUSTED_PROXIES.length > 0 ? env.TRUSTED_PROXIES : false);
   app.disable('x-powered-by');
 
+  app.use(httpMetrics);
   app.use(helmet());
   if (env.TRUSTED_ORIGINS.length > 0) {
     app.enableCors({ origin: env.TRUSTED_ORIGINS, credentials: true });
@@ -38,7 +44,16 @@ export async function createApp(): Promise<INestApplication> {
 
   // Expose the proxy-aware client IP to Better Auth (rate limiting, session metadata).
   // Any client-supplied value is overwritten so it cannot be spoofed.
+  // Behind a proxy with TRUSTED_PROXIES unset, every client shares the
+  // proxy's address (and its rate limits): say so once.
+  let warnedAboutProxy = env.TRUSTED_PROXIES.length > 0;
   app.use((req: Request, _res: Response, next: NextFunction) => {
+    if (!warnedAboutProxy && req.headers['x-forwarded-for'] !== undefined && !req.path.startsWith('/api/internal')) {
+      warnedAboutProxy = true;
+      new Logger('Bootstrap').warn(
+        'Requests carry X-Forwarded-For but TRUSTED_PROXIES is empty: client addresses (rate limits, audit log) are the proxy\'s. Set TRUSTED_PROXIES to the reverse proxy\'s address or network.',
+      );
+    }
     req.headers[CLIENT_IP_HEADER] = req.ip ?? '';
     next();
   });

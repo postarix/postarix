@@ -97,6 +97,10 @@ describe('Mail Cyrus sends by itself', () => {
     await expect(
       smtp(config.smtpPort).sendMail({ envelope: { from: 'spammer@outside.example', to: [srs!] }, from: 'spammer@outside.example', to: srs!, subject: 'relay?', text: 'x' }),
     ).rejects.toThrow(/5\d\d/);
+    // A "bounce" that is spam is refused rather than relayed to the writer.
+    await expect(
+      smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [srs!] }, from: 'MAILER-DAEMON@outside.example', to: srs!, subject: unique('spam-bounce'), text: `Delivery failed.\n${SPAM_MARKER}\n` }),
+    ).rejects.toThrow(/5\d\d/);
     const forged = srs!.replace(/^SRS0=[0-9a-f]{8}/i, 'SRS0=00000000');
     await expect(
       smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [forged] }, from: 'MAILER-DAEMON@outside.example', to: forged, subject: 'forged', text: 'x' }),
@@ -202,5 +206,15 @@ describe('Mail Cyrus sends by itself', () => {
     const subject = unique('alias-spam');
     await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: alias.address, subject, text: `Cheap stuff\n${SPAM_MARKER}\n` });
     await waitForMessage(writer.address, PASSWORD, subject, 45_000, 'Junk');
+  });
+
+  it('never forwards spam to an alias’ outside destinations', async () => {
+    const alias = await admin.ok<{ address: string }>('POST', `/api/orgs/${orgId}/aliases`, {
+      domainId: domain.id,
+      localPart: unique('outside'),
+      destinations: ['partner@outside.example'],
+    });
+    // Accepted (and discarded): refusing it would tell the spammer what works.
+    await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: alias.address, subject: unique('alias-out'), text: `Cheap stuff\n${SPAM_MARKER}\n` });
   });
 });

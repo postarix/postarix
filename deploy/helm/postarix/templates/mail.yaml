@@ -52,7 +52,12 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
-            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MAIL_AUTH") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_CYRUS_SMTP") | nindent 12 }}
+            {{- if .Values.mail.murder.enabled }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_MUPDATE") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_PROXY") | nindent 12 }}
+            {{- end }}
             - name: MAIL_HOSTNAME
               value: {{ .Values.mailHostname | quote }}
             # The API's internal HTTPS listener (mail-login bridge).
@@ -95,7 +100,8 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "POSTFIX_DB_PASSWORD") | nindent 12 }}
-            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_SUBMISSION") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_CYRUS_SMTP") | nindent 12 }}
             - name: MAIL_HOSTNAME
               value: {{ .Values.mailHostname | quote }}
             - name: POSTFIX_DB_HOST

@@ -331,11 +331,12 @@ export class CalendarService {
       throw new NotFoundException('Address book not found');
     }
 
+    // Everyone on the list must still be a colleague (people who left are dropped).
     const existing = new Set((await this.shares(me.address, kind, collectionId)).map((s) => s.email));
-    const added = [...shares.keys()].filter((e) => !existing.has(e));
-    const colleagues = await this.colleagues.inOrganization(me.organizationId, added);
-    const outsider = added.find((e) => !colleagues.has(e));
+    const colleagues = await this.colleagues.inOrganization(me.organizationId, [...shares.keys()]);
+    const outsider = [...shares.keys()].find((e) => !colleagues.has(e) && !existing.has(e));
     if (outsider) throw new UnprocessableEntityException(`${outsider} is not in your organization`);
+    for (const email of [...shares.keys()]) if (!colleagues.has(email)) shares.delete(email);
 
     try {
       await this.engine.setShares(

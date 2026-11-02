@@ -22,7 +22,7 @@ spec:
         - name: webmail
           image: {{ include "postarix.image" (list . "webmail") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          securityContext: {{- include "postarix.appSecurity" . | nindent 12 }}
           ports:
             - name: http
               containerPort: 3002

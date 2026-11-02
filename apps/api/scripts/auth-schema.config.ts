@@ -6,6 +6,7 @@ import type { Database } from '../src/db/client.js';
 export const auth = createAuth({} as Database, {
   NODE_ENV: 'development',
   PORT: 3000,
+  LOG_FORMAT: 'text',
   INTERNAL_TLS_PORT: 3443,
   DATABASE_URL: 'postgresql://localhost/postarix',
   AUTH_URL: 'http://localhost:3000',

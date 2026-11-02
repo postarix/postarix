@@ -36,6 +36,14 @@ describe('checkApiRequest', () => {
     expect(set({ update: { e1: { 'recurrenceRules/0/frequency': 'minutely' } } })).toThrow(/at most daily/);
     expect(set({ create: { e: { title: 'Stand-up', recurrenceRules: [{ '@type': 'RecurrenceRule', frequency: 'weekly' }] } } })).not.toThrow();
     expect(set({ update: { e1: { title: 'Renamed' } }, destroy: ['e2'] })).not.toThrow();
+    // Hidden in overrides, in other spellings of a patch path, or behind a result reference.
+    expect(set({ create: { e: { recurrenceOverrides: { '2026-11-20T09:00:00': { participants: { p: {} } } } } } })).toThrow(/Inviting/);
+    expect(set({ update: { e1: { 'recurrenceOverrides/2026-11-20T09:00:00/participants': {} } } })).toThrow(/Inviting/);
+    expect(set({ update: { e1: { '/participants/p1': {} } } })).toThrow(/Inviting/);
+    expect(set({ update: { e1: { 'recurrenceRules/0': { frequency: 'hourly' } } } })).toThrow(/at most daily/);
+    expect(set({ '#create': { resultOf: 'a', name: 'Email/get', path: '/list' } })).toThrow(/Result references/);
+    expect(set({ sendSchedulingMessages: true, update: {} })).toThrow(/Inviting/);
+    expect(check(CAL, [['Core/echo', { x: 1 }, 'a']])).toThrow(/Method not available/);
   });
 
   it('refuses what is not a JMAP request and re-serializes what it checked', () => {

@@ -84,6 +84,6 @@ export class MySecondFactorController {
   @Get()
   @AllowWithoutSecondFactor()
   status(@CurrentSession() session: AuthSession): Promise<SecondFactorStatus> {
-    return this.policy.status(session.user.id);
+    return this.policy.status(session.user.id, session.session.id);
   }
 }

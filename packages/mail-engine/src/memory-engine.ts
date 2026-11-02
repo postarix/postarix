@@ -104,6 +104,14 @@ export class MemoryMailEngine implements MailEngine {
     this.shares.set(key, [...shares].sort((a, b) => a.grantee.localeCompare(b.grantee)));
   }
 
+  async removeGrantee(address: string, grantee: string): Promise<void> {
+    this.checkFailure();
+    this.get(address);
+    for (const [key, list] of this.shares) {
+      if (key.startsWith(`${address} `)) this.shares.set(key, list.filter((s) => s.grantee !== grantee));
+    }
+  }
+
   async restrictCollections(address: string): Promise<void> {
     this.checkFailure();
     this.get(address);
