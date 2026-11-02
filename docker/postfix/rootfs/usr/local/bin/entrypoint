@@ -25,17 +25,32 @@ for template in /etc/postfix/pgsql/*.cf.template; do
 done
 
 # --- TLS ------------------------------------------------------------------------
-install -d -m 0755 /etc/postfix/tls
-if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
-  install -m 0644 "$CERT_DIR/fullchain.pem" /etc/postfix/tls/fullchain.pem
-  install -m 0600 "$CERT_DIR/privkey.pem" /etc/postfix/tls/privkey.pem
-else
+# Certificates come from the shared /certs volume (managed by the certs service).
+install_certificates() {
+  install -d -m 0755 /etc/postfix/tls
+  if [ -s "$CERT_DIR/fullchain.pem" ] && [ -s "$CERT_DIR/privkey.pem" ]; then
+    install -m 0600 "$CERT_DIR/privkey.pem" /etc/postfix/tls/privkey.pem
+    install -m 0644 "$CERT_DIR/fullchain.pem" /etc/postfix/tls/fullchain.pem
+    return 0
+  fi
+  return 1
+}
+if ! install_certificates; then
   log "no certificate in $CERT_DIR; generating a self-signed one (development only)"
   openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
     -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
     -keyout /etc/postfix/tls/privkey.pem -out /etc/postfix/tls/fullchain.pem 2>/dev/null
   chmod 0600 /etc/postfix/tls/privkey.pem
 fi
+
+# Reload when the certificate is renewed.
+watch_certificates() {
+  while sleep 60; do
+    if [ -s "$CERT_DIR/fullchain.pem" ] && ! cmp -s "$CERT_DIR/fullchain.pem" /etc/postfix/tls/fullchain.pem; then
+      install_certificates && postfix reload && log "certificate changed; Postfix reloaded"
+    fi
+  done
+}
 
 # --- main.cf --------------------------------------------------------------------
 pg() { echo "pgsql:/etc/postfix/pgsql/$1.cf"; }
@@ -59,6 +74,10 @@ postconf -e \
   "mailbox_size_limit = 0" \
   "disable_vrfy_command = yes" \
   "smtpd_helo_required = yes" \
+  "smtpd_client_auth_rate_limit = 30" \
+  "smtpd_client_connection_count_limit = 20" \
+  "smtpd_client_message_rate_limit = 300" \
+  "anvil_rate_time_unit = 60s" \
   "virtual_mailbox_domains = $(pg domains)" \
   "virtual_mailbox_maps = $(pg mailboxes)" \
   "virtual_alias_maps = $(pg aliases)" \
@@ -80,7 +99,8 @@ postconf -e \
   "smtpd_tls_mandatory_protocols = >=TLSv1.2" \
   "smtpd_tls_loglevel = 1" \
   "smtpd_tls_received_header = yes" \
-  "smtp_tls_security_level = may" \
+  "smtp_dns_support_level = dnssec" \
+  "smtp_tls_security_level = dane" \
   "smtp_tls_loglevel = 1" \
   "smtp_tls_CApath = /etc/ssl/certs" \
   "smtpd_milters = $RSPAMD_MILTER" \
@@ -106,5 +126,6 @@ postconf -P "submission/inet/smtpd_tls_security_level=encrypt"
 postconf -P "smtps/inet/smtpd_tls_wrappermode=yes"
 
 postfix check
+watch_certificates &
 log "starting Postfix for $MAIL_HOSTNAME"
 exec postfix start-fg

@@ -1,4 +1,4 @@
-# Dependencias
+# Dependencies
 node_modules/
 
 # Builds
@@ -9,14 +9,14 @@ out/
 .turbo/
 coverage/
 
-# Entorno y secretos
+# Environment and secrets
 .env
 .env.*
 !.env.example
 *.pem
 *.key
 
-# Datos locales de servicios
+# Local service data
 docker/compose/data/
 
 # Logs
@@ -24,9 +24,10 @@ docker/compose/data/
 npm-debug.log*
 pnpm-debug.log*
 
-# Sistema y editores
+# OS and editors
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+docker/compose/external-certs/

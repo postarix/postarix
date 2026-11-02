@@ -24,7 +24,8 @@ sasl_saslauthd_path: /run/saslauthd/mux
 allowplaintext: no
 allowanonymouslogin: no
 
-# TLS
+# TLS. Cyrus 3.10+ only offers STARTTLS when allowed explicitly.
+allowstarttls: yes
 tls_server_cert: /etc/cyrus-tls/fullchain.pem
 tls_server_key: /etc/cyrus-tls/privkey.pem
 tls_client_ca_dir: /etc/ssl/certs

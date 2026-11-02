@@ -1,0 +1,106 @@
+#!/bin/sh
+# Keeps /certs/{fullchain,privkey}.pem current for the mail services.
+set -eu
+
+: "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}"
+MODE="${CERTS_MODE:-selfsigned}"
+OUT=/certs
+CHECK_INTERVAL="${CERTS_CHECK_INTERVAL:-43200}"   # 12 h
+
+log() { echo "[certs] $*"; }
+
+# Atomically installs a new certificate pair (readers never see half a pair).
+install_pair() {
+  cert="$1"; key="$2"
+  openssl x509 -in "$cert" -noout >/dev/null
+  openssl pkey -in "$key" -noout >/dev/null
+  install -m 0644 "$cert" "$OUT/.fullchain.pem.new"
+  install -m 0600 "$key" "$OUT/.privkey.pem.new"
+  mv -f "$OUT/.privkey.pem.new" "$OUT/privkey.pem"
+  mv -f "$OUT/.fullchain.pem.new" "$OUT/fullchain.pem"
+  log "installed certificate: $(openssl x509 -in "$OUT/fullchain.pem" -noout -subject -enddate | tr '\n' ' ')"
+}
+
+expires_within() { # seconds
+  [ -s "$OUT/fullchain.pem" ] || return 0
+  ! openssl x509 -in "$OUT/fullchain.pem" -noout -checkend "$1" >/dev/null
+}
+
+selfsigned() {
+  if expires_within $((30 * 86400)); then
+    tmp=$(mktemp -d)
+    openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
+      -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
+      -keyout "$tmp/key.pem" -out "$tmp/cert.pem" 2>/dev/null
+    log "generated a self-signed certificate (development only)"
+    install_pair "$tmp/cert.pem" "$tmp/key.pem"
+    rm -rf "$tmp"
+  fi
+}
+
+acme() {
+  : "${ACME_EMAIL:?ACME_EMAIL is required in acme mode}"
+  domains="${ACME_DOMAINS:-$MAIL_HOSTNAME}"
+  set -- --accept-tos --email "$ACME_EMAIL" --path /var/lib/lego \
+    --server "${ACME_SERVER:-https://acme-v02.api.letsencrypt.org/directory}" --key-type rsa2048
+  old_ifs=$IFS; IFS=','
+  for domain in $domains; do set -- "$@" --domains "$domain"; done
+  IFS=$old_ifs
+  case "${ACME_CHALLENGE:-http}" in
+    http) set -- "$@" --http --http.port :80 ;;
+    dns)  set -- "$@" --dns "${ACME_DNS_PROVIDER:?ACME_DNS_PROVIDER is required for DNS challenges}" ;;
+    *)    log "unknown ACME_CHALLENGE: ${ACME_CHALLENGE}"; exit 1 ;;
+  esac
+
+  first="${domains%%,*}"
+  issued="/var/lib/lego/certificates/$first.crt"
+  if [ -s "$issued" ]; then
+    lego "$@" renew --days 30 || log "renewal failed; will retry"
+  else
+    lego "$@" run || { log "issuance failed; will retry"; return 0; }
+  fi
+  if [ -s "$issued" ] && ! cmp -s "$issued" "$OUT/fullchain.pem"; then
+    # Replaces the temporary self-signed certificate as soon as issuance succeeds.
+    install_pair "$issued" "/var/lib/lego/certificates/$first.key"
+  fi
+}
+
+external() {
+  dir="${CERTS_EXTERNAL_DIR:-/external}"
+  cert="$dir/${CERTS_EXTERNAL_CERT:-fullchain.pem}"
+  key="$dir/${CERTS_EXTERNAL_KEY:-privkey.pem}"
+  if [ ! -s "$cert" ] || [ ! -s "$key" ]; then
+    log "waiting for $cert and $key"
+    return 0
+  fi
+  if ! cmp -s "$cert" "$OUT/fullchain.pem" || ! cmp -s "$key" "$OUT/privkey.pem"; then
+    install_pair "$cert" "$key"
+  fi
+}
+
+mkdir -p "$OUT"
+log "mode: $MODE"
+case "$MODE" in
+  selfsigned|acme|external) ;;
+  *) log "unknown CERTS_MODE: $MODE"; exit 1 ;;
+esac
+
+# External certificates change outside our control: check them more often.
+[ "$MODE" = external ] && CHECK_INTERVAL="${CERTS_CHECK_INTERVAL:-300}"
+
+while true; do
+  "$MODE"
+  # Never leave the mail services without a certificate: until ACME issuance
+  # succeeds or external files appear, serve a temporary self-signed one.
+  if [ ! -s "$OUT/fullchain.pem" ]; then
+    log "no certificate yet; using a temporary self-signed one"
+    selfsigned
+  fi
+  # While serving the temporary certificate, retry the real one every few minutes.
+  if [ "$MODE" != selfsigned ] && openssl x509 -in "$OUT/fullchain.pem" -noout -issuer 2>/dev/null \
+       | grep -q "CN *= *$MAIL_HOSTNAME\$"; then
+    sleep 300
+  else
+    sleep "$CHECK_INTERVAL"
+  fi
+done
