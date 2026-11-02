@@ -25,13 +25,14 @@ export async function checkDnsRecords(
   mailHostname: string,
 ): Promise<DnsRecordCheckDto[]> {
   const cache = new Map<string, Promise<Lookup>>();
-  const lookup = (kind: 'TXT' | 'MX', name: string) => {
+  const lookup = (kind: 'TXT' | 'MX' | 'CNAME', name: string) => {
     const key = `${kind} ${name}`;
     let pending = cache.get(key);
     if (!pending) {
       pending = (async (): Promise<Lookup> => {
         try {
           if (kind === 'MX') return { values: (await dns.resolveMx(name)).map((r) => normalizeHost(r.exchange)) };
+          if (kind === 'CNAME') return { values: (await dns.resolveCname(name)).map(normalizeHost) };
           // A TXT record may be split into several strings; they form one value.
           return { values: (await dns.resolveTxt(name)).map((chunks) => chunks.join('')) };
         } catch (error) {
@@ -72,6 +73,16 @@ export async function checkDnsRecords(
           if (values.length === 0) return verdict('missing');
           const published = values.some((v) => key !== undefined && compact(v).includes(`p=${compact(key)}`));
           return published ? verdict('ok') : verdict('mismatch', values);
+        }
+        case 'autoconfig':
+        case 'mta-sts': {
+          if (values.length === 0) return verdict('missing');
+          return values.includes(normalizeHost(mailHostname)) ? verdict('ok') : verdict('mismatch', values);
+        }
+        case 'mta-sts-id': {
+          const sts = values.filter((v) => /^v=STSv1(;|\s|$)/i.test(v));
+          if (sts.length === 0) return verdict('missing');
+          return sts.length === 1 && compact(sts[0]!) === compact(record.value) ? verdict('ok') : verdict('mismatch', sts);
         }
         case 'dmarc': {
           const dmarc = values.filter((v) => /^v=DMARC1(;|\s|$)/i.test(v));

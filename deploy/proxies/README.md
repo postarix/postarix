@@ -13,6 +13,7 @@ they see real client IPs.
 | `/.well-known/caldav`, `/.well-known/carddav` | `cyrus:8080` | DAV discovery for calendar/contact clients. |
 | `/dav/*` | `cyrus:8080` | CalDAV / CardDAV. |
 | `/admin`, `/admin/*` | `admin:3001` | Admin panel. |
+| `/.well-known/autoconfig/*`, `/mail/config-v1.1.xml`, `/autodiscover/autodiscover.xml`, `/.well-known/mta-sts.txt` | `api:3000` | Mail app setup (Thunderbird, Outlook) and the MTA-STS policy. Also served on each hosted domain's `autoconfig.` and `mta-sts.` names, which need their own certificates (Caddy's on-demand TLS, or your ACME resolver). |
 | `/.well-known/acme-challenge/*` | `certs:80` | Only with `CERTS_MODE=acme` and `ACME_CHALLENGE=http`. |
 | `/` (everything else) | `webmail:3002` | Webmail. |
 

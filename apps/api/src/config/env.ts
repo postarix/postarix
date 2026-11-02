@@ -72,6 +72,12 @@ const envSchema = z
     /** DNS resolvers used for verification (defaults to the system resolver). */
     DNS_SERVERS: commaList,
 
+    /**
+     * MTA-STS policy mode for hosted domains (RFC 8461). "testing" reports
+     * problems without refusing delivery; switch to "enforce" once every
+     * domain's mta-sts host serves a valid certificate.
+     */
+    MTA_STS_MODE: z.enum(['enforce', 'testing', 'none']).default('testing'),
     /** Public name of the mail server, used in the DNS records shown to admins (MX target). */
     MAIL_HOSTNAME: z.string().min(1).default('localhost'),
     /**

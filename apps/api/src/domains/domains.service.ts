@@ -16,6 +16,7 @@ import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto } from './domains.dto.js';
 import { DomainsRepository } from './domains.repository.js';
+import { mtaStsPolicy, mtaStsPolicyId } from '../discovery/discovery.js';
 import { checkDnsRecords, type DnsRecordCheckDto } from './dns-check.js';
 
 const DNS_CHECK_CACHE_MS = 30_000;
@@ -114,6 +115,14 @@ export class DomainsService {
       name: `_dmarc.${domain.name}`,
       value: 'v=DMARC1; p=quarantine; adkim=s; aspf=s',
     });
+    // Mail apps configure themselves (Thunderbird autoconfig), and other
+    // servers learn to require TLS (MTA-STS: the policy is served on mta-sts.<domain>).
+    const policyId = mtaStsPolicyId(mtaStsPolicy(this.env.MTA_STS_MODE, host));
+    records.push(
+      { purpose: 'autoconfig', type: 'CNAME', name: `autoconfig.${domain.name}`, value: `${host}.` },
+      { purpose: 'mta-sts', type: 'CNAME', name: `mta-sts.${domain.name}`, value: `${host}.` },
+      { purpose: 'mta-sts-id', type: 'TXT', name: `_mta-sts.${domain.name}`, value: `v=STSv1; id=${policyId}` },
+    );
     return records;
   }
 

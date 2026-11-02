@@ -13,4 +13,5 @@ Object.assign(process.env, {
   MAIL_ENGINE: 'memory',
   DOMAIN_VERIFICATION: 'skip',
   INTERNAL_API_TOKEN: 'internal-test-token-that-is-long-enough',
+  MAIL_HOSTNAME: 'mail.example.test',
 });

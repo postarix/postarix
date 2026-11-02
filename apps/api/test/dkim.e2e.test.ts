@@ -68,8 +68,8 @@ describe('DKIM keys', () => {
     const domain = await createDomain(`dkim-dns-${Date.now()}.example`);
     const res = await alice.agent.get(`/api/orgs/${orgA}/domains/${domain.id}/dns-records`).expect(200);
     const purposes = res.body.data.map((r: { purpose: string }) => r.purpose);
-    expect(purposes).toEqual(['verification', 'mx', 'spf', 'dkim', 'dmarc']);
-    expect(res.body.data[1]).toMatchObject({ type: 'MX', name: domain.name, value: '10 localhost.' });
+    expect(purposes).toEqual(['verification', 'mx', 'spf', 'dkim', 'dmarc', 'autoconfig', 'mta-sts', 'mta-sts-id']);
+    expect(res.body.data[1]).toMatchObject({ type: 'MX', name: domain.name, value: '10 mail.example.test.' });
   });
 
   it('hides another organization’s DNS records', async () => {

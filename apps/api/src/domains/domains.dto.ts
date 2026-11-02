@@ -44,8 +44,8 @@ export function toDomainDto(row: DomainRow): DomainDto {
 }
 
 export interface DnsRecordDto {
-  purpose: 'verification' | 'mx' | 'spf' | 'dkim' | 'dmarc';
-  type: 'TXT' | 'MX';
+  purpose: 'verification' | 'mx' | 'spf' | 'dkim' | 'dmarc' | 'autoconfig' | 'mta-sts' | 'mta-sts-id';
+  type: 'TXT' | 'MX' | 'CNAME';
   name: string;
   value: string;
 }

@@ -6,6 +6,7 @@ import { AliasesModule } from './aliases/aliases.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AppPasswordsModule } from './app-passwords/app-passwords.module.js';
 import { DomainsModule } from './domains/domains.module.js';
+import { DiscoveryModule } from './discovery/discovery.module.js';
 import { HealthController } from './health/health.controller.js';
 import { JmapModule } from './jmap/jmap.module.js';
 import { MailModule } from './mail/mail.module.js';
@@ -25,6 +26,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     MailAuthModule,
     JmapModule,
     MailModule,
+    DiscoveryModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],
