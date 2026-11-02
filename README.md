@@ -51,15 +51,20 @@ docs/           Documentación
 
 ## Desarrollo
 
-Requisitos: Node.js 24 LTS, pnpm (vía Corepack) y Docker.
+Requisitos: Node.js 22 o superior (recomendado 24 LTS), pnpm (vía Corepack) y Docker.
 
 ```bash
 corepack enable
 pnpm install
-cp .env.example .env
-pnpm dev:services   # levanta PostgreSQL y Valkey
-pnpm dev            # levanta las apps
+cp .env.example .env                       # completa AUTH_SECRET
+pnpm dev:services                          # levanta PostgreSQL y Valkey
+pnpm --filter @postarix/api db:migrate     # crea las tablas
+ADMIN_EMAIL=tu@dominio.com ADMIN_PASSWORD='una frase larga' \
+  pnpm --filter @postarix/api create-admin # primera cuenta (super-admin)
+pnpm dev                                   # levanta las apps
 ```
+
+Comprobaciones: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
 
 ## Hoja de ruta
 
