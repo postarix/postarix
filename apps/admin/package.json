@@ -28,7 +28,7 @@
     "@playwright/test": "1.63.0",
     "@postarix/config": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^22.19.0",
+    "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

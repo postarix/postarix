@@ -12,7 +12,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@postarix/config": "workspace:*",
-    "@types/node": "^22.19.0",
+    "@types/node": "^26.6.6",
     "@types/nodemailer": "^8.0.2",
     "imapflow": "^2.10.0",
     "nodemailer": "^10.3.1",
