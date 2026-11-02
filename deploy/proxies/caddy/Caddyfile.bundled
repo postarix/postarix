@@ -1,0 +1,70 @@
+# The bundled reverse proxy (docker/compose/caddy.yml). Configured from the
+# environment: MAIL_HOSTNAME and ACME_EMAIL from postarix.env.
+{
+	email {$ACME_EMAIL}
+	# Certificates for autoconfig.<domain> and mta-sts.<domain> of every hosted
+	# domain, obtained when first asked for; the API says which names qualify.
+	on_demand_tls {
+		ask http://api:3000/api/tls/allowed
+	}
+}
+
+(postarix) {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# Internal endpoints never leave the Docker network. This must be a handle
+	# block listed first: Caddy runs handle blocks before a bare respond.
+	@internal path_regexp (?i)^/+api/+internal(/|$)
+	handle @internal {
+		respond 404
+	}
+
+	# Mail app setup (autoconfig, Autodiscover) and the MTA-STS policy.
+	@discovery path /.well-known/autoconfig/* /mail/config-v1.1.xml /autodiscover/autodiscover.xml /Autodiscover/Autodiscover.xml /.well-known/mta-sts.txt
+	handle @discovery {
+		reverse_proxy api:3000
+	}
+}
+
+{$MAIL_HOSTNAME} {
+	import postarix
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle /admin* {
+		reverse_proxy admin:3001
+	}
+
+	# Calendars and contacts share the webmail's origin: nothing Cyrus serves
+	# there may run, be framed, or be sniffed into HTML.
+	@cyrus path /.well-known/caldav /.well-known/carddav /dav/*
+	handle @cyrus {
+		header Content-Security-Policy "default-src 'none'; sandbox; frame-ancestors 'none'"
+		header X-Content-Type-Options nosniff
+		reverse_proxy cyrus:8080
+	}
+
+	handle /.well-known/acme-challenge/* {
+		reverse_proxy certs:80
+	}
+
+	# Everything else is the webmail.
+	handle {
+		reverse_proxy webmail:3002
+	}
+}
+
+# autoconfig.<domain> and mta-sts.<domain> of hosted domains: discovery only.
+https:// {
+	tls {
+		on_demand
+	}
+	import postarix
+
+	handle {
+		respond 404
+	}
+}

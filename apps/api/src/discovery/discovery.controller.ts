@@ -82,4 +82,21 @@ export class DiscoveryController {
     if (!host.startsWith('mta-sts.') || !(await this.isHosted(host.slice('mta-sts.'.length)))) throw new NotFoundException();
     return mtaStsPolicy(this.env.MTA_STS_MODE, this.env.MAIL_HOSTNAME);
   }
+
+  /**
+   * /api/tls/allowed?domain=…: whether the reverse proxy may obtain a
+   * certificate for this name on demand (Caddy's on_demand_tls "ask"). Only
+   * the mail hostname and the autoconfig./mta-sts. names of hosted domains,
+   * so nobody can make the proxy request certificates for arbitrary names.
+   */
+  @Public()
+  @Get('tls/allowed')
+  @Header('cache-control', 'no-store')
+  async tlsAllowed(@Query('domain') domain: unknown): Promise<string> {
+    const name = typeof domain === 'string' ? domain.trim().toLowerCase().replace(/\.$/, '') : '';
+    if (name && name === this.env.MAIL_HOSTNAME.toLowerCase()) return 'ok';
+    const match = /^(?:autoconfig|mta-sts)\.(.+)$/.exec(name);
+    if (match && (await this.isHosted(match[1]!))) return 'ok';
+    throw new NotFoundException();
+  }
 }

@@ -1,0 +1,28 @@
+# The bundled reverse proxy: Caddy, with HTTPS certificates from Let's Encrypt.
+#   docker compose -f postarix.yml -f caddy.yml --env-file postarix.env up -d
+# Publishes ports 80 and 443. Skip this file to use your own proxy instead
+# (see deploy/proxies).
+services:
+  caddy:
+    restart: unless-stopped
+    image: caddy:2.11-alpine
+    environment:
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL (Let's Encrypt account e-mail)}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ../../deploy/proxies/caddy/Caddyfile.bundled:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [proxy]
+    cap_drop: [NET_RAW]
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  caddy-data:
+  caddy-config:

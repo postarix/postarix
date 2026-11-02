@@ -157,6 +157,9 @@ jobs:
       - name: Install Chromium (webmail browser tests)
         run: pnpm --filter @postarix/integration-tests exec playwright install --with-deps chromium
 
+      - name: Install age (encrypted backup test)
+        run: sudo apt-get install -y --no-install-recommends age
+
       - name: Build images, start the stack and run the integration tests
         run: tests/integration/run.sh
 
@@ -189,6 +192,9 @@ jobs:
       - name: Install Chromium (webmail browser tests)
         run: pnpm --filter @postarix/integration-tests exec playwright install --with-deps chromium
 
+      - name: Install age (encrypted backup test)
+        run: sudo apt-get install -y --no-install-recommends age
+
       - name: Build images, start a Murder (two backends) and run the integration tests
         run: MURDER=1 tests/integration/run.sh
 
@@ -200,6 +206,32 @@ jobs:
           path: tests/integration/test-results
           retention-days: 7
 
+  images:
+    name: Image security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the images
+        run: |
+          docker compose -f docker/compose/postarix.yml --env-file docker/compose/test.env --profile clamav --profile crowdsec \
+            build api admin webmail cyrus postfix rspamd unbound certs clamav crowdsec
+
+      # Known vulnerabilities with a fix available fail the build when
+      # critical; high ones are listed in the log.
+      - name: Scan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.76.1/contrib/install.sh | sh -s -- -b /usr/local/bin v0.76.1
+          status=0
+          for image in api admin webmail cyrus postfix rspamd unbound certs clamav crowdsec; do
+            echo "::group::$image"
+            trivy image --quiet --ignore-unfixed --severity HIGH,CRITICAL --exit-code 0 "ghcr.io/postarix/$image:dev"
+            trivy image --quiet --ignore-unfixed --severity CRITICAL --exit-code 1 "ghcr.io/postarix/$image:dev" >/dev/null || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
   helm:
     name: Helm chart
     runs-on: ubuntu-latest
@@ -208,7 +240,13 @@ jobs:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
       - name: The chart's init script matches the Compose one
-        run: cmp deploy/helm/postarix/files/10-postarix-mail-role.sh docker/postgres/10-postarix-mail-role.sh
+        run: |
+          cmp deploy/helm/postarix/files/10-postarix-mail-role.sh docker/postgres/10-postarix-mail-role.sh
+          cmp deploy/helm/postarix/files/alerts.yml deploy/monitoring/alerts.yml
+      - name: Check the Prometheus configuration and alert rules
+        run: |
+          docker run --rm -v "$PWD/deploy/monitoring:/etc/prometheus:ro" --entrypoint promtool prom/prometheus:v3.14.0 \
+            check config /etc/prometheus/prometheus.yml
       - name: Lint and render
         run: |
           helm lint deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml
@@ -216,6 +254,11 @@ jobs:
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
             --set postgresql.enabled=false,postgresql.host=db.example,valkey.enabled=false,valkey.host=cache.example,existingSecret=postarix,networkPolicies.enabled=false,ingress.enabled=false,tls.certManager.enabled=true >> /tmp/rendered.yaml
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml --set clamav.enabled=true >> /tmp/rendered.yaml
+          helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
+            --set metrics.serviceMonitor.enabled=true,metrics.prometheusRule.enabled=true > /tmp/monitoring.yaml
+          grep -q 'kind: ServiceMonitor' /tmp/monitoring.yaml
+          grep -q 'alert: PostarixApiDown' /tmp/monitoring.yaml
+          cat /tmp/monitoring.yaml >> /tmp/rendered.yaml
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml --set mail.murder.enabled=true,mail.murder.backends=3 > /tmp/murder.yaml
           grep -q 'value: "postarix-cyrus-backend-0.postarix-cyrus-backend postarix-cyrus-backend-1.postarix-cyrus-backend postarix-cyrus-backend-2.postarix-cyrus-backend"' /tmp/murder.yaml
           grep -q 'value: "b0=postarix-cyrus-backend-0.postarix-cyrus-backend,b1=postarix-cyrus-backend-1.postarix-cyrus-backend,b2=postarix-cyrus-backend-2.postarix-cyrus-backend"' /tmp/murder.yaml
@@ -262,7 +305,7 @@ jobs:
       - name: Load the images into the cluster
         run: |
           for image in api admin webmail cyrus postfix rspamd unbound; do
-            kind load docker-image "postarix/$image:dev" --name postarix
+            kind load docker-image "ghcr.io/postarix/$image:dev" --name postarix
           done
 
       - name: Install the chart
