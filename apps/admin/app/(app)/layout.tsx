@@ -43,7 +43,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const orgs = superAdmin ? (all.data ?? []) : (mine.data ?? []);
   const signOut = async () => {
     await authClient.signOut();
-    router.replace('/login');
+    // A full page load drops every cached query, so nothing of this session
+    // stays in memory for whoever uses the browser next.
+    window.location.assign('/admin/login');
   };
 
   const brand = (
