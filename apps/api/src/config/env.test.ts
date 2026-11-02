@@ -24,6 +24,18 @@ describe('loadEnv', () => {
     expect(env.TRUSTED_PROXIES).toEqual(['10.0.0.0/8', '172.16.0.1']);
   });
 
+  it('reads the backends of a Cyrus Murder', () => {
+    expect(loadEnv(base).CYRUS_BACKENDS).toEqual([]);
+    const env = loadEnv({ ...base, CYRUS_BACKENDS: 'b1=cyrus-backend-1, b2=cyrus-backend-2.cluster.local', CYRUS_DEFAULT_BACKEND: 'b2' });
+    expect(env.CYRUS_BACKENDS).toEqual([
+      { name: 'b1', host: 'cyrus-backend-1' },
+      { name: 'b2', host: 'cyrus-backend-2.cluster.local' },
+    ]);
+    expect(() => loadEnv({ ...base, CYRUS_BACKENDS: 'b1=one,b1=two' })).toThrow(/unique/);
+    expect(() => loadEnv({ ...base, CYRUS_BACKENDS: 'just-a-host' })).toThrow(/name=host/);
+    expect(() => loadEnv({ ...base, CYRUS_BACKENDS: 'b1=one', CYRUS_DEFAULT_BACKEND: 'b9' })).toThrow(/CYRUS_DEFAULT_BACKEND/);
+  });
+
   it('refuses an https deployment that is not explicitly in production mode', () => {
     const { NODE_ENV: _unused, ...withoutNodeEnv } = base;
     expect(() => loadEnv(withoutNodeEnv)).toThrow(/NODE_ENV/);

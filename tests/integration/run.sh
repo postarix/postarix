@@ -3,11 +3,18 @@
 # tears it down. Extra environment (e.g. BASE_IMAGE) is passed to compose.
 #   tests/integration/run.sh            # build, test, tear down
 #   KEEP_STACK=1 tests/integration/run.sh   # leave the stack running afterwards
+#   MURDER=1 tests/integration/run.sh       # with a Cyrus Murder (two backends)
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 ENV_FILE="${ENV_FILE:-docker/compose/test.env}"
-COMPOSE=(docker compose -f docker/compose/postarix.yml -f docker/compose/test.yml --env-file "$ENV_FILE")
+COMPOSE_FILES=(-f docker/compose/postarix.yml -f docker/compose/test.yml)
+if [ -n "${MURDER:-}" ]; then
+  COMPOSE_FILES+=(-f docker/compose/murder.yml)
+  # The backup scripts handle a single Cyrus.
+  SKIP_BACKUP_TEST=1
+fi
+COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE")
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@postarix.test}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-integration admin password}"
 export ADMIN_EMAIL ADMIN_PASSWORD

@@ -8,7 +8,21 @@ set -eu
 # The API's internal HTTPS listener (host:port), for the mail-login bridge.
 POSTARIX_API_INTERNAL="${POSTARIX_API_INTERNAL:-api:3443}"
 CERT_DIR="${CERT_DIR:-/certs}"
-export MAIL_HOSTNAME
+# standalone (one Cyrus), or a part of a Cyrus Murder: backend (holds
+# mailboxes), frontend (where clients and Postfix connect; routes each user to
+# their backend) or mupdate (the list of which mailbox is on which backend).
+CYRUS_ROLE="${CYRUS_ROLE:-standalone}"
+# This server's own name in the Murder (what frontends connect to); the public
+# name otherwise.
+CYRUS_SERVERNAME="${CYRUS_SERVERNAME:-$MAIL_HOSTNAME}"
+export MAIL_HOSTNAME CYRUS_SERVERNAME
+case "$CYRUS_ROLE" in
+  standalone) ;;
+  backend|frontend) : "${MURDER_MUPDATE_HOST:?MURDER_MUPDATE_HOST is required in a Murder}" ;;
+  mupdate) ;;
+  *) echo "CYRUS_ROLE must be standalone, backend, frontend or mupdate" >&2; exit 1 ;;
+esac
+if [ "$CYRUS_ROLE" = frontend ]; then : "${MURDER_BACKENDS:?MURDER_BACKENDS (the backends' names) is required on a frontend}"; fi
 
 log() { echo "[cyrus-entrypoint] $*"; }
 
@@ -17,13 +31,101 @@ log() { echo "[cyrus-entrypoint] $*"; }
 internal_secret() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1; }
 MAIL_AUTH_SECRET=$(internal_secret mail-auth)
 CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
+# Murder: backends publish their mailboxes to mupdate, frontends log in to
+# backends on behalf of users. Internal accounts, never valid on public ports.
+MUPDATE_SECRET=$(internal_secret murder-mupdate)
+PROXY_SECRET=$(internal_secret murder-proxy)
 
 # --- Configuration -----------------------------------------------------------
-envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
+envsubst '${CYRUS_SERVERNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
+
+# --- Cyrus Murder ------------------------------------------------------------
+murder_client() {
+  echo "mupdate_server: $MURDER_MUPDATE_HOST"
+  echo "mupdate_port: 3905"
+  echo "mupdate_config: standard"
+  echo "mupdate_authname: postarix-mupdate"
+  echo "mupdate_password: $MUPDATE_SECRET"
+}
+# Internal accounts live in a sasldb of their own (realm: this server's name).
+murder_accounts() {
+  rm -f /etc/sasldb2-murder
+  for account in "$@"; do
+    case "$account" in
+      postarix-mupdate) secret=$MUPDATE_SECRET ;;
+      postarix-murder) secret=$PROXY_SECRET ;;
+    esac
+    printf '%s' "$secret" | saslpasswd2 -p -c -u "$CYRUS_SERVERNAME" -f /etc/sasldb2-murder "$account"
+  done
+  chown root:sasl /etc/sasldb2-murder
+  chmod 0640 /etc/sasldb2-murder
+}
+case "$CYRUS_ROLE" in
+  backend)
+    # Only frontends, the API and Postfix reach a backend (never clients):
+    # its services may take plain-text logins on the internal network, and
+    # the internal accounts are valid here, from their own sasldb.
+    {
+      sed -e 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: saslauthd auxprop/' \
+          -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf
+      echo "sasl_sasldb_path: /etc/sasldb2-murder"
+      murder_client
+      echo "proxyservers: postarix-murder"
+      # Frontends deliver over LMTP as this account (per-service option: the service is "lmtpnet").
+      echo "lmtpnet_admins: postarix-murder"
+    } > /etc/imapd.conf.new
+    mv /etc/imapd.conf.new /etc/imapd.conf
+    murder_accounts postarix-murder
+    # Services frontends connect to, on their standard ports; and the
+    # backend publishes its mailboxes to mupdate at start.
+    sed -i -e 's|^START {|START {\n  mupdatepush   cmd="ctl_mboxlist -m"|' \
+      -e 's|^SERVICES {|SERVICES {\n  pop3          cmd="pop3d -U 30" listen="0.0.0.0:110" prefork=0 maxchild=50\n  lmtpnet       cmd="lmtpd -C /etc/imapd-lmtp.conf" listen="0.0.0.0:24" prefork=1 maxchild=20\n  httpnet       cmd="httpd -U 30" listen="0.0.0.0:80" prefork=1 maxchild=100|' /etc/cyrus.conf
+    ;;
+  frontend)
+    {
+      cat /etc/imapd.conf
+      murder_client
+      echo "serverlist: $MURDER_BACKENDS"
+      echo "proxy_authname: postarix-murder"
+      echo "proxy_password: $PROXY_SECRET"
+      # ManageSieve: pass connections on to the backend instead of referring
+      # clients to it (backends are not reachable by clients).
+      echo "sieve_allowreferrals: no"
+    } > /etc/imapd.conf.new
+    mv /etc/imapd.conf.new /etc/imapd.conf
+    # A local copy of the mailbox list, kept in sync by mupdate (slave). No
+    # mailboxes, so no admin IMAP or JMAP service here: the API reaches the
+    # backends directly.
+    sed -i -e '/^  imapadmin /d' -e '/^  jmap /d' -e '/^  squatter /d' \
+      -e 's|^SERVICES {|SERVICES {\n  mupdate       cmd="mupdate" listen="3905" prefork=1|' /etc/cyrus.conf
+    ;;
+  mupdate)
+    {
+      sed -e 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' -e 's/^allowplaintext:.*/allowplaintext: yes/' /etc/imapd.conf
+      echo "sasl_sasldb_path: /etc/sasldb2-murder"
+      echo "mupdate_config: standard"
+      echo "admins: postarix-mupdate"
+    } > /etc/imapd.conf.new
+    mv /etc/imapd.conf.new /etc/imapd.conf
+    murder_accounts postarix-mupdate
+    cat > /etc/cyrus.conf <<'CONF'
+# Cyrus Murder mupdate server: the list of mailboxes and their backends.
+START {
+  recover       cmd="/usr/sbin/cyrus ctl_cyrusdb -r"
+}
+SERVICES {
+  mupdate       cmd="mupdate -m" listen="0.0.0.0:3905" prefork=1
+}
+EVENTS {
+  checkpoint    cmd="/usr/sbin/cyrus ctl_cyrusdb -c" period=30
+}
+CONF
+    ;;
+esac
 # Admin rights, and the sasldb that holds the admin password, exist only in the
 # configuration of the internal admin service.
 {
-  sed 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' /etc/imapd.conf
+  sed -e 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: auxprop/' -e '/^sasl_sasldb_path:/d' -e '/^admins:/d' /etc/imapd.conf
   echo "admins: cyrus"
 } > /etc/imapd-admin.conf
 # The JMAP service: JMAP (mail, calendars, contacts; the DAV modules provide
@@ -36,13 +138,16 @@ envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
 # and for which it accepts nothing but its tokens (no app passwords).
 sed -e 's/^httpmodules:.*/httpmodules: caldav carddav jmap/' \
     -e 's/^allowplaintext:.*/allowplaintext: yes/' \
+    -e 's/^sasl_pwcheck_method:.*/sasl_pwcheck_method: saslauthd/' -e '/^sasl_sasldb_path:/d' \
     -e 's|^sasl_saslauthd_path:.*|sasl_saslauthd_path: /run/saslauthd-jmap/mux|' /etc/imapd.conf > /etc/imapd-jmap.conf
 # Contacts over JMAP are a Cyrus extension (the IETF JMAP for Contacts
 # capability is not in this Cyrus version yet).
 echo 'jmap_nonstandard_extensions: yes' >> /etc/imapd-jmap.conf
 # The JMAP service listens on the internal network address only.
 sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
-chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
+# Readable by Cyrus (group mail) only: in a Murder they hold internal passwords.
+chown root:mail /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
+chmod 0640 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 
 # Mail Cyrus sends by itself (Sieve redirect and vacation replies) is sent by
 # lmtpd only, through a Postfix port kept for it (10588; Rspamd checks it, see
@@ -85,12 +190,12 @@ if ! install_certificates; then
 fi
 
 # --- Internal admin account (sasldb; realm = servername) ---------------------
-printf '%s' "$CYRUS_ADMIN_PASSWORD" | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/sasldb2 cyrus
+printf '%s' "$CYRUS_ADMIN_PASSWORD" | saslpasswd2 -p -c -u "$CYRUS_SERVERNAME" -f /etc/sasldb2 cyrus
 chown root:sasl /etc/sasldb2
 chmod 0640 /etc/sasldb2
 
 # Both secrets now live in root-only files; no process started below needs them.
-unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET
+unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET MUPDATE_SECRET PROXY_SECRET
 
 # --- Runtime and data directories ---------------------------------------------
 install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket
@@ -136,5 +241,5 @@ POSTARIX_SASL_INSTANCE=jmap saslauthd -a pam -r -m /run/saslauthd-jmap -n 2
   done
 ) &
 
-log "starting Cyrus for $MAIL_HOSTNAME"
+log "starting Cyrus ($CYRUS_ROLE, $CYRUS_SERVERNAME) for $MAIL_HOSTNAME"
 exec /usr/sbin/cyrmaster -D -M /etc/cyrus.conf -C /etc/imapd.conf

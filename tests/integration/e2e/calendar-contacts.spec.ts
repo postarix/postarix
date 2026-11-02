@@ -110,7 +110,8 @@ test('invites a colleague, who answers from the message', async ({ browser }) =>
   await dialog.getByLabel('Guests').fill(`${colleague}, `);
   await dialog.getByRole('button', { name: 'Save and send' }).click();
   await expect(dialog).toBeHidden();
-  await olga.getByRole('grid').getByRole('button', { name: new RegExp(title) }).click();
+  // Once the calendar shows the event with its guests.
+  await olga.getByRole('grid').getByRole('button', { name: new RegExp(`${title}.*With guests`) }).click();
   await expect(olga.getByRole('dialog').getByRole('list', { name: 'Answers' })).toContainText(`${colleague}Not answered`);
   await olga.close();
 

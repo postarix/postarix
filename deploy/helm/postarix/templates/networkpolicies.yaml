@@ -27,6 +27,14 @@ spec:
         - { port: 1143 }
         - { port: 8008 }
         - { port: 10587 }
+    {{- if .Values.mail.murder.enabled }}
+    # Sieve redirects and vacation replies from the Murder's backends.
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 14 }}
+      ports:
+        - { port: 10588 }
+    {{- end }}
 ---
 # The API: its web port from anywhere (the ingress), its internal HTTPS port
 # (mail-login bridge) from the mail pod only.
@@ -45,9 +53,64 @@ spec:
     - from:
         - podSelector:
             matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 14 }}
+        {{- if .Values.mail.murder.enabled }}
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 14 }}
+        {{- end }}
       ports:
         - { port: 3443 }
 ---
+{{- if .Values.mail.murder.enabled }}
+# Murder backends: reached by the frontend (mail pod) for clients and
+# delivery, by the API for administration and JMAP, and by each other.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list . "cyrus-backend") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 14 }}
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 14 }}
+      ports:
+        - { port: 143 }
+        - { port: 110 }
+        - { port: 24 }
+        - { port: 80 }
+        - { port: 4190 }
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "api") | nindent 14 }}
+      ports:
+        - { port: 1143 }
+        - { port: 8008 }
+---
+# The mupdate server: the backends and the frontend only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "postarix.name" (list . "mupdate") }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "postarix.selector" (list . "mupdate") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "mail") | nindent 14 }}
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 14 }}
+      ports:
+        - { port: 3905 }
+---
+{{- end }}
 # Data stores and the spam filter accept only Postarix' own pods.
 {{- $components := list "postgres" "valkey" "rspamd" "unbound" }}
 {{- if .Values.clamav.enabled }}{{- $components = append $components "clamav" }}{{- end }}

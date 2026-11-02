@@ -65,6 +65,35 @@ const envSchema = z
     SUBMISSION_PORT: z.coerce.number().int().positive().default(10587),
     /** Largest attachment or message accepted through the webmail, in bytes (default 50 MiB, like Postfix). */
     MAIL_UPLOAD_LIMIT: z.coerce.number().int().positive().default(50 * 1024 * 1024),
+    /**
+     * Cyrus Murder: the backends mailboxes are spread over, as
+     * "name=host,name=host" (each one's admin IMAP is host:CYRUS_PORT and its
+     * JMAP https://host:8008). Unset: a single Cyrus (CYRUS_HOST,
+     * CYRUS_JMAP_URL). See docs/SCALING.md.
+     */
+    CYRUS_BACKENDS: z
+      .string()
+      .optional()
+      .transform((value, ctx) => {
+        if (!value?.trim()) return [];
+        const backends = value.split(',').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+          const [name, host] = entry.split('=').map((part) => part.trim());
+          return { name: name ?? '', host: host ?? '' };
+        });
+        for (const backend of backends) {
+          if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(backend.name) || !/^[A-Za-z0-9.-]+$/.test(backend.host)) {
+            ctx.addIssue({ code: 'custom', message: 'Expected "name=host,name=host" (names: lowercase letters, digits, dashes)' });
+            return z.NEVER;
+          }
+        }
+        if (new Set(backends.map((b) => b.name)).size !== backends.length) {
+          ctx.addIssue({ code: 'custom', message: 'Backend names must be unique' });
+          return z.NEVER;
+        }
+        return backends;
+      }),
+    /** Murder: the backend of mailboxes created before the Murder (default: the first one). */
+    CYRUS_DEFAULT_BACKEND: z.string().optional(),
     CYRUS_ADMIN_USER: z.string().default('cyrus'),
     CYRUS_ADMIN_PASSWORD: z.string().optional(),
 
@@ -119,6 +148,10 @@ const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || (env.VALKEY_URL ?? '').length > 0, {
     path: ['VALKEY_URL'],
     message: 'is required in production (Rspamd reads DKIM keys from Valkey)',
+  })
+  .refine((env) => !env.CYRUS_DEFAULT_BACKEND || env.CYRUS_BACKENDS.some((b) => b.name === env.CYRUS_DEFAULT_BACKEND), {
+    path: ['CYRUS_DEFAULT_BACKEND'],
+    message: 'CYRUS_DEFAULT_BACKEND must be one of CYRUS_BACKENDS',
   })
   .refine((env) => env.NODE_ENV !== 'production' || !env.CYRUS_JMAP_URL || env.CYRUS_JMAP_URL.startsWith('https:'), {
     path: ['CYRUS_JMAP_URL'],

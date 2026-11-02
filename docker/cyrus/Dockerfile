@@ -1,4 +1,5 @@
-# Cyrus IMAP: mailboxes, IMAP/POP3, ManageSieve, CalDAV and CardDAV.
+# Cyrus IMAP: mailboxes, IMAP/POP3, ManageSieve, CalDAV and CardDAV. Also runs
+# as a Cyrus Murder backend, frontend or mupdate server (CYRUS_ROLE).
 # Also runs saslauthd, which validates mail logins against the Postarix API
 # (PAM → pam_exec → /api/internal/mail-auth) for both Cyrus and Postfix.
 ARG BASE_IMAGE=debian:trixie-slim
@@ -8,12 +9,16 @@ RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      cyrus-imapd cyrus-caldav cyrus-pop3d cyrus-admin \
+      cyrus-imapd cyrus-caldav cyrus-pop3d cyrus-admin cyrus-murder \
       sasl2-bin libsasl2-modules libpam-modules \
       rsyslog ca-certificates curl openssl gettext-base; \
     rm -rf /var/lib/apt/lists/*; \
     # The package ships a sample config; ours replaces it at startup.
-    rm -f /etc/imapd.conf /etc/cyrus.conf
+    rm -f /etc/imapd.conf /etc/cyrus.conf; \
+    # Service names Cyrus looks up (a Murder connects to backends by them).
+    for entry in 'imap 143/tcp' 'lmtp 24/tcp' 'mupdate 3905/tcp'; do \
+      grep -q "^${entry%% *}[[:space:]]" /etc/services || echo "$entry" >> /etc/services; \
+    done
 
 COPY rootfs/ /
 
