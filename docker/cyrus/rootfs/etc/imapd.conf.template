@@ -5,7 +5,7 @@ mboxname_lockpath: /run/cyrus/lock
 defaultpartition: default
 partition-default: /var/spool/cyrus/mail
 sievedir: /var/spool/sieve
-servername: ${MAIL_HOSTNAME}
+servername: ${CYRUS_SERVERNAME}
 
 # One namespace per domain; users log in with their full address.
 virtdomains: userid

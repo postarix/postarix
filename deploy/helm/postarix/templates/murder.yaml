@@ -1,0 +1,161 @@
+{{- if .Values.mail.murder.enabled }}
+{{- $backend := include "postarix.name" (list . "cyrus-backend") }}
+{{- $mupdate := include "postarix.name" (list . "mupdate") }}
+{{- $api := include "postarix.name" (list . "api") }}
+{{- $mail := include "postarix.name" (list . "mail-internal") }}
+# Cyrus Murder: the mupdate server keeps the list of which mailbox is on which
+# backend; frontends (the mail pod) follow it to route users.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $mupdate }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mupdate
+spec:
+  serviceName: {{ $mupdate }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "mupdate") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "mupdate") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: mupdate
+          image: {{ include "postarix.image" (list . "cyrus") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            - { name: CYRUS_ROLE, value: mupdate }
+            - { name: CYRUS_SERVERNAME, value: {{ $mupdate | quote }} }
+            - { name: MAIL_HOSTNAME, value: {{ .Values.mailHostname | quote }} }
+          ports:
+            - { name: mupdate, containerPort: 3905 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/cyrus }
+            - { name: certs, mountPath: /certs, readOnly: true }
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck] }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.mail.murder.mupdate.resources | nindent 12 }}
+      volumes:
+        - name: certs
+          secret:
+            secretName: {{ .Values.tls.secretName }}
+            items:
+              - { key: tls.crt, path: fullchain.pem }
+              - { key: tls.key, path: privkey.pem }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.mail.murder.mupdate.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.mail.murder.mupdate.storage.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $mupdate }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "postarix.selector" (list . "mupdate") | nindent 4 }}
+  ports:
+    - { name: mupdate, port: 3905, targetPort: mupdate }
+---
+# The backends hold the mailboxes. Each is reached by its own name
+# (<pod>.<service>), which is also its name in the Murder.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $backend }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cyrus-backend
+spec:
+  serviceName: {{ $backend }}
+  replicas: {{ .Values.mail.murder.backends }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: cyrus
+          image: {{ include "postarix.image" (list . "cyrus") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
+            {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - { name: CYRUS_ROLE, value: backend }
+            - { name: CYRUS_SERVERNAME, value: "$(POD_NAME).{{ $backend }}" }
+            - { name: MURDER_MUPDATE_HOST, value: {{ $mupdate | quote }} }
+            - { name: MAIL_HOSTNAME, value: {{ .Values.mailHostname | quote }} }
+            - { name: POSTARIX_API_INTERNAL, value: "{{ $api }}:3443" }
+            - { name: JMAP_LISTEN_ADDRESS, value: 0.0.0.0 }
+            # Sieve redirects and vacation replies go out through Postfix (mail pod).
+            - { name: CYRUS_SMTP_HOST, value: "{{ $mail }}:10588" }
+          ports:
+            - { name: imap, containerPort: 143 }
+            - { name: pop3, containerPort: 110 }
+            - { name: lmtp, containerPort: 24 }
+            - { name: http, containerPort: 80 }
+            - { name: sieve, containerPort: 4190 }
+            - { name: imap-admin, containerPort: 1143 }
+            - { name: jmap, containerPort: 8008 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/cyrus, subPath: cyrus-lib }
+            - { name: data, mountPath: /var/spool/cyrus, subPath: cyrus-spool }
+            - { name: data, mountPath: /var/spool/sieve, subPath: cyrus-sieve }
+            - { name: certs, mountPath: /certs, readOnly: true }
+          readinessProbe:
+            exec: { command: [/usr/local/bin/healthcheck] }
+            periodSeconds: 15
+          resources: {{- toYaml .Values.mail.murder.resources | nindent 12 }}
+      volumes:
+        - name: certs
+          secret:
+            secretName: {{ .Values.tls.secretName }}
+            items:
+              - { key: tls.crt, path: fullchain.pem }
+              - { key: tls.key, path: privkey.pem }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.mail.murder.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.mail.murder.storage.size }}
+---
+# Headless: gives each backend its own name.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $backend }}
+  labels: {{- include "postarix.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 4 }}
+  ports:
+    - { name: imap, port: 143 }
+{{- end }}

@@ -168,6 +168,38 @@ jobs:
           path: tests/integration/test-results
           retention-days: 7
 
+  murder:
+    name: Integration (Cyrus Murder)
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium (webmail browser tests)
+        run: pnpm --filter @postarix/integration-tests exec playwright install --with-deps chromium
+
+      - name: Build images, start a Murder (two backends) and run the integration tests
+        run: MURDER=1 tests/integration/run.sh
+
+      - name: Upload traces of failed browser tests
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: murder-webmail-traces
+          path: tests/integration/test-results
+          retention-days: 7
+
   helm:
     name: Helm chart
     runs-on: ubuntu-latest
@@ -184,6 +216,10 @@ jobs:
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
             --set postgresql.enabled=false,postgresql.host=db.example,valkey.enabled=false,valkey.host=cache.example,existingSecret=postarix,networkPolicies.enabled=false,ingress.enabled=false,tls.certManager.enabled=true >> /tmp/rendered.yaml
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml --set clamav.enabled=true >> /tmp/rendered.yaml
+          helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml --set mail.murder.enabled=true,mail.murder.backends=3 > /tmp/murder.yaml
+          grep -q 'value: "postarix-cyrus-backend-0.postarix-cyrus-backend postarix-cyrus-backend-1.postarix-cyrus-backend postarix-cyrus-backend-2.postarix-cyrus-backend"' /tmp/murder.yaml
+          grep -q 'value: "b0=postarix-cyrus-backend-0.postarix-cyrus-backend,b1=postarix-cyrus-backend-1.postarix-cyrus-backend,b2=postarix-cyrus-backend-2.postarix-cyrus-backend"' /tmp/murder.yaml
+          cat /tmp/murder.yaml >> /tmp/rendered.yaml
           helm template postarix deploy/helm/postarix -f deploy/helm/postarix/ci-values.yaml \
             --set 'ingress.discoveryDomains={example.com}' --set ingress.tlsSecretName=web-tls > /tmp/ingress.yaml
           # /api/internal must never be routed, and the discovery names must be.

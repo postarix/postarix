@@ -51,7 +51,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       inject: [DATABASE, ENV, COUNTER_STORE],
       useFactory: (db: Database, env: Env, counters: CounterStore) => createAuth(db, env, counters),
     },
-    { provide: MAIL_ENGINE, inject: [ENV], useFactory: (env: Env) => createMailEngine(env) },
+    { provide: MAIL_ENGINE, inject: [ENV, DATABASE], useFactory: (env: Env, db: Database) => createMailEngine(env, db) },
     SecondFactorPolicy,
     {
       provide: DNS_RESOLVER,

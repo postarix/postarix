@@ -42,6 +42,17 @@ describe('Mail flow through the full stack', () => {
 
   describe('provisioning', () => {
     it('creates the mailbox in Cyrus with the default folders', async () => {
+      // In a Cyrus Murder the frontend learns new mailboxes within seconds.
+      await expect
+        .poll(async () => {
+          const probe = await imapLogin(alice.address, PASSWORD);
+          try {
+            return (await probe.list()).length;
+          } finally {
+            await probe.logout();
+          }
+        }, { timeout: 20_000, interval: 1_000 })
+        .toBeGreaterThan(0);
       const client = await imapLogin(alice.address, PASSWORD);
       try {
         const folders = await client.list();

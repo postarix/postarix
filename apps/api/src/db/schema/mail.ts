@@ -38,6 +38,8 @@ export const mailboxes = pgTable(
     displayName: text().notNull().default(''),
     quotaBytes: bigint({ mode: 'number' }),
     status: text({ enum: mailboxStatuses }).notNull().default('active'),
+    /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
+    mailServer: text(),
     /** When its calendars and address books were made private (see MailboxCollectionsService). */
     collectionsRestrictedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

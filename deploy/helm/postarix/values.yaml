@@ -57,8 +57,8 @@ webmail:
   resources: {}
 
 # Cyrus and Postfix run in one pod: they share Unix sockets (LMTP delivery,
-# saslauthd logins). One replica per installation; scale out with Cyrus Murder
-# (planned).
+# saslauthd logins). One replica per installation; to spread mailboxes over
+# several Cyrus servers, enable mail.murder (Cyrus Murder).
 # The cluster's DNS domain.
 clusterDomain: cluster.local
 
@@ -91,6 +91,24 @@ mail:
     externalTrafficPolicy: Local
     loadBalancerIP: ""
   resources: {}
+  # Cyrus Murder (docs/SCALING.md): mailboxes live on several Cyrus backends;
+  # the mail pod's Cyrus becomes the frontend that clients and Postfix use,
+  # and routes each user to their backend. An organization's mailboxes stay on
+  # one backend; new organizations go to the one with the fewest mailboxes. Mailboxes created before enabling it stay on the first
+  # backend only after moving the mail pod's data there (see the docs).
+  # Removing a backend, or lowering their number, needs its mailboxes moved first.
+  murder:
+    enabled: false
+    backends: 2
+    storage:
+      size: 50Gi
+      storageClass: ""
+    resources: {}
+    mupdate:
+      storage:
+        size: 1Gi
+        storageClass: ""
+      resources: {}
 
 rspamd:
   greylist: true

@@ -1,6 +1,12 @@
 #!/bin/bash
-# Healthy when IMAP greets us and saslauthd is listening.
+# Healthy when the service of this server's role answers: IMAP greets us and
+# saslauthd is listening, or (mupdate server) mupdate greets us.
 set -e
+if [ "${CYRUS_ROLE:-standalone}" = mupdate ]; then
+  greeting=$(timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/3905; head -c 1 <&3')
+  [ -n "$greeting" ]
+  exit 0
+fi
 [ -S /run/saslauthd/mux ]
 greeting=$(timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/143; head -c 4 <&3')
 [ "$greeting" = "* OK" ]

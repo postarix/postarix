@@ -52,3 +52,16 @@ allowPrivilegeEscalation: false
 capabilities:
   drop: [NET_RAW]
 {{- end -}}
+
+{{/* Murder backends: "<pod>.<service>" names, space-separated (frontend) or as name=host pairs (API). */}}
+{{- define "postarix.murderBackends" -}}
+{{- $root := index . 0 -}}
+{{- $pairs := index . 1 -}}
+{{- $backend := include "postarix.name" (list $root "cyrus-backend") -}}
+{{- $out := list -}}
+{{- range $i := until (int $root.Values.mail.murder.backends) -}}
+{{- $host := printf "%s-%d.%s" $backend $i $backend -}}
+{{- if $pairs -}}{{- $out = append $out (printf "b%d=%s" $i $host) -}}{{- else -}}{{- $out = append $out $host -}}{{- end -}}
+{{- end -}}
+{{- if $pairs -}}{{ join "," $out }}{{- else -}}{{ join " " $out }}{{- end -}}
+{{- end -}}

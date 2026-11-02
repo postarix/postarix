@@ -386,7 +386,9 @@ out the account password after repeated failures (app passwords keep working).
 - [x] SSO with OpenID Connect and SAML 2.0.
 - [x] Two-step sign-in required by organization (authenticator app or passkey): until people set one up they only reach their account settings; mail apps then need app passwords.
 - [x] CrowdSec (optional `crowdsec` profile) reading the Postfix and Cyrus logs, with the firewall bouncer on the host (see `docs/CROWDSEC.md`).
-- Replication and Cyrus Murder; Helm chart.
+- [x] Cyrus Murder: mailboxes spread over several Cyrus backends behind a frontend, with a mupdate server; the API places new mailboxes and talks to each one's backend (Compose overlay, Helm `mail.murder`, CI runs the integration tests on a two-backend Murder). See `docs/SCALING.md`.
+- [x] Helm chart.
+- Replication (Cyrus `sync_client`/`sync_server`) and moving mailboxes between backends.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.
 - [x] Filtering history per organization (from Rspamd's history, filtered to the organization's domains); MTA-STS policy host.

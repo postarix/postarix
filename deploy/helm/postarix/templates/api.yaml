@@ -77,6 +77,11 @@ spec:
               value: /certs/fullchain.pem
             - name: INTERNAL_TLS_KEY_FILE
               value: /certs/privkey.pem
+            {{- if .Values.mail.murder.enabled }}
+            # Each mailbox is on one of these backends (admin IMAP and JMAP).
+            - name: CYRUS_BACKENDS
+              value: {{ include "postarix.murderBackends" (list . true) | quote }}
+            {{- end }}
             - name: CYRUS_JMAP_URL
               value: "https://{{ include "postarix.name" (list . "mail-internal") }}:8008"
             - name: SUBMISSION_HOST

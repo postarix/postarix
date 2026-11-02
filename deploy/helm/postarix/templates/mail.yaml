@@ -64,6 +64,12 @@ spec:
             # Sieve redirects and vacation replies, through Postfix in this pod.
             - name: CYRUS_SMTP_HOST
               value: 127.0.0.1:10588
+            {{- if .Values.mail.murder.enabled }}
+            # The Murder's frontend: routes each user to their backend.
+            - { name: CYRUS_ROLE, value: frontend }
+            - { name: MURDER_MUPDATE_HOST, value: {{ include "postarix.name" (list . "mupdate") | quote }} }
+            - { name: MURDER_BACKENDS, value: {{ include "postarix.murderBackends" (list . false) | quote }} }
+            {{- end }}
           ports:
             - { name: imap, containerPort: 143 }
             - { name: imaps, containerPort: 993 }
@@ -103,6 +109,10 @@ spec:
             - { name: smtps, containerPort: 465 }
             - { name: submission, containerPort: 587 }
             - { name: api-submit, containerPort: 10587 }
+            {{- if .Values.mail.murder.enabled }}
+            # Sieve sending from the backends.
+            - { name: cyrus-submit, containerPort: 10588 }
+            {{- end }}
           volumeMounts:
             - { name: data, mountPath: /var/spool/postfix, subPath: postfix-spool }
             - { name: saslauthd, mountPath: /run/saslauthd }
@@ -189,3 +199,6 @@ spec:
     - { name: jmap, port: 8008, targetPort: jmap }
     - { name: dav, port: 8080, targetPort: dav }
     - { name: api-submit, port: 10587, targetPort: api-submit }
+    {{- if .Values.mail.murder.enabled }}
+    - { name: cyrus-submit, port: 10588, targetPort: cyrus-submit }
+    {{- end }}

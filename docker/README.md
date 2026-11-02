@@ -5,7 +5,7 @@ PostgreSQL and Valkey use their official images.
 
 | Directory | Image | Role |
 |---|---|---|
-| `cyrus/` | `postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, CalDAV, CardDAV, and JMAP for the API (webmail). Also runs saslauthd, the login bridge to the API. |
+| `cyrus/` | `postarix/cyrus` | Mailboxes: IMAP, POP3, ManageSieve, CalDAV, CardDAV, and JMAP for the API (webmail). Also runs saslauthd, the login bridge to the API. With `CYRUS_ROLE` it is a Cyrus Murder backend, frontend or mupdate server (`compose/murder.yml`, see `docs/SCALING.md`). |
 | `postfix/` | `postarix/postfix` | SMTP: inbound mail (25), submission (587, 465) and internal ports for webmail sending (10587) and Sieve (10588). |
 | `rspamd/` | `postarix/rspamd` | Spam filtering and DKIM, as a Postfix milter. |
 | `unbound/` | `postarix/unbound` | DNSSEC-validating resolver for Rspamd. |

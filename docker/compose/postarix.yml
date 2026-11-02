@@ -307,6 +307,9 @@ networks:
     ipam:
       config:
         - subnet: ${POSTARIX_SUBNET:-172.30.53.0/24}
+          # Addresses handed out automatically, kept apart from the fixed ones
+          # (CYRUS_IP, UNBOUND_IP) so a container never takes theirs.
+          ip_range: ${POSTARIX_IP_RANGE:-172.30.53.128/25}
   # What the reverse proxy joins: the API, the admin panel, the webmail, Cyrus (CalDAV/CardDAV)
   # and the certs service (ACME HTTP challenges) only. Set TRUSTED_PROXIES to its range.
   proxy:
