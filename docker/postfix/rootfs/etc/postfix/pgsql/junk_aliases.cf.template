@@ -1,0 +1,17 @@
+# Generated at container start.
+# Spam for an alias (Rspamd turns sales@example.com into sales+Junk@example.com,
+# see rspamd.local.lua): hosted destinations get "+Junk" too, so the message is
+# filed in their Junk folder; outside destinations get the plain address.
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM mail.mailboxes mb WHERE mb.address = al.destination)
+      OR EXISTS (SELECT 1 FROM mail.aliases inner_al WHERE inner_al.address = al.destination)
+    THEN split_part(al.destination, '@', 1) || '+Junk@' || split_part(al.destination, '@', 2)
+    ELSE al.destination
+  END
+  FROM mail.aliases al
+  WHERE position('+junk@' IN lower('%s')) > 0
+    AND al.address = replace(lower('%s'), '+junk@', '@')

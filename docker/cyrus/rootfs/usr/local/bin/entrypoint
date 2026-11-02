@@ -11,6 +11,12 @@ export MAIL_HOSTNAME
 
 log() { echo "[cyrus-entrypoint] $*"; }
 
+# Secrets for one purpose each, derived from INTERNAL_API_TOKEN (the API
+# derives the same; see apps/api/src/config/internal-secrets.ts).
+internal_secret() { printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1; }
+MAIL_AUTH_SECRET=$(internal_secret mail-auth)
+CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
+
 # --- Configuration -----------------------------------------------------------
 envsubst '${MAIL_HOSTNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
 # Admin rights, and the sasldb that holds the admin password, exist only in the
@@ -37,11 +43,24 @@ echo 'jmap_nonstandard_extensions: yes' >> /etc/imapd-jmap.conf
 sed -i "s/listen=\"0.0.0.0:8008\"/listen=\"${JMAP_LISTEN_ADDRESS:-127.0.0.1}:8008\"/" /etc/cyrus.conf
 chmod 0644 /etc/imapd.conf /etc/imapd-admin.conf /etc/imapd-jmap.conf
 
+# Mail Cyrus sends by itself (Sieve redirect and vacation replies) is sent by
+# lmtpd only, through a Postfix port kept for it (10588; Rspamd checks it, see
+# rspamd.local.lua). Every other service keeps the closed port of imapd.conf.
+# Postfix gives redirected mail an envelope sender on the server's own name.
+{
+  grep -v -e '^smtp_host:' /etc/imapd.conf
+  echo "smtp_host: ${CYRUS_SMTP_HOST:-postfix:10588}"
+  echo "smtp_auth_authname: postarix-cyrus"
+  echo "smtp_auth_password: $CYRUS_SMTP_SECRET"
+} > /etc/imapd-lmtp.conf
+chown root:mail /etc/imapd-lmtp.conf
+chmod 0640 /etc/imapd-lmtp.conf
+
 # --- Login bridge to the API (read by pam_exec as root only) -----------------
 umask 077
 mkdir -p /etc/postarix
 printf 'POSTARIX_API_URL=%s\n' "$POSTARIX_API_URL" > /etc/postarix/mail-auth.env
-printf 'x-postarix-internal-token: %s\n' "$INTERNAL_API_TOKEN" > /etc/postarix/mail-auth.headers
+printf 'x-postarix-internal-token: %s\n' "$MAIL_AUTH_SECRET" > /etc/postarix/mail-auth.headers
 umask 022
 
 # --- TLS ------------------------------------------------------------------------
@@ -70,7 +89,7 @@ chown root:sasl /etc/sasldb2
 chmod 0640 /etc/sasldb2
 
 # Both secrets now live in root-only files; no process started below needs them.
-unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN
+unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET
 
 # --- Runtime and data directories ---------------------------------------------
 install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket

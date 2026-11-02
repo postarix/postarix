@@ -1,50 +1,32 @@
-interface Entry {
-  failures: number;
-  windowStart: number;
-}
+import type { CounterStore } from '../core/counter-store.js';
 
 /**
  * Counts failed logins per key within a time window and blocks the key once
  * the limit is reached, even for correct passwords, until the window expires.
- *
- * In memory for now (single API instance); it will move to Valkey so several
- * API replicas share the counters.
+ * The counters live in the shared counter store (Valkey in production), so
+ * every API instance sees the same ones.
  */
 export class FailureLimiter {
-  private readonly entries = new Map<string, Entry>();
-
   constructor(
+    private readonly store: CounterStore,
+    private readonly name: string,
     private readonly maxFailures: number,
     private readonly windowMs: number,
-    private readonly now: () => number = Date.now,
   ) {}
 
-  isBlocked(key: string): boolean {
-    const entry = this.current(key);
-    return entry !== undefined && entry.failures >= this.maxFailures;
+  private key(subject: string): string {
+    return `fail:${this.name}:${subject.toLowerCase()}`;
   }
 
-  recordFailure(key: string): void {
-    const entry = this.current(key);
-    if (entry) entry.failures += 1;
-    else this.entries.set(key, { failures: 1, windowStart: this.now() });
-    if (this.entries.size > 100_000) this.prune();
+  async isBlocked(subject: string): Promise<boolean> {
+    return (await this.store.count(this.key(subject))) >= this.maxFailures;
   }
 
-  recordSuccess(key: string): void {
-    this.entries.delete(key);
+  async recordFailure(subject: string): Promise<void> {
+    await this.store.increment(this.key(subject), this.windowMs);
   }
 
-  private current(key: string): Entry | undefined {
-    const entry = this.entries.get(key);
-    if (entry && this.now() - entry.windowStart >= this.windowMs) {
-      this.entries.delete(key);
-      return undefined;
-    }
-    return entry;
-  }
-
-  private prune(): void {
-    for (const key of this.entries.keys()) this.current(key);
+  async recordSuccess(subject: string): Promise<void> {
+    await this.store.delete(this.key(subject));
   }
 }

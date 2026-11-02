@@ -58,4 +58,9 @@ describe('loadEnv', () => {
   it('rejects anything other than true/false for booleans', () => {
     expect(() => loadEnv({ ...base, ALLOW_SIGNUP: 'yes' })).toThrow(/ALLOW_SIGNUP/);
   });
+  it('treats an empty SYSTEM_MAIL_FROM as unset and rejects a malformed one', () => {
+    expect(loadEnv({ ...base, SYSTEM_MAIL_FROM: '' }).SYSTEM_MAIL_FROM).toBeUndefined();
+    expect(loadEnv({ ...base, SYSTEM_MAIL_FROM: 'notices@example.com' }).SYSTEM_MAIL_FROM).toBe('notices@example.com');
+    expect(() => loadEnv({ ...base, SYSTEM_MAIL_FROM: 'not an address' })).toThrow(/SYSTEM_MAIL_FROM/);
+  });
 });

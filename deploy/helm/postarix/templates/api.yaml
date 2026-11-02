@@ -44,6 +44,12 @@ spec:
               value: {{ join "," .Values.api.trustedOrigins | quote }}
             - name: TRUSTED_PROXIES
               value: {{ join "," .Values.api.trustedProxies | quote }}
+            - name: SSO_TRUSTED_ISSUERS
+              value: {{ join "," .Values.api.ssoTrustedIssuers | quote }}
+            {{- with .Values.api.systemMailFrom }}
+            - name: SYSTEM_MAIL_FROM
+              value: {{ . | quote }}
+            {{- end }}
             - name: MAIL_HOSTNAME
               value: {{ .Values.mailHostname | quote }}
             - name: DOMAIN_VERIFICATION

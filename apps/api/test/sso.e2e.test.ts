@@ -1,5 +1,10 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { DATABASE } from '../src/core/tokens.js';
+import type { Database } from '../src/db/client.js';
+import { ssoProvider } from '../src/db/schema/index.js';
+import { SsoService } from '../src/sso/sso.service.js';
 import { addMember, createOrg, newAgent, signUp, startApp, type TestUser } from './helpers.js';
 import { FakeOidcProvider } from './fake-oidc-provider.js';
 
@@ -14,7 +19,7 @@ describe('Single sign-on', () => {
   let domainA: { id: string; name: string };
   let domainB: { id: string; name: string };
   let providerA: { id: string; providerId: string; callbackUrl: string };
-  const originalTrustedOrigins = process.env.TRUSTED_ORIGINS;
+  const originalTrustedIssuers = process.env.SSO_TRUSTED_ISSUERS;
 
   const verifiedDomain = async (owner: TestUser, orgId: string, prefix: string) => {
     const name = `${prefix}-${Date.now()}.example`;
@@ -44,7 +49,7 @@ describe('Single sign-on', () => {
   beforeAll(async () => {
     await idp.start();
     // An identity provider on a private address must be allowed explicitly by the operator.
-    process.env.TRUSTED_ORIGINS = idp.issuer;
+    process.env.SSO_TRUSTED_ISSUERS = idp.issuer;
     app = await startApp();
     alice = await signUp(app, 'sso-alice');
     bob = await signUp(app, 'sso-bob');
@@ -57,7 +62,8 @@ describe('Single sign-on', () => {
   });
 
   afterAll(async () => {
-    process.env.TRUSTED_ORIGINS = originalTrustedOrigins;
+    if (originalTrustedIssuers === undefined) delete process.env.SSO_TRUSTED_ISSUERS;
+    else process.env.SSO_TRUSTED_ISSUERS = originalTrustedIssuers;
     await app.close();
     await idp.stop();
   });
@@ -72,6 +78,11 @@ describe('Single sign-on', () => {
       expect(res.body.callbackUrl).toBe(`http://localhost:3000/api/auth/sso/callback/${res.body.providerId}`);
       expect(JSON.stringify(res.body)).not.toContain(idp.clientSecret);
       providerA = res.body;
+      // Stored encrypted.
+      const db = app.get<Database>(DATABASE);
+      const [stored] = await db.select().from(ssoProvider).where(eq(ssoProvider.id, res.body.id));
+      expect(stored!.oidcConfig).not.toContain(idp.clientSecret);
+      expect(stored!.oidcConfig).toContain('enc:v1:');
 
       const list = await alice.agent.get(`/api/orgs/${orgA}/sso`).expect(200);
       expect(list.body.data).toHaveLength(1);
@@ -106,6 +117,14 @@ describe('Single sign-on', () => {
         .send({ domainId: domainB.id, issuer: 'http://169.254.169.254', clientId: 'x', clientSecret: 'y' })
         .expect(422);
       expect(internal.body.code).toBe('SSO_ISSUER_NOT_ALLOWED');
+    });
+
+    it('trusts a private identity provider for signing in only, not as a browser origin', async () => {
+      const res = await newAgent(app)
+        .post('/api/auth/sign-in/email')
+        .set('origin', idp.issuer)
+        .send({ email: alice.email, password: 'whatever long password' });
+      expect(res.status).toBe(403);
     });
 
     it('cannot be managed through Better Auth’s own endpoints', async () => {
@@ -188,5 +207,24 @@ describe('Single sign-on', () => {
         .send({ domainId: second.body.id, issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret })
         .expect(201);
     });
+  });
+
+  it('encrypts client secrets stored in plain text by an earlier version, at start', async () => {
+    const db = app.get<Database>(DATABASE);
+    const id = crypto.randomUUID();
+    await db.insert(ssoProvider).values({
+      id,
+      providerId: `legacy-${Date.now()}`,
+      issuer: idp.issuer,
+      domain: `legacy-${Date.now()}.example`,
+      organizationId: orgB,
+      userId: 'postarix-system',
+      oidcConfig: JSON.stringify({ clientId: 'legacy', clientSecret: 'legacy-plain-secret' }),
+    });
+    await app.get(SsoService).onApplicationBootstrap();
+    const [row] = await db.select().from(ssoProvider).where(eq(ssoProvider.id, id));
+    expect(row!.oidcConfig).not.toContain('legacy-plain-secret');
+    expect(JSON.parse(row!.oidcConfig!).clientId).toBe('legacy');
+    await db.delete(ssoProvider).where(eq(ssoProvider.id, id));
   });
 });

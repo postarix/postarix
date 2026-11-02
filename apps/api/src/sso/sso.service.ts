@@ -1,8 +1,11 @@
+import { sealOidcConfig } from './sso-crypto.js';
 import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnApplicationBootstrap,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { computeDiscoveryUrl, DiscoveryError, discoverOIDCConfig } from '@better-auth/sso';
@@ -22,13 +25,21 @@ import { SsoRepository, type SsoProviderRow } from './sso.repository.js';
  * sign in is decided by resolveSsoUser (an active mailbox of the organization).
  */
 @Injectable()
-export class SsoService {
+export class SsoService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(SsoService.name);
+
   constructor(
     @Inject(ENV) private readonly env: Env,
     @Inject(SsoRepository) private readonly providers: SsoRepository,
     @Inject(DomainsRepository) private readonly domains: DomainsRepository,
     @Inject(AuditService) private readonly audit: AuditService,
   ) {}
+
+  /** Encrypts client secrets of providers saved before they were encrypted. */
+  async onApplicationBootstrap(): Promise<void> {
+    const changed = await this.providers.resealAll((stored) => sealOidcConfig(stored, this.env.AUTH_SECRET));
+    if (changed > 0) this.logger.log(`Encrypted the client secret of ${changed} sign-in provider(s)`);
+  }
 
   async list(ctx: TenantContext): Promise<SsoProviderDto[]> {
     return (await this.providers.list(ctx)).map((row) => this.toDto(row));
@@ -47,11 +58,11 @@ export class SsoService {
     // Better Auth checks every URL it fetches at sign-in (also after DNS
     // resolution); the discovery document is fetched now, so its host is
     // checked here first. See IssuerPolicy.
-    const policy = new IssuerPolicy(this.env.TRUSTED_ORIGINS);
+    const policy = new IssuerPolicy(this.env.SSO_TRUSTED_ISSUERS);
     const discoveryUrl = computeDiscoveryUrl(input.issuer);
     if (!(await policy.allowsFetch(discoveryUrl))) {
       throw new UnprocessableEntityException({
-        message: 'The issuer must be a public https address. An identity provider on a private network must be listed in TRUSTED_ORIGINS by the instance administrator.',
+        message: 'The issuer must be a public https address. An identity provider on a private network must be listed in SSO_TRUSTED_ISSUERS by the instance administrator.',
         code: 'SSO_ISSUER_NOT_ALLOWED',
       });
     }
@@ -89,7 +100,9 @@ export class SsoService {
       providerId,
       issuer: discovered.issuer,
       domain: domain.name,
-      oidcConfig,
+      // The client secret is stored encrypted; Better Auth reads it through
+      // the adapter in auth.ts, which opens it.
+      oidcConfig: sealOidcConfig(oidcConfig, this.env.AUTH_SECRET),
     });
     await this.audit.record(ctx, 'sign_in_provider.added', { type: 'sign_in_provider', id: row.id, label: domain.name }, { issuer: row.issuer });
     return this.toDto(row);

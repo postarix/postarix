@@ -1,3 +1,4 @@
+import { internalSecret } from '../config/internal-secrets.js';
 import {
   Body,
   type CanActivate,
@@ -22,8 +23,9 @@ import { type MailLoginAttempt, MailAuthService, mailLoginSchema } from './mail-
 export const INTERNAL_TOKEN_HEADER = 'x-postarix-internal-token';
 
 /**
- * Protects /api/internal/*: requires the shared INTERNAL_API_TOKEN. When no
- * token is configured the endpoints do not exist (404).
+ * Protects /api/internal/*: requires the mail-login secret derived from
+ * INTERNAL_API_TOKEN (see internal-secrets.ts). When no token is configured
+ * the endpoints do not exist (404).
  */
 @Injectable()
 export class InternalTokenGuard implements CanActivate {
@@ -45,7 +47,7 @@ export class InternalTokenGuard implements CanActivate {
     if (typeof provided !== 'string') throw new UnauthorizedException();
 
     const a = Buffer.from(provided);
-    const b = Buffer.from(expected);
+    const b = Buffer.from(internalSecret(expected, 'mail-auth'));
     if (a.length !== b.length || !timingSafeEqual(a, b)) throw new UnauthorizedException();
     return true;
   }

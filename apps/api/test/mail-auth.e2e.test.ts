@@ -4,10 +4,13 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DATABASE } from '../src/core/tokens.js';
 import type { Database } from '../src/db/client.js';
+import { internalSecret } from '../src/config/internal-secrets.js';
 import { mintJmapToken } from '../src/jmap/jmap-token.js';
 import { createOrg, newAgent, signUp, startApp, type TestUser } from './helpers.js';
 
-const TOKEN = 'internal-test-token-that-is-long-enough';
+const MASTER = 'internal-test-token-that-is-long-enough';
+// The bridge sends the mail-login secret derived from the token, never the token.
+const TOKEN = internalSecret(MASTER, 'mail-auth');
 const MAILBOX_PASSWORD = 'a long mailbox password';
 
 describe('App passwords and the mail login bridge', () => {
@@ -67,6 +70,12 @@ describe('App passwords and the mail login bridge', () => {
       await mailAuth(
         { username: address, password: MAILBOX_PASSWORD, service: 'imap' },
         `${TOKEN}x`,
+      ).expect(401);
+      // The token itself, or a secret for another purpose, is not accepted.
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }, MASTER).expect(401);
+      await mailAuth(
+        { username: address, password: MAILBOX_PASSWORD, service: 'imap' },
+        internalSecret(MASTER, 'submission'),
       ).expect(401);
     });
   });
