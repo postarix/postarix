@@ -15,6 +15,10 @@ mail.example.com {
 		reverse_proxy api:3000
 	}
 
+	handle /admin* {
+		reverse_proxy admin:3001
+	}
+
 	@cyrus path /.well-known/caldav /.well-known/carddav /dav/*
 	handle @cyrus {
 		reverse_proxy cyrus:8080

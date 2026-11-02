@@ -15,6 +15,16 @@ services:
       traefik.http.routers.postarix-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
       traefik.http.services.postarix-api.loadbalancer.server.port: "3000"
 
+  admin:
+    networks: [traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+      traefik.http.routers.postarix-admin.rule: Host(`${MAIL_HOSTNAME}`) && (Path(`/admin`) || PathPrefix(`/admin/`))
+      traefik.http.routers.postarix-admin.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.postarix-admin.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.services.postarix-admin.loadbalancer.server.port: "3001"
+
   cyrus:
     networks: [default, traefik]
     labels:
