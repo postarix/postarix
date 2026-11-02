@@ -13,6 +13,9 @@ services:
   rspamd:
     environment:
       RSPAMD_GREYLIST: "false"
+      # A body marker that scores as ordinary spam (unlike GTUBE, which skips
+      # the remaining rules), to test spam handling end to end.
+      RSPAMD_TEST_RULES: "true"
   # The webmail on its own port, forwarding /api to the API (no reverse proxy in the tests).
   webmail:
     environment:

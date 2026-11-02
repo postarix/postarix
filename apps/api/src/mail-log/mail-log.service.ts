@@ -70,8 +70,10 @@ export class MailLogService {
       const recipients = (Array.isArray(row.rcpt_smtp) ? row.rcpt_smtp : row.rcpt_smtp ? [row.rcpt_smtp] : []).map((r) => r.toLowerCase());
       const sender = (row.sender_smtp ?? '').toLowerCase();
       const ownRecipients = recipients.filter((r) => own.has(domainOf(r)));
-      // Sent by one of the organization's accounts (authenticated) from its domains.
-      const outgoing = Boolean(row.user) && sender.includes('@') && own.has(domainOf(sender));
+      // Sent by one of the organization's accounts (authenticated) from its
+      // domains. Rspamd records unauthenticated mail with the user "unknown".
+      const authenticated = Boolean(row.user) && row.user !== 'unknown';
+      const outgoing = authenticated && sender.includes('@') && own.has(domainOf(sender));
       if (!outgoing && ownRecipients.length === 0) continue;
       const reasons = Object.entries(row.symbols ?? {})
         .map(([name, s]) => ({ name, score: Math.round((s.score ?? 0) * 100) / 100 }))

@@ -130,30 +130,24 @@ describe('Mail flow through the full stack', () => {
   });
 
   describe('spam handling', () => {
-    // Rspamd's test patterns (GTUBE) trigger each action deterministically.
-    const GTUBE = {
-      spam: 'YJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X',
-      reject: 'XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X',
-    };
+    // The test stack scores this marker as ordinary spam (RSPAMD_TEST_RULES);
+    // GTUBE triggers a rejection outright.
+    const SPAM_MARKER = 'POSTARIX-TEST-SPAM-MARKER';
+    const GTUBE_REJECT = 'XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X';
 
     it('files mail marked as spam in the recipient’s Junk folder', async () => {
       const subject = unique('junk');
-      await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject, text: `Cheap stuff\n${GTUBE.spam}\n` });
+      await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject, text: `Cheap stuff\n${SPAM_MARKER}\n` });
       const raw = await waitForMessage(bob.address, PASSWORD, subject, 45_000, 'Junk');
       expect(raw).toMatch(/^X-Spam: Yes/im);
     });
 
     it('rejects mail over the reject threshold', async () => {
       await expect(
-        smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject: unique('reject'), text: `${GTUBE.reject}\n` }),
+        smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: bob.address, subject: unique('reject'), text: `${GTUBE_REJECT}\n` }),
       ).rejects.toThrow(/5\d\d/);
     });
 
-    it('shows what the filter did in the organization’s mail log', async () => {
-      const log = await admin.ok<{ data: { to: string[]; outcome: string }[] }>('GET', `/api/orgs/${orgId}/mail-log`);
-      const outcomes = log.data.filter((e) => e.to.includes(bob.address)).map((e) => e.outcome);
-      expect(outcomes).toEqual(expect.arrayContaining(['spam', 'rejected']));
-    });
   });
 
   describe('abuse protection', () => {
@@ -292,6 +286,21 @@ describe('Mail flow through the full stack', () => {
       // The address can be reused, which requires the Cyrus mailbox to be gone.
       const again = await createMailbox('dave');
       expect(again.address).toBe(dave.address);
+    });
+  });
+
+  describe('mail log', () => {
+    // Runs last: by now the organization has delivered, sent and refused mail.
+    it('shows the organization what the filter did with its mail, and nothing else', async () => {
+      const log = await admin.ok<{ data: { from: string; to: string[]; outcome: string; direction: string }[] }>('GET', `/api/orgs/${orgId}/mail-log`);
+      expect(log.data.length).toBeGreaterThan(0);
+      expect(log.data.some((e) => e.direction === 'in' && e.outcome === 'delivered' && e.to.includes(bob.address))).toBe(true);
+      // The forged From header refused on submission.
+      expect(log.data.some((e) => e.direction === 'out' && e.outcome === 'rejected' && e.from === alice.address)).toBe(true);
+      for (const entry of log.data) {
+        const own = (address: string) => address.endsWith(`@${domain.name}`);
+        expect(entry.direction === 'out' ? own(entry.from) : entry.to.every(own)).toBe(true);
+      }
     });
   });
 });
