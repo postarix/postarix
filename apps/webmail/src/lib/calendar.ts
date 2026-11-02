@@ -485,3 +485,19 @@ export function useSetSharing() {
     onSettled: () => void queryClient.invalidateQueries({ queryKey: calendarKeys.sharing }),
   });
 }
+
+export interface Resource {
+  email: string;
+  name: string;
+  kind: 'room' | 'equipment';
+}
+
+/** The organization's rooms and equipment: invited like guests, they accept when free. */
+export function useResources(enabled: boolean) {
+  return useQuery({
+    queryKey: ['calendar', 'resources'],
+    enabled,
+    queryFn: async () => (await api<{ data: Resource[] }>('/calendar/resources')).data,
+    staleTime: 5 * 60_000,
+  });
+}

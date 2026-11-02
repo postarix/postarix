@@ -8,6 +8,8 @@ export interface Participant {
   email?: string | null;
   sendTo?: Record<string, string> | null;
   roles?: Record<string, boolean> | null;
+  /** "individual" (default), "location" (a room) or "resource" (equipment). */
+  kind?: string | null;
   participationStatus?: string | null;
   expectReply?: boolean | null;
 }

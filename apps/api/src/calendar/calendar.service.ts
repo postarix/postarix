@@ -6,8 +6,10 @@ import { MAIL_ENGINE } from '../core/tokens.js';
 import { ServerJmap } from '../mail/jmap-client.js';
 import { SendService } from '../mail/send.service.js';
 import {
+  defaultCalendarId,
   describeWhen,
   downloadText,
+  findByUid,
   getEvent,
   jmapCall,
   organizerOf,
@@ -15,10 +17,26 @@ import {
   participantEmail,
   type StoredEvent,
 } from './calendar-jmap.js';
-import { ColleaguesRepository, type OwnMailbox } from './colleagues.repository.js';
+import { ColleaguesRepository, type OwnMailbox, type Resource } from './colleagues.repository.js';
 import { withMethod } from './ics.js';
 
 export const MAX_GUESTS = 50;
+
+/** What a booked resource's calendar keeps of the event. */
+const RESOURCE_COPY = [
+  'title',
+  'start',
+  'timeZone',
+  'duration',
+  'showWithoutTime',
+  'recurrenceRules',
+  'excludedRecurrenceRules',
+  'recurrenceOverrides',
+  'locations',
+  'participants',
+  'replyTo',
+  'sequence',
+];
 export const MAX_SHARES = 50;
 export const MAX_AVAILABILITY_PEOPLE = 20;
 export const MAX_AVAILABILITY_DAYS = 62;
@@ -81,6 +99,7 @@ const EVENT_PROPERTIES = [
   'duration',
   'showWithoutTime',
   'utcStart',
+  'utcEnd',
   'sequence',
   'replyTo',
   'participants',
@@ -126,8 +145,18 @@ export class CalendarService {
     const removed = current.map(([, p]) => participantEmail(p)!).filter((e) => e && !guests.includes(e));
     if (guests.length === 0 && current.length === 0) return { guests: [], notified: 0 };
 
+    // Rooms and equipment of the organization answer by themselves: booked
+    // when free at that time, declined otherwise. They get no email.
+    const resources = new Map((await this.colleagues.resources(me.organizationId, [...guests, ...removed])).map((r) => [r.email, r]));
+    const booked = new Map<string, boolean>();
+    for (const email of guests.filter((g) => resources.has(g))) {
+      booked.set(email, await this.isFree(email, event.uid, event.utcStart, event.utcEnd));
+    }
+    const people = guests.filter((g) => !resources.has(g));
+    const removedPeople = removed.filter((g) => !resources.has(g));
+
     // The event as the removed guests knew it, for their cancellation.
-    const removedIcs = removed.length ? await this.ics(jmap, eventId) : null;
+    const removedIcs = removedPeople.length ? await this.ics(jmap, eventId) : null;
 
     let participants: Record<string, Participant> | null = null;
     if (guests.length) {
@@ -144,15 +173,27 @@ export class CalendarService {
       };
       for (const email of guests) {
         const existing = current.find(([, p]) => participantEmail(p) === email);
-        participants[existing?.[0] ?? randomUUID().replaceAll('-', '').slice(0, 16)] = {
-          '@type': 'Participant',
-          email,
-          sendTo: { imip: `mailto:${email}` },
-          roles: { attendee: true },
-          participationStatus: existing?.[1].participationStatus ?? 'needs-action',
-          expectReply: true,
-          ...(existing?.[1].name ? { name: existing[1].name } : {}),
-        };
+        const resource = resources.get(email);
+        participants[existing?.[0] ?? randomUUID().replaceAll('-', '').slice(0, 16)] = resource
+          ? {
+              '@type': 'Participant',
+              email,
+              name: resource.name,
+              sendTo: { imip: `mailto:${email}` },
+              kind: resource.kind === 'room' ? 'location' : 'resource',
+              roles: { attendee: true },
+              participationStatus: booked.get(email) ? 'accepted' : 'declined',
+              expectReply: false,
+            }
+          : {
+              '@type': 'Participant',
+              email,
+              sendTo: { imip: `mailto:${email}` },
+              roles: { attendee: true },
+              participationStatus: existing?.[1].participationStatus ?? 'needs-action',
+              expectReply: true,
+              ...(existing?.[1].name ? { name: existing[1].name } : {}),
+            };
       }
     }
     const sequence = (event.sequence ?? 0) + (current.length ? 1 : 0);
@@ -168,28 +209,33 @@ export class CalendarService {
     const updated = await getEvent(jmap, eventId, [...EVENT_PROPERTIES, 'blobId']);
     const title = updated.title || '(no title)';
     const when = describeWhen(updated);
+    // The booked resources' calendars hold the event too; the others don't.
+    for (const email of resources.keys()) {
+      await this.syncResource(email, eventId, jmap, booked.get(email) === true);
+    }
+
     let notified = 0;
-    if (guests.length) {
+    if (people.length) {
       const ics = withMethod(await downloadText(jmap, updated.blobId!), 'REQUEST');
-      const update = guests.some((g) => currentEmails.has(g));
+      const update = people.some((g) => currentEmails.has(g));
       await this.sender.sendComposed(userId, {
         from: me.address,
-        to: guests,
+        to: people,
         subject: `${update ? 'Updated invitation' : 'Invitation'}: ${title}`,
         text: `${me.address} invites you to "${title}".\n\nWhen: ${when}\n\nAnswer from your calendar or mail app.\n`,
         calendar: { method: 'REQUEST', content: ics },
       });
-      notified += guests.length;
+      notified += people.length;
     }
-    if (removedIcs && removed.length) {
+    if (removedIcs && removedPeople.length) {
       await this.sender.sendComposed(userId, {
         from: me.address,
-        to: removed,
+        to: removedPeople,
         subject: `Cancelled: ${title}`,
         text: `${me.address} took you off "${title}".\n\nWhen: ${when}\n`,
         calendar: { method: 'CANCEL', content: withMethod(removedIcs, 'CANCEL') },
       });
-      notified += removed.length;
+      notified += removedPeople.length;
     }
     return { guests: this.guestsOf(updated, me.address), notified };
   }
@@ -200,8 +246,12 @@ export class CalendarService {
     const jmap = new ServerJmap(this.engine, me.address);
     const event = await getEvent(jmap, eventId, [...EVENT_PROPERTIES, 'blobId']);
     const organizer = organizerOf(event);
-    const guests = organizer === me.address ? this.guestsOf(event, me.address).map((g) => g.email) : [];
+    const everyone = organizer === me.address ? this.guestsOf(event, me.address).map((g) => g.email) : [];
+    const resources = new Set((await this.colleagues.resources(me.organizationId, everyone)).map((r) => r.email));
+    const guests = everyone.filter((g) => !resources.has(g));
     const ics = guests.length ? await downloadText(jmap, event.blobId!) : null;
+    // Free the booked rooms and equipment.
+    for (const email of resources) await this.syncResource(email, eventId, jmap, false, event.uid);
 
     const result = await jmapCall<{ notDestroyed?: Record<string, { type: string }> | null }>(jmap, 'CalendarEvent/set', { destroy: [eventId] });
     if (result.notDestroyed?.[eventId]) throw new UnprocessableEntityException(`Could not delete the event: ${result.notDestroyed[eventId]!.type}`);
@@ -246,7 +296,50 @@ export class CalendarService {
     return { data, unavailable };
   }
 
-  private async busyTimes(email: string, from: Date, to: Date): Promise<Busy[]> {
+  /** The organization's rooms and equipment, for the person to book. */
+  async listResources(userId: string): Promise<Resource[]> {
+    const me = await this.me(userId);
+    return this.colleagues.resources(me.organizationId);
+  }
+
+  /**
+   * Whether a resource is free for an event (its first occurrence, for a
+   * repeating one), not counting that event itself.
+   */
+  private async isFree(email: string, uid: string, start: string | undefined, end: string | undefined): Promise<boolean> {
+    if (!start || !end) return false;
+    const busy = await this.busyTimes(email, new Date(start), new Date(end), uid);
+    return busy.length === 0;
+  }
+
+  /** Puts the organizer's event into a resource's calendar (or takes it out). */
+  private async syncResource(email: string, eventId: string, organizer: ServerJmap, booked: boolean, knownUid?: string): Promise<void> {
+    const room = new ServerJmap(this.engine, email);
+    try {
+      const source = booked ? await getEvent(organizer, eventId, RESOURCE_COPY) : null;
+      const uid = source?.uid ?? knownUid ?? (await getEvent(organizer, eventId, [])).uid;
+      const copy = await findByUid(room, uid, []);
+      if (!source) {
+        if (copy) await jmapCall(room, 'CalendarEvent/set', { destroy: [copy.id] });
+        return;
+      }
+      const fields: Record<string, unknown> = {};
+      for (const key of RESOURCE_COPY) {
+        const value = (source as unknown as Record<string, unknown>)[key];
+        if (value !== undefined) fields[key] = value;
+      }
+      if (copy) {
+        await jmapCall(room, 'CalendarEvent/set', { update: { [copy.id]: fields } });
+      } else {
+        const calendarId = await defaultCalendarId(room);
+        await jmapCall(room, 'CalendarEvent/set', { create: { booking: { ...fields, uid, calendarIds: { [calendarId]: true } } } });
+      }
+    } catch (error) {
+      this.logger.warn(`Could not update the calendar of ${email}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async busyTimes(email: string, from: Date, to: Date, excludeUid?: string): Promise<Busy[]> {
     const jmap = new ServerJmap(this.engine, email);
     const { list: calendars } = await jmapCall<{ list: { id: string; includeInAvailability?: string | null }[] }>(jmap, 'Calendar/get', {
       properties: ['id', 'includeInAvailability'],
@@ -262,10 +355,11 @@ export class CalendarService {
     if (!ids.length) return [];
     const { list } = await jmapCall<{ list: StoredEvent[] }>(jmap, 'CalendarEvent/get', {
       ids,
-      properties: ['utcStart', 'utcEnd', 'freeBusyStatus', 'status', 'calendarIds', 'participants'],
+      properties: ['uid', 'utcStart', 'utcEnd', 'freeBusyStatus', 'status', 'calendarIds', 'participants'],
     });
     const intervals = list
       .filter((e) => e.utcStart && e.utcEnd && e.freeBusyStatus !== 'free' && e.status !== 'cancelled')
+      .filter((e) => !excludeUid || e.uid !== excludeUid)
       .filter((e) => Object.keys(e.calendarIds ?? {}).some((id) => counted.has(id)))
       .filter((e) => {
         const mine = Object.values(e.participants ?? {}).find((p) => participantEmail(p) === email);

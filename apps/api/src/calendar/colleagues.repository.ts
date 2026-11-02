@@ -1,8 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { domains, mailboxes } from '../db/schema/index.js';
+
+export interface Resource {
+  email: string;
+  name: string;
+  kind: 'room' | 'equipment';
+}
 
 export interface OwnMailbox {
   address: string;
@@ -45,5 +51,25 @@ export class ColleaguesRepository {
         ),
       );
     return new Set(rows.map((r) => r.address));
+  }
+
+  /** The organization's rooms and equipment that can be booked. */
+  async resources(organizationId: string, addresses?: string[]): Promise<Resource[]> {
+    if (addresses && addresses.length === 0) return [];
+    const rows = await this.db
+      .select({ email: mailboxes.address, name: mailboxes.displayName, kind: mailboxes.kind })
+      .from(mailboxes)
+      .innerJoin(domains, eq(domains.id, mailboxes.domainId))
+      .where(
+        and(
+          eq(mailboxes.organizationId, organizationId),
+          ne(mailboxes.kind, 'person'),
+          eq(mailboxes.status, 'active'),
+          eq(domains.status, 'active'),
+          ...(addresses ? [inArray(mailboxes.address, addresses.map((a) => a.toLowerCase()))] : []),
+        ),
+      )
+      .orderBy(asc(mailboxes.displayName), asc(mailboxes.address));
+    return rows.map((r) => ({ email: r.email, name: r.name || r.email, kind: r.kind as Resource['kind'] }));
   }
 }

@@ -7,11 +7,12 @@ import { DialogFooter } from '@postarix/ui/components/dialog';
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Progress } from '@postarix/ui/components/progress';
+import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, Inbox, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -25,7 +26,7 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
-import { api, errorMessage } from '@/lib/api';
+import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
@@ -86,6 +87,7 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
         displayName: String(data.get('displayName')),
         password,
         quotaBytes: quotaFromGiB(String(data.get('quota'))),
+        kind: String(data.get('kind') ?? 'person'),
       });
       refresh();
       setPassword('');
@@ -104,6 +106,15 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           {error ? <Notice>{error}</Notice> : null}
           <AddressFields domains={domains} placeholder="jane" />
           <FormField label="Display name">{(props) => <Input {...props} name="displayName" placeholder="Jane Doe" maxLength={128} />}</FormField>
+          <FormField label="Type" hint="Rooms and equipment are booked by inviting them to an event: they accept when free.">
+            {(props) => (
+              <NativeSelect {...props} name="kind" defaultValue="person" className="w-full">
+                <NativeSelectOption value="person">Person</NativeSelectOption>
+                <NativeSelectOption value="room">Room</NativeSelectOption>
+                <NativeSelectOption value="equipment">Equipment</NativeSelectOption>
+              </NativeSelect>
+            )}
+          </FormField>
           <FormField label="Password" hint="At least 12 characters.">
             {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
           </FormField>
@@ -231,6 +242,99 @@ function ResetPasswordDialog({ orgId, mailbox, onClose }: { orgId: string; mailb
   );
 }
 
+interface Archiving {
+  archiveMailboxId: string | null;
+  legalHold: boolean;
+}
+
+/**
+ * Archiving (a copy of all mail in one mailbox) and legal hold (nothing can
+ * be deleted). Owners only: the section stays hidden for other admins.
+ */
+function ArchivingSection({ orgId, mailboxes }: { orgId: string; mailboxes: Mailbox[] }) {
+  const queryClient = useQueryClient();
+  const key = ['org', orgId, 'archiving'];
+  const archiving = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      try {
+        return await api.get<Archiving>(`/orgs/${orgId}/archiving`);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 403) return null;
+        throw e;
+      }
+    },
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function change(next: Archiving) {
+    setPending(true);
+    setError(null);
+    try {
+      queryClient.setQueryData(key, await api.put(`/orgs/${orgId}/archiving`, next));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (archiving.data === null) return null;
+  const current = archiving.data;
+  return (
+    <section aria-labelledby="archiving-title" className="mb-6 rounded-xl border bg-card p-5">
+      <div className="flex items-start gap-3">
+        <Archive className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <h2 id="archiving-title" className="text-base font-semibold">
+              Archiving and legal hold
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Keep a copy of every message the organization receives or sends in one mailbox. Under legal hold, no mailbox can be deleted or
+              disabled. Keep the archive mailbox&apos;s password with whoever answers for compliance.
+            </p>
+          </div>
+          {error ? <Notice>{error}</Notice> : null}
+          {archiving.isLoading || !current ? (
+            <Skeleton className="h-5 w-64" />
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                Archive mailbox
+                <NativeSelect
+                  value={current.archiveMailboxId ?? ''}
+                  disabled={pending}
+                  onChange={(e) => void change({ ...current, archiveMailboxId: e.target.value || null })}
+                >
+                  <NativeSelectOption value="">No archiving</NativeSelectOption>
+                  {mailboxes.map((m) => (
+                    <NativeSelectOption key={m.id} value={m.id}>
+                      {m.address}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </label>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="legal-hold"
+                  checked={current.legalHold}
+                  disabled={pending}
+                  onCheckedChange={(v) => void change({ ...current, legalHold: v === true })}
+                />
+                <label htmlFor="legal-hold" className="text-sm">
+                  Legal hold
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function MailboxesPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const mailboxes = useOrgList<Mailbox>(orgId, 'mailboxes');
@@ -264,6 +368,7 @@ export default function MailboxesPage() {
           </Notice>
         </div>
       ) : null}
+      {mailboxes.data?.length ? <ArchivingSection orgId={orgId} mailboxes={mailboxes.data} /> : null}
       {mailboxes.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : mailboxes.error ? (
@@ -285,7 +390,18 @@ export default function MailboxesPage() {
             {mailboxes.data.map((mailbox) => (
               <TableRow key={mailbox.id}>
                 <TableCell className="pl-4 font-medium">{mailbox.address}</TableCell>
-                <TableCell>{mailbox.displayName || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell>
+                  {mailbox.displayName || <span className="text-muted-foreground">—</span>}
+                  {mailbox.kind === 'room' ? (
+                    <Badge variant="secondary" className="ml-2">
+                      Room
+                    </Badge>
+                  ) : mailbox.kind === 'equipment' ? (
+                    <Badge variant="secondary" className="ml-2">
+                      Equipment
+                    </Badge>
+                  ) : null}
+                </TableCell>
                 <TableCell>
                   <Usage orgId={orgId} mailbox={mailbox} />
                 </TableCell>

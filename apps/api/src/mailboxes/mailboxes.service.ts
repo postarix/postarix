@@ -23,6 +23,7 @@ import {
   toMailboxDto,
   type UpdateMailboxInput,
 } from './mailboxes.dto.js';
+import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
 import { MailboxesRepository } from './mailboxes.repository.js';
 
@@ -43,6 +44,7 @@ export class MailboxesService {
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(MailboxCollectionsService) private readonly collections: MailboxCollectionsService,
+    @Inject(ArchivingService) private readonly archiving: ArchivingService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -98,6 +100,7 @@ export class MailboxesService {
         address,
         displayName: input.displayName,
         quotaBytes: input.quotaBytes,
+        kind: input.kind,
       });
     } catch (error) {
       await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
@@ -136,6 +139,7 @@ export class MailboxesService {
   async update(ctx: TenantContext, id: string, input: UpdateMailboxInput): Promise<MailboxDto> {
     const current = await this.require(ctx, id);
     if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: input.status === 'disabled' });
+    if (input.status === 'disabled' && current.status !== 'disabled') await this.archiving.assertMayRemove(ctx, id);
 
     if (input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes) {
       try {
@@ -145,10 +149,11 @@ export class MailboxesService {
       }
     }
 
-    const changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status'>> = {};
+    const changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind'>> = {};
     if (input.displayName !== undefined) changes.displayName = input.displayName;
     if (input.quotaBytes !== undefined) changes.quotaBytes = input.quotaBytes;
     if (input.status !== undefined) changes.status = input.status;
+    if (input.kind !== undefined) changes.kind = input.kind;
 
     const row = await this.repository.update(ctx, id, changes);
     if (!row) throw new NotFoundException('Mailbox not found');
@@ -184,6 +189,7 @@ export class MailboxesService {
   async remove(ctx: TenantContext, id: string): Promise<void> {
     const mailbox = await this.require(ctx, id);
     if (mailbox.userId) await this.assertMayManage(ctx, mailbox.userId, { removing: true });
+    await this.archiving.assertMayRemove(ctx, id);
     try {
       await this.engine.deleteMailbox(mailbox.address);
     } catch (error) {

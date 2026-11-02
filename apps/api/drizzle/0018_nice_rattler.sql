@@ -1,0 +1,1 @@
+ALTER TABLE "mailboxes" ADD COLUMN "kind" text DEFAULT 'person' NOT NULL;

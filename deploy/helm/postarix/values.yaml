@@ -12,7 +12,7 @@ image:
 # values below (generate each with: openssl rand -base64 36 | tr -d '/+=').
 # The secret must hold: AUTH_SECRET, INTERNAL_API_TOKEN, POSTARIX_SECRET_MAIL_AUTH,
 # POSTARIX_SECRET_SUBMISSION, POSTARIX_SECRET_CYRUS_SMTP (and, with mail.murder,
-# POSTARIX_SECRET_MURDER_MUPDATE and POSTARIX_SECRET_MURDER_PROXY), CYRUS_ADMIN_PASSWORD,
+# POSTARIX_SECRET_MURDER_MUPDATE, POSTARIX_SECRET_MURDER_PROXY and POSTARIX_SECRET_MURDER_XFER), CYRUS_ADMIN_PASSWORD,
 # POSTGRES_PASSWORD, POSTFIX_DB_PASSWORD, VALKEY_PASSWORD, RSPAMD_CONTROLLER_PASSWORD.
 existingSecret: ""
 secrets:
@@ -45,6 +45,9 @@ api:
   trustedProxies: []
   # Identity providers (SSO) on a private network that organizations may use.
   ssoTrustedIssuers: []
+  # IMAP servers on a private network that people may import mail from
+  # (public servers need no entry). See docs/MIGRATION.md.
+  mailImportAllowedHosts: []
   # Sender of the server's own notices (default: no-reply@<mailHostname>).
   systemMailFrom: ""
   # "json" for one JSON object per log line (Loki, Elasticsearch…).

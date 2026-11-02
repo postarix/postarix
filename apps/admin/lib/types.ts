@@ -39,6 +39,8 @@ export interface Mailbox {
   displayName: string;
   quotaBytes: number | null;
   status: 'active' | 'disabled';
+  /** Rooms and equipment answer calendar invitations by themselves. */
+  kind: 'person' | 'room' | 'equipment';
   createdAt: string;
 }
 

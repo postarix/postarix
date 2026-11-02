@@ -137,6 +137,8 @@ services:
       # Prometheus metrics, on the internal networks only (see docs/MONITORING.md).
       METRICS_PORT: 9464
       LOG_FORMAT: ${LOG_FORMAT:-text}
+      # Mail import from servers on a private network (see docs/MIGRATION.md).
+      MAIL_IMPORT_ALLOWED_HOSTS: ${MAIL_IMPORT_ALLOWED_HOSTS:-}
       MAIL_ENGINE: cyrus
       CYRUS_HOST: cyrus
       CYRUS_PORT: 1143

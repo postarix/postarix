@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { normalizeLocalPart } from '../common/addresses.js';
-import { type MailboxRow, mailboxStatuses } from '../db/schema/index.js';
+import { type MailboxRow, mailboxKinds, mailboxStatuses } from '../db/schema/index.js';
 
 const MIN_QUOTA = 1024 * 1024; // 1 MiB
 const MAX_QUOTA = 1024 ** 4; // 1 TiB
@@ -30,6 +30,8 @@ export const createMailboxSchema = z.strictObject({
   displayName: displayNameSchema.default(''),
   password: passwordSchema,
   quotaBytes: quotaSchema.default(null),
+  /** A room or equipment: invitations to it are answered by itself (see CalendarService). */
+  kind: z.enum(mailboxKinds).default('person'),
 });
 export type CreateMailboxInput = z.infer<typeof createMailboxSchema>;
 
@@ -38,6 +40,7 @@ export const updateMailboxSchema = z
     displayName: displayNameSchema.optional(),
     quotaBytes: quotaSchema.optional(),
     status: z.enum(mailboxStatuses).optional(),
+    kind: z.enum(mailboxKinds).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
@@ -54,6 +57,7 @@ export interface MailboxDto {
   displayName: string;
   quotaBytes: number | null;
   status: MailboxRow['status'];
+  kind: MailboxRow['kind'];
   createdAt: string;
   updatedAt: string;
 }
@@ -67,6 +71,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
     displayName: row.displayName,
     quotaBytes: row.quotaBytes,
     status: row.status,
+    kind: row.kind,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

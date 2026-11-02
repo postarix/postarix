@@ -12,6 +12,7 @@ export interface NewMailbox {
   address: string;
   displayName: string;
   quotaBytes: number | null;
+  kind?: MailboxRow['kind'];
 }
 
 /** Tenant-scoped data access for mailboxes. */
@@ -79,7 +80,7 @@ export class MailboxesRepository {
   async update(
     ctx: TenantContext,
     id: string,
-    changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status'>>,
+    changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind'>>,
   ): Promise<MailboxRow | undefined> {
     const [row] = await this.db
       .update(mailboxes)

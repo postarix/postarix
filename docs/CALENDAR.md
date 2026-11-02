@@ -1,4 +1,4 @@
-# Calendar: invitations, free/busy and sharing
+# Calendar: invitations, free/busy, sharing and rooms
 
 Postarix keeps calendars and address books in Cyrus (CalDAV/CardDAV), and the
 webmail reads them over JMAP. This page covers what happens between people.
@@ -58,3 +58,21 @@ Sharing is stored as Cyrus ACLs on the calendar or address book. Cyrus gives
 removes it for every mailbox (new ones when they are created, existing ones in
 the background when the API starts), so free/busy cannot be read across
 organizations.
+
+## Rooms and equipment
+
+Admins create a room or a piece of equipment as a mailbox of that type (admin
+panel › Mailboxes › New mailbox › Type). People in the organization book it by
+inviting it to an event; the event dialog lists the organization's rooms and
+equipment under the guests.
+
+- The API answers for the resource at once: it accepts when the resource is
+  free at that time and declines otherwise (for a repeating event, the first
+  occurrence is checked). The answer shows next to the guest like anyone
+  else's.
+- A booked resource keeps the event in its own calendar, so its free/busy and
+  its calendar (open it with the resource's mailbox, or share it with the
+  people who manage the room) show when it is taken. Changing the time checks
+  again; cancelling the event or taking the resource off frees it.
+- Resources receive no email, and only people of the same organization can
+  book them: to anyone else they are ordinary addresses.
