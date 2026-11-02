@@ -2,6 +2,7 @@ import { Input } from '@postarix/ui/components/input';
 import { cn } from '@postarix/ui/lib/utils';
 import { useId, useMemo, useState } from 'react';
 import { contactName, useContacts } from '@/lib/contacts';
+import { formatRecipient, splitRecipients } from '@/lib/format';
 import { Avatar } from './avatar';
 
 /**
@@ -29,7 +30,7 @@ export function RecipientInput({
   const [focused, setFocused] = useState(false);
   const [active, setActive] = useState(0);
 
-  const token = value.split(/[,;]/).at(-1)!.trim().toLocaleLowerCase();
+  const token = splitRecipients(value).at(-1)!.trim().toLocaleLowerCase();
   const suggestions = useMemo(() => {
     if (token.length < 2) return [];
     const already = new Set(value.toLocaleLowerCase().split(/[,;<>\s]+/));
@@ -47,8 +48,8 @@ export function RecipientInput({
   const open = focused && suggestions.length > 0;
 
   const pick = (s: { name: string; email: string }) => {
-    const parts = value.split(/[,;]/);
-    parts[parts.length - 1] = ` ${s.name && s.name !== s.email ? `${s.name} <${s.email}>` : s.email}`;
+    const parts = splitRecipients(value);
+    parts[parts.length - 1] = ` ${formatRecipient(s.name, s.email)}`;
     onChange(`${parts.join(',').replace(/^\s+/, '')}, `);
     setActive(0);
   };

@@ -12,7 +12,7 @@ and create one per app or device:
 
 | The app needs | Choose |
 |---|---|
-| Reading mail (IMAP, POP3) | Mail |
+| Reading mail (IMAP, POP3), mail filters (ManageSieve) | Mail |
 | Sending mail (SMTP) | Sending |
 | Calendars and contacts (CalDAV, CardDAV) | Calendars & contacts |
 
@@ -31,8 +31,12 @@ with your server's name.
 | POP3 | mail.example.com | 995 | SSL/TLS |
 | SMTP | mail.example.com | 465 | SSL/TLS |
 | SMTP | mail.example.com | 587 | STARTTLS |
+| ManageSieve (filters) | mail.example.com | 4190 | STARTTLS |
 | CalDAV | `https://mail.example.com/dav/calendars/user/you@example.com/` | 443 | HTTPS |
 | CardDAV | `https://mail.example.com/dav/addressbooks/user/you@example.com/` | 443 | HTTPS |
+
+Filters can file, flag or reject mail; forwarding to another address and
+automatic replies are not available yet (use an alias to forward).
 
 Most calendar and contacts apps only need `https://mail.example.com`: they find
 the rest through `/.well-known/caldav` and `/.well-known/carddav`.
