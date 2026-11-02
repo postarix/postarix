@@ -10,9 +10,18 @@ import {
   type SieveScriptInfo,
 } from './types.js';
 
+/** A backend that can hand its mailboxes to another one (CyrusEngine). */
+export interface TransferableEngine extends MailEngine {
+  transfer(address: string, server: string): Promise<void>;
+}
+
 export interface MurderEngineOptions {
   /** The backends by name: each is the engine of one Cyrus backend. */
   backends: Record<string, MailEngine>;
+  /** Each backend's server name in the Murder (its CYRUS_SERVERNAME), for moves. */
+  serverNames?: Record<string, string>;
+  /** Records that a mailbox now lives on another backend. */
+  relocate?: (address: string, backend: string) => Promise<void>;
   /** The backend a mailbox lives on (by address), or null if unknown. */
   locate: (address: string) => Promise<string | null>;
   /** Picks the backend for a new mailbox and records it; returns its name. */
@@ -107,6 +116,31 @@ export class MurderEngine implements MailEngine {
 
   async restrictCollections(address: string): Promise<void> {
     await (await this.backendOf(address)).restrictCollections(address);
+  }
+
+  /** The backends' names. */
+  get backendNames(): string[] {
+    return [...this.names];
+  }
+
+  /**
+   * Moves a mailbox to another backend (Cyrus XFER), then records it there.
+   * Mail arriving meanwhile waits in Postfix' queue (the frontend defers it).
+   */
+  async moveMailbox(address: string, to: string): Promise<void> {
+    const from = await this.options.locate(address);
+    if (from === null) throw new MailEngineError(`Mailbox ${address} does not exist`, 'not_found');
+    if (from === to) return;
+    const source = this.options.backends[from] as Partial<TransferableEngine> | undefined;
+    const server = this.options.serverNames?.[to];
+    if (!this.options.backends[to] || !server) throw new MailEngineError(`Unknown backend: ${to}`, 'rejected');
+    if (!source?.transfer || !this.options.relocate) throw new MailEngineError('This Murder cannot move mailboxes', 'unavailable');
+    await source.transfer(address, server);
+    await this.options.relocate(address, to);
+    // The frontends learn the new location from the mupdate server; give them
+    // longer than for a new mailbox (the old entry is replaced, not added).
+    const wait = (this.options.propagationMs ?? 3_000) * 3;
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   }
 
   /** Healthy when every backend is. */

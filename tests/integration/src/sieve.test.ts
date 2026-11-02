@@ -97,13 +97,21 @@ describe('Mail Cyrus sends by itself', () => {
     await expect(
       smtp(config.smtpPort).sendMail({ envelope: { from: 'spammer@outside.example', to: [srs!] }, from: 'spammer@outside.example', to: srs!, subject: 'relay?', text: 'x' }),
     ).rejects.toThrow(/5\d\d/);
-    // A "bounce" that is spam is refused rather than relayed to the writer.
-    await expect(
-      smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [srs!] }, from: 'MAILER-DAEMON@outside.example', to: srs!, subject: unique('spam-bounce'), text: `Delivery failed.\n${SPAM_MARKER}\n` }),
-    ).rejects.toThrow(/5\d\d/);
     const forged = srs!.replace(/^SRS0=[0-9a-f]{8}/i, 'SRS0=00000000');
     await expect(
       smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [forged] }, from: 'MAILER-DAEMON@outside.example', to: forged, subject: 'forged', text: 'x' }),
+    ).rejects.toThrow(/5\d\d/);
+  });
+
+  // Needs the test-only spam rule (not run on Kubernetes).
+  it('refuses spam sent to a forwarding address instead of relaying it', async () => {
+    const subject = unique('srs-spam');
+    await smtp(config.submissionPort, { user: writer.address, pass: PASSWORD }).sendMail({ from: writer.address, to: forwarder.address, subject, text: 'Forward me too.' });
+    const copy = await waitForMessage(target.address, PASSWORD, subject);
+    const srs = /^Return-Path: <(SRS0=[^>]+)>/im.exec(copy)?.[1];
+    expect(srs).toBeDefined();
+    await expect(
+      smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [srs!] }, from: 'MAILER-DAEMON@outside.example', to: srs!, subject: unique('spam-bounce'), text: `Delivery failed.\n${SPAM_MARKER}\n` }),
     ).rejects.toThrow(/5\d\d/);
   });
 

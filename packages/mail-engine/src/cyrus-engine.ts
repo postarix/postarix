@@ -106,10 +106,10 @@ export class CyrusEngine implements MailEngine {
     return `user/${address.slice(0, at)}/${folder}${address.slice(at)}`;
   }
 
-  private async withAdmin<T>(run: (connection: ImapConnection) => Promise<T>): Promise<T> {
+  private async withAdmin<T>(run: (connection: ImapConnection) => Promise<T>, timeoutMs?: number): Promise<T> {
     let connection: ImapConnection | undefined;
     try {
-      connection = await ImapConnection.connect(this.options);
+      connection = await ImapConnection.connect(timeoutMs ? { ...this.options, timeoutMs } : this.options);
       await connection.login(this.options.adminUser, this.options.adminPassword);
     } catch (error) {
       connection?.destroy();
@@ -161,6 +161,23 @@ export class CyrusEngine implements MailEngine {
     const source = quote(CyrusEngine.mailboxName(from));
     const target = quote(CyrusEngine.mailboxName(to));
     await this.withAdmin((imap) => imap.expectOk(`RENAME ${source} ${target}`).then(() => undefined));
+  }
+
+  /**
+   * Cyrus Murder: moves a user's whole mailbox (folders, calendars, contacts,
+   * Sieve scripts) from this backend to another one, named as the Murder
+   * knows it. The backends log in to each other for it (postarix-xfer). It
+   * can take a while for a large mailbox.
+   */
+  async transfer(address: string, server: string): Promise<void> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$/.test(server)) throw new MailEngineError(`Invalid server name: ${server}`, 'rejected');
+    const name = quote(CyrusEngine.mailboxName(address));
+    await this.withAdmin(async (imap) => {
+      const response = await imap.expectOk(`XFER ${name} ${quote(server)}`);
+      // Cyrus answers OK overall and reports each user it could not move on its own line.
+      const failed = response.untagged.find((line) => /^NO (USER|MAILBOX) /i.test(line));
+      if (failed) throw new MailEngineError(`The mailbox was not moved: ${failed.slice(3)}`, 'rejected');
+    }, 60 * 60_000);
   }
 
   async setQuota(address: string, quotaBytes: number | null): Promise<void> {

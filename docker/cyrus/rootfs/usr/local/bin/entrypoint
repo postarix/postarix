@@ -44,6 +44,7 @@ MAIL_AUTH_SECRET=""
 CYRUS_SMTP_SECRET=""
 MUPDATE_SECRET=""
 PROXY_SECRET=""
+XFER_SECRET=""
 if [ "$CYRUS_ROLE" != mupdate ]; then
   MAIL_AUTH_SECRET=$(internal_secret mail-auth)
   CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
@@ -52,6 +53,8 @@ fi
 # backends on behalf of users. Internal accounts, never valid on public ports.
 if [ "$CYRUS_ROLE" != standalone ]; then MUPDATE_SECRET=$(internal_secret murder-mupdate); fi
 if [ "$CYRUS_ROLE" = backend ] || [ "$CYRUS_ROLE" = frontend ]; then PROXY_SECRET=$(internal_secret murder-proxy); fi
+# Backends move mailboxes to each other (XFER) with an account of their own.
+if [ "$CYRUS_ROLE" = backend ]; then XFER_SECRET=$(internal_secret murder-xfer); fi
 
 # --- Configuration -----------------------------------------------------------
 envsubst '${CYRUS_SERVERNAME}' < /etc/imapd.conf.template > /etc/imapd.conf
@@ -71,6 +74,7 @@ murder_accounts() {
     case "$account" in
       postarix-mupdate) secret=$MUPDATE_SECRET ;;
       postarix-murder) secret=$PROXY_SECRET ;;
+      postarix-xfer) secret=$XFER_SECRET ;;
     esac
     printf '%s' "$secret" | saslpasswd2 -p -c -u "$CYRUS_SERVERNAME" -f /etc/sasldb2-murder "$account"
   done
@@ -90,9 +94,15 @@ case "$CYRUS_ROLE" in
       echo "proxyservers: postarix-murder"
       # Frontends deliver over LMTP as this account (per-service option: the service is "lmtpnet").
       echo "lmtpnet_admins: postarix-murder"
+      # Moving a mailbox (XFER): the backend holding it logs in to the other
+      # one as postarix-xfer, an administrator on backends only.
+      echo "admins: postarix-xfer"
+      echo "allowusermoves: yes"
+      echo "proxy_authname: postarix-xfer"
+      echo "proxy_password: $XFER_SECRET"
     } > /etc/imapd.conf.new
     mv /etc/imapd.conf.new /etc/imapd.conf
-    murder_accounts postarix-murder
+    murder_accounts postarix-murder postarix-xfer
     # Services frontends connect to, on their standard ports; and the
     # backend publishes its mailboxes to mupdate at start.
     sed -i -e 's|^START {|START {\n  mupdatepush   cmd="ctl_mboxlist -m"|' \
@@ -216,8 +226,8 @@ chown root:sasl /etc/sasldb2
 chmod 0640 /etc/sasldb2
 
 # Both secrets now live in root-only files; no process started below needs them.
-unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET MUPDATE_SECRET PROXY_SECRET \
-  POSTARIX_SECRET_MAIL_AUTH POSTARIX_SECRET_CYRUS_SMTP POSTARIX_SECRET_MURDER_MUPDATE POSTARIX_SECRET_MURDER_PROXY
+unset CYRUS_ADMIN_PASSWORD INTERNAL_API_TOKEN MAIL_AUTH_SECRET CYRUS_SMTP_SECRET MUPDATE_SECRET PROXY_SECRET XFER_SECRET \
+  POSTARIX_SECRET_MAIL_AUTH POSTARIX_SECRET_CYRUS_SMTP POSTARIX_SECRET_MURDER_MUPDATE POSTARIX_SECRET_MURDER_PROXY POSTARIX_SECRET_MURDER_XFER
 
 # --- Runtime and data directories ---------------------------------------------
 install -d -o cyrus -g mail -m 0750 /run/cyrus /run/cyrus/proc /run/cyrus/lock /run/cyrus/socket

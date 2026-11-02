@@ -17,6 +17,10 @@ export function createMailEngine(env: Env, db?: Database): MailEngine {
   const fallback = env.CYRUS_DEFAULT_BACKEND ?? env.CYRUS_BACKENDS[0]!.name;
   return new MurderEngine({
     backends,
+    serverNames: Object.fromEntries(env.CYRUS_BACKENDS.map((b) => [b.name, b.host])),
+    relocate: async (address, backend) => {
+      await db.update(mailboxes).set({ mailServer: backend }).where(eq(mailboxes.address, address));
+    },
     locate: async (address) => {
       const [row] = await db.select({ server: mailboxes.mailServer }).from(mailboxes).where(eq(mailboxes.address, address)).limit(1);
       return row ? (row.server ?? fallback) : null;
