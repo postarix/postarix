@@ -17,7 +17,7 @@ describe('JMAP proxy for the webmail', () => {
   let calls: { address: string; request: JmapRequest; body: string }[];
 
   const readBody = async (body: JmapRequest['body']) =>
-    body ? Buffer.from(await new Response(body as BodyInit).arrayBuffer()).toString('utf8') : '';
+    body ? Buffer.from(await new Response(body as ConstructorParameters<typeof Response>[0]).arrayBuffer()).toString('utf8') : '';
 
   beforeAll(async () => {
     app = await startApp();
