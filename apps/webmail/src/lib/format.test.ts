@@ -24,5 +24,8 @@ describe('router', () => {
     expect(parseRoute(mailboxPath('M a', 'E/1', 'from:bob'))).toEqual({ name: 'mailbox', mailboxId: 'M a', emailId: 'E/1', search: 'from:bob' });
     expect(parseRoute('/')).toEqual({ name: 'mailbox', mailboxId: null, emailId: null, search: '' });
     expect(parseRoute('/login')).toEqual({ name: 'login' });
+    expect(parseRoute('/calendar?date=2026-11-10')).toEqual({ name: 'calendar', date: '2026-11-10' });
+    expect(parseRoute('/calendar?date=junk')).toEqual({ name: 'calendar', date: null });
+    expect(parseRoute('/contacts/c1?q=ann')).toEqual({ name: 'contacts', contactId: 'c1', search: 'ann' });
   });
 });

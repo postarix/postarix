@@ -8,6 +8,8 @@ import { useSession } from '@/lib/auth-client';
 import { jmap } from '@/lib/jmap';
 import { navigate, useLinkInterception, useRoute } from '@/lib/router';
 import { LoginPage } from '@/pages/login';
+import { CalendarPage } from '@/pages/calendar';
+import { ContactsPage } from '@/pages/contacts';
 import { MailPage } from '@/pages/mail';
 import './styles.css';
 
@@ -73,7 +75,10 @@ function App() {
       </Centered>
     );
   }
-  return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} email={session.user.email} />;
+  const user = { email: session.user.email, name: session.user.name };
+  if (route.name === 'calendar') return <CalendarPage date={route.date} {...user} />;
+  if (route.name === 'contacts') return <ContactsPage contactId={route.contactId} search={route.search} {...user} />;
+  return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} {...user} />;
 }
 
 createRoot(document.getElementById('root')!).render(

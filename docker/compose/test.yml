@@ -20,3 +20,7 @@ services:
     networks: [default, proxy]
     ports:
       - "3002:3002"
+  # CalDAV/CardDAV, published so the tests can sync like a phone would.
+  cyrus:
+    ports:
+      - "8085:8080"

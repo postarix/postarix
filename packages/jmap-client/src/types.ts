@@ -79,9 +79,63 @@ export interface ResultReference {
   path: string;
 }
 
+/** A calendar (JMAP Calendars). */
+export interface Calendar {
+  id: Id;
+  name: string;
+  color?: string | null;
+  sortOrder: number;
+  isVisible: boolean;
+  myRights?: { mayWriteAll?: boolean; mayDelete?: boolean };
+}
+
+export interface RecurrenceRule {
+  '@type'?: 'RecurrenceRule';
+  frequency: 'yearly' | 'monthly' | 'weekly' | 'daily' | 'hourly' | 'minutely' | 'secondly';
+  interval?: number;
+  count?: number;
+  until?: string;
+}
+
+/** A calendar event (JSCalendar, RFC 8984, as served by JMAP Calendars). */
+export interface CalendarEvent {
+  id: Id;
+  uid?: string;
+  calendarIds: Record<Id, boolean>;
+  title: string;
+  description?: string | null;
+  /** Local date-time ("2026-11-10T10:00:00") in `timeZone`, or floating when null. */
+  start: string;
+  timeZone?: string | null;
+  /** ISO 8601 duration ("PT1H", "P1D"). */
+  duration?: string;
+  showWithoutTime?: boolean;
+  locations?: Record<string, { '@type'?: 'Location'; name?: string }> | null;
+  recurrenceRules?: RecurrenceRule[] | null;
+  /** For expanded occurrences: the recurrence id and the master event id. */
+  recurrenceId?: string | null;
+  baseEventId?: Id | null;
+}
+
+/** A contact (Cyrus' JMAP contacts model, stored as vCard for CardDAV). */
+export interface Contact {
+  id: Id;
+  addressbookId?: Id;
+  firstName: string;
+  lastName: string;
+  company: string;
+  jobTitle: string;
+  nickname: string;
+  notes: string;
+  emails: { type: string; value: string; isDefault?: boolean; label?: string | null }[];
+  phones: { type: string; value: string; label?: string | null }[];
+}
+
 export const CAPABILITIES = {
   core: 'urn:ietf:params:jmap:core',
   mail: 'urn:ietf:params:jmap:mail',
   submission: 'urn:ietf:params:jmap:submission',
   vacation: 'urn:ietf:params:jmap:vacationresponse',
+  calendars: 'urn:ietf:params:jmap:calendars',
+  contacts: 'https://cyrusimap.org/ns/jmap/contacts',
 } as const;

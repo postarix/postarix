@@ -362,7 +362,12 @@ out the account password after repeated failures (app passwords keep working).
 - Later: threads view, rich-text composing, Sieve filters and vacation replies, labels.
 
 ### Phase 4 — Calendar and contacts
-- UIs on top of CalDAV/CardDAV (or JMAP Calendars/Contacts as Cyrus support matures).
+- [x] Calendar in the webmail over JMAP Calendars (JSCalendar): month view, agenda on small screens, all-day and repeating events, places and notes.
+- [x] Contacts in the webmail over Cyrus' JMAP contacts: list with search, details, editing; suggestions while writing mail.
+- [x] The same calendars and address books sync to phones and desktop apps over CalDAV/CardDAV (`/dav`, discovery through `/.well-known`) with DAV-scoped app passwords; default calendar and address book created on first use.
+- [x] A visual identity of its own for every interface (ink, postal yellow, airmail edge; Bricolage Grotesque and Instrument Sans, self-hosted).
+- [x] Integration and browser tests: JMAP ↔ CalDAV/CardDAV sync, privacy between users, calendar and contacts in the browser.
+- Later: week and day views, invitations (iTIP) and free/busy, shared calendars and address books.
 - Invitations (iMIP), shared resources.
 
 ### Phase 5 — Enterprise and scale
@@ -387,6 +392,8 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Webmail JMAP goes through the API, which logs in to an internal Cyrus JMAP service **as the user** with short-lived HMAC tokens checked by the normal login bridge (Cyrus only allows `Authorize-As` proxying on Murder backends). The client never chooses the account. |
 | 2026-11-02 | Webmail sending goes through the API (From must be in `mail.sender_logins`, Bcc removed) to an internal Postfix port with its own account; Rspamd still requires From = envelope and signs DKIM. |
 | 2026-11-02 | Email HTML is sanitized on the server and shown in a sandboxed iframe (no scripts, opaque origin) with a CSP; remote images are blocked by default and loaded through a signed proxy that only reaches public addresses. |
+| 2026-11-02 | Calendar and contacts in the webmail use **JMAP** (Cyrus' JMAP service loads the CalDAV/CardDAV stores behind it), so the webmail, CalDAV and CardDAV clients share one copy of the data. |
+| 2026-11-02 | Visual identity inspired by the post: ink blue for structure and actions, postal yellow for attention (compose, selection, unread), post-box red for destructive actions; the airmail edge marks composing and signing in. Fonts are self-hosted so the strict CSP stays `font-src 'self'`. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |

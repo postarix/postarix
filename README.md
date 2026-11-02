@@ -78,6 +78,8 @@ Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`.
 
 Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#15-roadmap).
 
+Using Postarix with Thunderbird, Apple Mail, Outlook or a phone: [`docs/CONNECTING-DEVICES.md`](docs/CONNECTING-DEVICES.md).
+
 ## Security
 
 If you find a vulnerability, **do not open a public issue**. Follow [`SECURITY.md`](SECURITY.md).

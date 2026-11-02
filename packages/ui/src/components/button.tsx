@@ -18,6 +18,9 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // Postarix addition: postal yellow, for the one main action of a screen (e.g. Compose).
+        stamp:
+          "bg-stamp font-semibold text-stamp-foreground shadow-[inset_0_-2px_0_rgb(0_0_0/0.12)] hover:brightness-[0.97] active:shadow-none",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

@@ -13,6 +13,7 @@ import { type Attachment, type DraftInput, saveDraft, sendDraft } from '@/lib/co
 import { addressList, formatBytes, parseAddresses } from '@/lib/format';
 import { jmap } from '@/lib/jmap';
 import { keys } from '@/lib/mail';
+import { RecipientInput } from './recipient-input';
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -105,9 +106,9 @@ export function Composer({
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent className="flex max-h-[95vh] flex-col sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent className="airmail-edge flex max-h-[95vh] flex-col pt-8 sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>{subject.trim() || 'New message'}</DialogTitle>
+          <DialogTitle className="truncate text-xl">{subject.trim() || 'New message'}</DialogTitle>
           <DialogDescription className="sr-only">Write and send an email</DialogDescription>
         </DialogHeader>
         <form
@@ -136,7 +137,7 @@ export function Composer({
               <FieldLabel htmlFor={`${id}-to`} className="w-14 shrink-0 text-muted-foreground">
                 To
               </FieldLabel>
-              <Input id={`${id}-to`} value={to} onChange={(e) => setTo(e.target.value)} autoFocus={!to} placeholder="name@example.com, …" />
+              <RecipientInput id={`${id}-to`} value={to} onChange={setTo} autoFocus={!to} placeholder="Name or address" />
               {!showCopies ? (
                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowCopies(true)}>
                   Cc/Bcc
@@ -149,13 +150,13 @@ export function Composer({
                   <FieldLabel htmlFor={`${id}-cc`} className="w-14 shrink-0 text-muted-foreground">
                     Cc
                   </FieldLabel>
-                  <Input id={`${id}-cc`} value={cc} onChange={(e) => setCc(e.target.value)} />
+                  <RecipientInput id={`${id}-cc`} value={cc} onChange={setCc} />
                 </Field>
                 <Field orientation="horizontal">
                   <FieldLabel htmlFor={`${id}-bcc`} className="w-14 shrink-0 text-muted-foreground">
                     Bcc
                   </FieldLabel>
-                  <Input id={`${id}-bcc`} value={bcc} onChange={(e) => setBcc(e.target.value)} />
+                  <RecipientInput id={`${id}-bcc`} value={bcc} onChange={setBcc} />
                 </Field>
               </>
             ) : null}
@@ -171,7 +172,7 @@ export function Composer({
             value={text}
             onChange={(e) => setText(e.target.value)}
             autoFocus={Boolean(to)}
-            className="min-h-64 flex-1 font-sans"
+            className="min-h-64 flex-1 resize-none text-[0.95rem] leading-relaxed"
           />
           {attachments.length || uploading ? (
             <ul className="flex flex-wrap gap-2" aria-label="Attachments">
@@ -214,7 +215,7 @@ export function Composer({
                 {busy === 'save' ? <Spinner /> : null}
                 Save draft
               </Button>
-              <Button type="submit" disabled={busy !== null || uploading > 0}>
+              <Button type="submit" variant="stamp" disabled={busy !== null || uploading > 0}>
                 {busy === 'send' ? <Spinner /> : <Send aria-hidden />}
                 Send
               </Button>

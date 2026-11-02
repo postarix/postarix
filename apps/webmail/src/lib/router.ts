@@ -5,10 +5,14 @@ import { useEffect, useSyncExternalStore } from 'react';
  *   /login                       sign-in
  *   /                            the inbox
  *   /m/<mailboxId>[/<emailId>]   a folder, optionally with an open message
+ *   /calendar[?date=YYYY-MM-DD]  the calendar, showing that date's month
+ *   /contacts[/<contactId>]      contacts
  */
 export type Route =
   | { name: 'login' }
-  | { name: 'mailbox'; mailboxId: string | null; emailId: string | null; search: string };
+  | { name: 'mailbox'; mailboxId: string | null; emailId: string | null; search: string }
+  | { name: 'calendar'; date: string | null }
+  | { name: 'contacts'; contactId: string | null; search: string };
 
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => {
@@ -31,6 +35,14 @@ export function navigate(path: string, replace = false): void {
 export function parseRoute(location: string): Route {
   const url = new URL(location, 'http://local');
   if (url.pathname === '/login') return { name: 'login' };
+  if (url.pathname === '/calendar' || url.pathname === '/calendar/') {
+    const date = url.searchParams.get('date');
+    return { name: 'calendar', date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null };
+  }
+  const contact = /^\/contacts(?:\/([^/]+))?\/?$/.exec(url.pathname);
+  if (contact) {
+    return { name: 'contacts', contactId: contact[1] ? decodeURIComponent(contact[1]) : null, search: url.searchParams.get('q') ?? '' };
+  }
   const match = /^\/m\/([^/]+)(?:\/([^/]+))?\/?$/.exec(url.pathname);
   return {
     name: 'mailbox',

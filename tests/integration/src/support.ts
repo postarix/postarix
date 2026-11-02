@@ -10,6 +10,7 @@ export const config = {
   submissionsPort: Number(process.env.SUBMISSIONS_PORT ?? 4650),
   imapsPort: Number(process.env.IMAPS_PORT ?? 9930),
   imapPort: Number(process.env.IMAP_PORT ?? 1430),
+  davUrl: process.env.DAV_URL ?? 'http://localhost:8085',
   adminEmail: process.env.ADMIN_EMAIL ?? 'admin@postarix.test',
   adminPassword: process.env.ADMIN_PASSWORD ?? 'integration admin password',
 };

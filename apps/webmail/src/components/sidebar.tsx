@@ -1,12 +1,12 @@
 import type { Mailbox } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
-import { Skeleton } from '@postarix/ui/components/skeleton';
 import { cn } from '@postarix/ui/lib/utils';
-import { Archive, File, Folder, Inbox, PenSquare, Send, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, File, Folder, Inbox, PenLine, Send, ShieldAlert, Trash2 } from 'lucide-react';
 import { mailboxPath } from '@/lib/router';
 
 const ICONS = { inbox: Inbox, drafts: File, sent: Send, archive: Archive, junk: ShieldAlert, trash: Trash2 } as const;
 
+/** The folders of the mailbox, on the ink sidebar, with Compose as the one yellow action. */
 export function Sidebar({
   mailboxes,
   loading,
@@ -19,16 +19,16 @@ export function Sidebar({
   onCompose: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col gap-3">
-      <Button onClick={onCompose} className="w-full">
-        <PenSquare aria-hidden />
+    <div className="flex h-full flex-col gap-4">
+      <Button variant="stamp" size="lg" onClick={onCompose} className="w-full justify-start">
+        <PenLine aria-hidden />
         Compose
       </Button>
-      <nav aria-label="Folders" className="flex-1 overflow-y-auto">
+      <nav aria-label="Folders" className="-mx-1 flex-1 overflow-y-auto px-1">
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5" aria-hidden>
             {[0, 1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-8 w-full" />
+              <div key={i} className="h-8 animate-pulse rounded-md bg-sidebar-accent/60" />
             ))}
           </div>
         ) : (
@@ -36,6 +36,7 @@ export function Sidebar({
             {mailboxes.map((mailbox) => {
               const Icon = (mailbox.role && ICONS[mailbox.role as keyof typeof ICONS]) || Folder;
               const active = mailbox.id === currentId;
+              const showUnread = mailbox.unreadEmails > 0 && mailbox.role !== 'sent' && mailbox.role !== 'drafts' && mailbox.role !== 'trash';
               return (
                 <li key={mailbox.id}>
                   <a
@@ -43,14 +44,21 @@ export function Sidebar({
                     href={mailboxPath(mailbox.id)}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                      active ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent/60',
+                      'group flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
+                      active ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white',
                     )}
                   >
-                    <Icon className="size-4 shrink-0 opacity-70" aria-hidden />
+                    <Icon className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted group-hover:text-sidebar-foreground')} aria-hidden />
                     <span className="flex-1 truncate">{mailbox.name}</span>
-                    {mailbox.unreadEmails > 0 && mailbox.role !== 'sent' && mailbox.role !== 'drafts' ? (
-                      <span className="text-xs font-semibold tabular-nums" aria-label={`${mailbox.unreadEmails} unread`}>
+                    {showUnread ? (
+                      <span
+                        className={cn(
+                          'min-w-6 rounded-full px-1.5 text-center text-xs font-semibold tabular-nums',
+                          mailbox.role === 'inbox' ? 'bg-stamp text-stamp-foreground' : 'text-sidebar-foreground',
+                        )}
+                        aria-label={`${mailbox.unreadEmails} unread`}
+                      >
                         {mailbox.unreadEmails}
                       </span>
                     ) : null}

@@ -2,79 +2,96 @@
  * Postarix theme for shadcn/ui (Tailwind CSS v4). Import from each app's CSS:
  *   @import "tailwindcss";
  *   @import "@postarix/ui/styles.css";
- * Dark mode follows the operating system preference.
+ *
+ * The identity comes from the post: ink blue for structure and actions,
+ * postal yellow for what deserves attention (compose, the selected message,
+ * unread mail), post-box red for destructive actions. Dark mode follows the
+ * operating system and keeps the same three colours on deep ink.
  */
+@import "@fontsource-variable/bricolage-grotesque/opsz.css";
+@import "@fontsource-variable/instrument-sans/index.css";
 @import "tw-animate-css";
 
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.985 0.002 250);
-  --foreground: oklch(0.2 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 260);
-  --primary: oklch(0.546 0.2 259);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.003 250);
-  --secondary-foreground: oklch(0.21 0.02 260);
-  --muted: oklch(0.967 0.003 250);
-  --muted-foreground: oklch(0.52 0.02 260);
-  --accent: oklch(0.955 0.012 255);
-  --accent-foreground: oklch(0.21 0.02 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.55 0.13 155);
-  --warning: oklch(0.68 0.15 70);
-  --border: oklch(0.922 0.004 250);
-  --input: oklch(0.922 0.004 250);
-  --ring: oklch(0.65 0.15 259);
-  --sidebar: oklch(0.975 0.003 250);
-  --sidebar-foreground: oklch(0.2 0.02 260);
-  --sidebar-primary: oklch(0.546 0.2 259);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.94 0.02 255);
-  --sidebar-accent-foreground: oklch(0.25 0.05 259);
-  --sidebar-border: oklch(0.922 0.004 250);
-  --sidebar-ring: oklch(0.65 0.15 259);
+
+  /* Paper and ink */
+  --background: #f3f5f9;
+  --foreground: #16213d;
+  --card: #ffffff;
+  --card-foreground: #16213d;
+  --popover: #ffffff;
+  --popover-foreground: #16213d;
+  --primary: #1e2a52;
+  --primary-foreground: #ffffff;
+  --secondary: #e8ecf4;
+  --secondary-foreground: #16213d;
+  --muted: #eceff6;
+  --muted-foreground: #5a6582;
+  --accent: #e6ebf5;
+  --accent-foreground: #16213d;
+  --border: #dbe0eb;
+  --input: #cfd6e4;
+  --ring: #e0a800;
+
+  /* The post */
+  --stamp: #ffc72c;
+  --stamp-foreground: #16213d;
+  --stamp-soft: #fff3c7;
+  --airmail-red: #c8322b;
+  --airmail-blue: #2b4c9b;
+  --destructive: #c8322b;
+  --success: #1d7a52;
+  --warning: #a86400;
+
+  /* The sidebar is a slab of ink */
+  --sidebar: #16213d;
+  --sidebar-foreground: #dfe5f2;
+  --sidebar-muted: #8e9abb;
+  --sidebar-primary: #ffc72c;
+  --sidebar-primary-foreground: #16213d;
+  --sidebar-accent: #24315a;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #24315a;
+  --sidebar-ring: #ffc72c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.16 0.01 260);
-    --foreground: oklch(0.96 0.005 250);
-    --card: oklch(0.2 0.012 260);
-    --card-foreground: oklch(0.96 0.005 250);
-    --popover: oklch(0.2 0.012 260);
-    --popover-foreground: oklch(0.96 0.005 250);
-    --primary: oklch(0.65 0.17 259);
-    --primary-foreground: oklch(0.16 0.01 260);
-    --secondary: oklch(0.26 0.012 260);
-    --secondary-foreground: oklch(0.96 0.005 250);
-    --muted: oklch(0.26 0.012 260);
-    --muted-foreground: oklch(0.7 0.015 260);
-    --accent: oklch(0.28 0.02 260);
-    --accent-foreground: oklch(0.96 0.005 250);
-    --destructive: oklch(0.704 0.191 22.216);
-    --success: oklch(0.72 0.14 155);
-    --warning: oklch(0.8 0.14 80);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.6 0.12 259);
-    --sidebar: oklch(0.18 0.011 260);
-    --sidebar-foreground: oklch(0.96 0.005 250);
-    --sidebar-primary: oklch(0.65 0.17 259);
-    --sidebar-primary-foreground: oklch(0.16 0.01 260);
-    --sidebar-accent: oklch(0.26 0.02 260);
-    --sidebar-accent-foreground: oklch(0.96 0.005 250);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.6 0.12 259);
+    --background: #0d1427;
+    --foreground: #e6ebf6;
+    --card: #131c33;
+    --card-foreground: #e6ebf6;
+    --popover: #172140;
+    --popover-foreground: #e6ebf6;
+    --primary: #ffc72c;
+    --primary-foreground: #16213d;
+    --secondary: #1c2747;
+    --secondary-foreground: #e6ebf6;
+    --muted: #1a2442;
+    --muted-foreground: #9ba6c4;
+    --accent: #1e2a4c;
+    --accent-foreground: #e6ebf6;
+    --border: #253152;
+    --input: #2d3a5e;
+    --ring: #ffc72c;
+    --stamp-soft: #3a3417;
+    --destructive: #f0645b;
+    --success: #4cc28d;
+    --warning: #f2b544;
+    --sidebar: #090f1f;
+    --sidebar-foreground: #d5dcec;
+    --sidebar-muted: #7a86a8;
+    --sidebar-accent: #18223f;
+    --sidebar-border: #18223f;
   }
 }
 
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -97,11 +114,17 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-stamp: var(--stamp);
+  --color-stamp-foreground: var(--stamp-foreground);
+  --color-stamp-soft: var(--stamp-soft);
+  --color-airmail-red: var(--airmail-red);
+  --color-airmail-blue: var(--airmail-blue);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -115,6 +138,54 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  h1,
+  h2,
+  h3,
+  [data-slot="card-title"],
+  [data-slot="dialog-title"],
+  [data-slot="alert-dialog-title"] {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    letter-spacing: -0.015em;
+  }
+}
+
+@layer components {
+  /*
+   * The airmail edge: red and blue diagonal bands, as on an airmail envelope.
+   * Used only where a message is being written or the post office is entered
+   * (the composer and the sign-in card).
+   */
+  .airmail-edge {
+    position: relative;
+  }
+  .airmail-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 6px;
+    border-radius: inherit;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--airmail-red) 0 12px,
+      transparent 12px 18px,
+      var(--airmail-blue) 18px 30px,
+      transparent 30px 36px
+    );
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
