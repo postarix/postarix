@@ -79,7 +79,7 @@ function App() {
   const user = { email: session.user.email, name: session.user.name };
   if (route.name === 'calendar') return <CalendarPage date={route.date} view={route.view} {...user} />;
   if (route.name === 'contacts') return <ContactsPage contactId={route.contactId} search={route.search} {...user} />;
-  return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} {...user} />;
+  return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} label={route.label ?? null} {...user} />;
 }
 
 /** A rendering error shows a way out instead of a blank page. */

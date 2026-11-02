@@ -8,19 +8,32 @@ import { Flag, Paperclip, Search } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { dayGroup, displayName, shortDate } from '@/lib/format';
-import { useEmails } from '@/lib/mail';
-import { mailboxPath, navigate } from '@/lib/router';
+import { type Label, useEmails } from '@/lib/mail';
+import { labelPath, mailboxPath, navigate } from '@/lib/router';
 
 export function MessageList({
   mailbox,
+  label,
+  labels,
+  exclude,
   search,
   selectedId,
 }: {
   mailbox: Mailbox | undefined;
+  /** Show the messages with this label (across folders) instead of a folder. */
+  label?: Label | null;
+  labels: Label[];
+  /** Folders a label view leaves out (Trash, Junk). */
+  exclude: string[];
   search: string;
   selectedId: string | null;
 }) {
-  const emails = useEmails(mailbox?.id ?? null, search);
+  const emails = useEmails(label ? null : (mailbox?.id ?? null), search, label ? { keyword: label.keyword, exclude } : null);
+  const ready = Boolean(label) || Boolean(mailbox);
+  const title = label ? label.name : (mailbox?.name ?? 'Mail');
+  const pathFor = (emailId: string | null, q = search) => (label ? labelPath(label.keyword, emailId, q) : mailboxPath(mailbox!.id, emailId, q));
+  const labelNames = new Map(labels.map((l) => [l.keyword, l.name]));
+  const threadSizes: Record<string, number> = Object.assign({}, ...(emails.data?.pages.map((p) => p.threadSizes) ?? []));
   const [query, setQuery] = useState(search);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const all: Email[] = emails.data?.pages.flatMap((p) => p.emails) ?? [];
@@ -29,13 +42,13 @@ export function MessageList({
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (mailbox) navigate(mailboxPath(mailbox.id, null, query));
+    if (ready) navigate(pathFor(null, query));
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-        <h1 className="flex-1 truncate text-lg font-semibold">{mailbox?.name ?? 'Mail'}</h1>
+        <h1 className="flex-1 truncate text-lg font-semibold">{title}</h1>
         <div role="group" aria-label="Show" className="depth-sunken inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
           {[
             { label: 'All', value: false },
@@ -63,10 +76,10 @@ export function MessageList({
             type="search"
             // Enabled once the folder is known: the list restarts for each
             // folder, so anything typed before then would be lost.
-            disabled={!mailbox}
+            disabled={!ready}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={`Search ${mailbox?.name ?? 'mail'}`}
+            placeholder={`Search ${title}`}
             aria-label="Search mail"
             className="h-9 bg-background pl-9"
           />
@@ -81,7 +94,7 @@ export function MessageList({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {emails.isLoading || !mailbox ? (
+        {emails.isLoading || !ready ? (
           <div className="space-y-px">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="space-y-2 p-3">
@@ -114,7 +127,7 @@ export function MessageList({
                   ) : null}
                   <a
                     data-nav
-                    href={mailboxPath(mailbox.id, email.id, search)}
+                    href={pathFor(email.id)}
                     aria-current={selected ? 'true' : undefined}
                     className={cn(
                       'block rounded-lg border p-3 text-left transition-colors',
@@ -127,6 +140,11 @@ export function MessageList({
                       <span className={cn('flex-1 truncate text-sm', unread ? 'font-semibold' : 'font-medium text-foreground/85')}>
                         {people || '(no sender)'}
                       </span>
+                      {(threadSizes[email.threadId] ?? 1) > 1 ? (
+                        <span className="shrink-0 rounded-md bg-muted px-1.5 text-[0.6875rem] font-medium text-muted-foreground tabular-nums" aria-label="Messages in this conversation">
+                          {threadSizes[email.threadId]}
+                        </span>
+                      ) : null}
                       {email.keywords.$flagged ? <Flag className="size-3.5 shrink-0 fill-current text-destructive" aria-label="Flagged" /> : null}
                       <time className={cn('shrink-0 text-xs tabular-nums', unread ? 'font-medium text-foreground' : 'text-muted-foreground')} dateTime={email.receivedAt}>
                         {shortDate(email.receivedAt)}
@@ -136,6 +154,17 @@ export function MessageList({
                       {email.subject || '(no subject)'}
                     </p>
                     <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{email.preview}</p>
+                    {Object.keys(email.keywords).some((k) => labelNames.has(k)) ? (
+                      <span className="mt-2 flex flex-wrap gap-1">
+                        {Object.keys(email.keywords)
+                          .filter((k) => labelNames.has(k))
+                          .map((k) => (
+                            <span key={k} className="rounded-md bg-accent px-1.5 py-0.5 text-[0.6875rem] font-medium text-accent-foreground ring-1 ring-ink/10 ring-inset">
+                              {labelNames.get(k)}
+                            </span>
+                          ))}
+                      </span>
+                    ) : null}
                     {email.hasAttachment ? (
                       <span className="mt-2 inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground">
                         <Paperclip className="size-3" aria-label="Has attachments" />

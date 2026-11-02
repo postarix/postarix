@@ -10,6 +10,7 @@ import { errorMessage } from '@/lib/api';
 import { type MailSettings, useMailSettings, useSaveMailSettings } from '@/lib/mail-settings';
 
 const blank: MailSettings = {
+  filters: [],
   vacation: { enabled: false, subject: 'Out of office', message: '', until: null },
   forwarding: { enabled: false, address: '', keepCopy: true },
 };
@@ -23,7 +24,7 @@ export function MailSettingsDialog({ onClose }: { onClose: () => void }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (current.data) setForm({ vacation: current.data.vacation, forwarding: current.data.forwarding });
+    if (current.data) setForm({ filters: current.data.filters ?? [], vacation: current.data.vacation, forwarding: current.data.forwarding });
   }, [current.data]);
 
   const vacation = (patch: Partial<MailSettings['vacation']>) => setForm((f) => ({ ...f, vacation: { ...f.vacation, ...patch } }));

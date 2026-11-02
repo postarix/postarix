@@ -5,12 +5,13 @@ import { useEffect, useSyncExternalStore } from 'react';
  *   /login                       sign-in
  *   /                            the inbox
  *   /m/<mailboxId>[/<emailId>]   a folder, optionally with an open message
+ *   /l/<keyword>[/<emailId>]     messages with a label
  *   /calendar[?date=YYYY-MM-DD][&view=month|week|day]  the calendar around that date
  *   /contacts[/<contactId>]      contacts
  */
 export type Route =
   | { name: 'login' }
-  | { name: 'mailbox'; mailboxId: string | null; emailId: string | null; search: string }
+  | { name: 'mailbox'; mailboxId: string | null; emailId: string | null; search: string; label?: string | null }
   | { name: 'calendar'; date: string | null; view: 'month' | 'week' | 'day' }
   | { name: 'contacts'; contactId: string | null; search: string };
 
@@ -48,6 +49,16 @@ export function parseRoute(location: string): Route {
   if (contact) {
     return { name: 'contacts', contactId: contact[1] ? decodeURIComponent(contact[1]) : null, search: url.searchParams.get('q') ?? '' };
   }
+  const labelled = /^\/l\/([^/]+)(?:\/([^/]+))?\/?$/.exec(url.pathname);
+  if (labelled) {
+    return {
+      name: 'mailbox',
+      mailboxId: null,
+      emailId: labelled[2] ? decodeURIComponent(labelled[2]) : null,
+      search: url.searchParams.get('q') ?? '',
+      label: decodeURIComponent(labelled[1]!),
+    };
+  }
   const match = /^\/m\/([^/]+)(?:\/([^/]+))?\/?$/.exec(url.pathname);
   return {
     name: 'mailbox',
@@ -60,6 +71,11 @@ export function parseRoute(location: string): Route {
 export function mailboxPath(mailboxId: string, emailId?: string | null, search?: string): string {
   const query = search ? `?q=${encodeURIComponent(search)}` : '';
   return `/m/${encodeURIComponent(mailboxId)}${emailId ? `/${encodeURIComponent(emailId)}` : ''}${query}`;
+}
+
+export function labelPath(keyword: string, emailId?: string | null, search?: string): string {
+  const query = search ? `?q=${encodeURIComponent(search)}` : '';
+  return `/l/${encodeURIComponent(keyword)}${emailId ? `/${encodeURIComponent(emailId)}` : ''}${query}`;
 }
 
 export function useRoute(): Route {

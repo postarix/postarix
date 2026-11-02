@@ -3,20 +3,24 @@ import { Alert, AlertDescription } from '@postarix/ui/components/alert';
 import { Button } from '@postarix/ui/components/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@postarix/ui/components/dropdown-menu';
+import { Input } from '@postarix/ui/components/input';
+import { cn } from '@postarix/ui/lib/utils';
 import { Separator } from '@postarix/ui/components/separator';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@postarix/ui/components/tooltip';
-import { ArrowLeft, Archive, Download, Flag, FolderInput, Forward, ImageOff, Mail, MailOpen, Paperclip, Reply, ReplyAll, Trash2 } from 'lucide-react';
+import { ArrowLeft, Archive, Download, Flag, FolderInput, Forward, ImageOff, Mail, MailOpen, Paperclip, Reply, ReplyAll, Tag, Trash2 } from 'lucide-react';
 import { type ComponentProps, useEffect, useState } from 'react';
 import { errorMessage } from '@/lib/api';
-import { addressList, displayName, formatBytes, longDate } from '@/lib/format';
+import { addressList, displayName, formatBytes, longDate, shortDate } from '@/lib/format';
 import { jmap } from '@/lib/jmap';
-import { type RenderedMessage, useMessage, useUpdateEmails } from '@/lib/mail';
+import { type Label, type RenderedMessage, useCreateLabel, useMessage, useThread, useUpdateEmails } from '@/lib/mail';
 import { mailboxPath, navigate } from '@/lib/router';
 import { Avatar } from './avatar';
 import { MessageFrame } from './message-frame';
@@ -58,25 +62,115 @@ function AttachmentLink({ attachment }: { attachment: RenderedMessage['attachmen
   );
 }
 
+/** The other messages of the conversation, oldest first; the open one is marked. */
+function Conversation({ threadId, currentId, pathFor }: { threadId: string; currentId: string; pathFor: (emailId: string) => string }) {
+  const thread = useThread(threadId);
+  const list = thread.data ?? [];
+  if (list.length < 2) return null;
+  return (
+    <section aria-label="Conversation" className="rounded-lg border bg-muted/30">
+      <p className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{list.length} messages in this conversation</p>
+      <ol>
+        {list.map((m) => {
+          const current = m.id === currentId;
+          return (
+            <li key={m.id} className="border-b last:border-b-0">
+              <a
+                data-nav
+                href={pathFor(m.id)}
+                aria-current={current ? 'true' : undefined}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                  current ? 'bg-accent' : 'hover:bg-muted/60',
+                )}
+              >
+                <span className={cn('w-36 shrink-0 truncate', !m.keywords.$seen && 'font-semibold')}>{displayName(m.from?.[0]) || '(no sender)'}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{m.preview}</span>
+                <time className="shrink-0 text-xs text-muted-foreground tabular-nums" dateTime={m.receivedAt}>
+                  {shortDate(m.receivedAt)}
+                </time>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** Puts labels on a message or takes them off; new labels can be made here. */
+function LabelMenu({ message, labels, onToggle }: { message: RenderedMessage; labels: Label[]; onToggle: (keyword: string, on: boolean) => void }) {
+  const create = useCreateLabel();
+  const [name, setName] = useState('');
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Labels">
+              <Tag aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Labels</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuLabel>Labels</DropdownMenuLabel>
+        {labels.map((l) => (
+          <DropdownMenuCheckboxItem key={l.id} checked={Boolean(message.keywords[l.keyword])} onCheckedChange={(on) => onToggle(l.keyword, on === true)}>
+            {l.name}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {labels.length ? <DropdownMenuSeparator /> : null}
+        <form
+          className="flex gap-1 p-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            void create.mutateAsync(name.trim()).then((label) => {
+              onToggle(label.keyword, true);
+              setName('');
+            });
+          }}
+        >
+          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} placeholder="New label" aria-label="New label" className="h-8" maxLength={40} />
+          <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
+            Add
+          </Button>
+        </form>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function MessageView({
   emailId,
   mailbox,
   mailboxes,
+  labels,
   search,
+  backPath,
+  pathFor,
   onReply,
   onForward,
 }: {
   emailId: string;
   mailbox: Mailbox;
   mailboxes: Mailbox[];
+  labels: Label[];
   search: string;
+  /** Where "back" goes (the folder or label the message was opened from). */
+  backPath?: string;
+  /** The link to another message from the same list. */
+  pathFor?: (emailId: string) => string;
   onReply: (message: RenderedMessage, all: boolean) => void;
   onForward: (message: RenderedMessage) => void;
 }) {
   const [remoteImages, setRemoteImages] = useState(false);
   const message = useMessage(emailId, remoteImages);
   const update = useUpdateEmails();
-  const back = () => navigate(mailboxPath(mailbox.id, null, search));
+  const back = () => navigate(backPath ?? mailboxPath(mailbox.id, null, search));
+  const linkTo = pathFor ?? ((id: string) => mailboxPath(mailbox.id, id, search));
 
   useEffect(() => setRemoteImages(false), [emailId]);
 
@@ -154,6 +248,11 @@ export function MessageView({
         >
           <Flag aria-hidden className={data.keywords.$flagged ? 'fill-current text-destructive' : undefined} />
         </IconAction>
+        <LabelMenu
+          message={data}
+          labels={labels}
+          onToggle={(keyword, on) => update.mutate({ update: { [data.id]: { [`keywords/${keyword}`]: on ? true : null } } })}
+        />
         <IconAction
           label="Mark as unread"
           onClick={() => {
@@ -200,6 +299,20 @@ export function MessageView({
             </time>
           </div>
         </header>
+
+        {labels.some((l) => data.keywords[l.keyword]) ? (
+          <div className="-mt-2 flex flex-wrap gap-1.5" aria-label="Labels">
+            {labels
+              .filter((l) => data.keywords[l.keyword])
+              .map((l) => (
+                <span key={l.id} className="rounded-md bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground ring-1 ring-ink/10 ring-inset">
+                  {l.name}
+                </span>
+              ))}
+          </div>
+        ) : null}
+
+        <Conversation threadId={data.threadId} currentId={data.id} pathFor={linkTo} />
 
         <Separator />
 

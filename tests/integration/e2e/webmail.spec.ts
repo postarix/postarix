@@ -93,3 +93,72 @@ test('composes and sends a message with an attachment', async ({ page }) => {
   await page.getByRole('navigation', { name: 'Folders' }).getByRole('link', { name: /Sent/ }).click();
   await expect(page.getByRole('list', { name: 'Messages' }).getByText(subject)).toBeVisible();
 });
+
+test('writes with formatting, and keeps a plain-text version', async ({ page }) => {
+  const subject = unique('browser-rich');
+  await signIn(page, wendy);
+  await page.getByRole('button', { name: 'Compose' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('To').fill(xavier);
+  await dialog.getByLabel('Subject').fill(subject);
+  const body = dialog.getByRole('textbox', { name: 'Message' });
+  await body.click();
+  await dialog.getByRole('button', { name: 'Bold' }).click();
+  await page.keyboard.type('Important');
+  await dialog.getByRole('button', { name: 'Bold' }).click();
+  await page.keyboard.type(' details follow.');
+  await dialog.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Message sent.' })).toBeVisible();
+
+  const received = await waitForMessage(xavier, PASSWORD, subject);
+  expect(received).toMatch(/Content-Type: multipart\/alternative/i);
+  expect(received).toMatch(/<b>Important<\/b>/);
+  expect(received).toMatch(/Content-Type: text\/plain[\s\S]*Important details follow\./i);
+});
+
+test('groups a conversation, and labels it', async ({ page }) => {
+  const subject = unique('browser-thread');
+  // Xavier writes, Wendy answers, Xavier answers again: one conversation.
+  const first = await smtp(config.submissionPort, { user: xavier, pass: PASSWORD }).sendMail({ from: xavier, to: wendy, subject, text: 'First' });
+  await waitForMessage(wendy, PASSWORD, subject);
+  await smtp(config.submissionPort, { user: xavier, pass: PASSWORD }).sendMail({
+    from: xavier,
+    to: wendy,
+    subject: `Re: ${subject}`,
+    text: 'Second',
+    inReplyTo: first.messageId,
+    references: [first.messageId],
+  });
+  await waitForMessage(wendy, PASSWORD, `Re: ${subject}`);
+
+  await signIn(page, wendy);
+  const row = page.getByRole('list', { name: 'Messages' }).getByRole('link', { name: new RegExp(subject) });
+  await expect(row).toHaveCount(1);
+  await expect(row.getByLabel('Messages in this conversation')).toHaveText('2');
+  await row.click();
+  await expect(page.getByRole('region', { name: 'Conversation' }).getByRole('listitem')).toHaveCount(2);
+
+  // A new label, from the message.
+  const labelName = unique('Project').slice(0, 30);
+  await page.getByRole('button', { name: 'Labels' }).click();
+  await page.getByLabel('New label').fill(labelName);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.keyboard.press('Escape');
+  const sidebarLabel = page.getByRole('list', { name: 'Labels' }).getByRole('link', { name: labelName });
+  await expect(sidebarLabel).toBeVisible();
+  await sidebarLabel.click();
+  await expect(page.getByRole('heading', { name: labelName })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Messages' }).getByRole('link', { name: new RegExp(subject) })).toHaveCount(1);
+});
+
+test('saves filters', async ({ page }) => {
+  await signIn(page, wendy);
+  await page.getByRole('button', { name: new RegExp(wendy.replace(/[.]/g, '\\.')) }).first().click();
+  await page.getByRole('menuitem', { name: 'Filters' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Add filter' }).click();
+  await dialog.getByLabel('Filter 1: contains').fill('newsletter@');
+  await dialog.getByLabel('Filter 1: folder').selectOption('Archive');
+  await dialog.getByRole('button', { name: 'Save filters' }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Saved.');
+});

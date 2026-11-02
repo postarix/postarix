@@ -368,7 +368,7 @@ out the account password after repeated failures (app passwords keep working).
 - [x] Composing, replying, forwarding, attachments, drafts; sending through the API with From ownership checks and Bcc removal.
 - [x] Real-time updates (JMAP push over server-sent events).
 - [x] Browser tests against the full stack in CI.
-- Done later: automatic reply and forwarding (Settings, kept as a Sieve script). Still to come: threads view, rich-text composing, custom filters, labels.
+- Done later: automatic reply and forwarding and filters (kept as one Sieve script of the mailbox), conversations (JMAP threads), formatted composing (sanitized HTML with a plain-text part), labels (named per person, stored on messages as keywords).
 
 ### Phase 4 — Calendar and contacts
 - [x] Calendar in the webmail over JMAP Calendars (JSCalendar): month view, agenda on small screens, all-day and repeating events, places and notes.
