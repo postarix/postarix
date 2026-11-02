@@ -1,6 +1,7 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import type { Auth } from '../auth/auth.js';
+import { hasInstanceAdminRole } from '../auth/roles.js';
 import { hashPassword, verifyPassword } from '../auth/passwords.js';
 import { AUTH, DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
@@ -11,6 +12,8 @@ export interface AccountSummary {
   email: string;
   banned: boolean;
   twoFactorEnabled: boolean;
+  /** Holds the instance administrator role. */
+  instanceAdmin: boolean;
 }
 
 /** User-account operations the mail features need, on top of Better Auth. */
@@ -43,12 +46,19 @@ export class AccountsService {
         email: user.email,
         banned: user.banned,
         twoFactorEnabled: user.twoFactorEnabled,
+        role: user.role,
       })
       .from(user)
       .where(eq(user.id, userId))
       .limit(1);
     if (!row) return undefined;
-    return { ...row, banned: row.banned ?? false, twoFactorEnabled: row.twoFactorEnabled ?? false };
+    const { role, ...rest } = row;
+    return {
+      ...rest,
+      banned: row.banned ?? false,
+      twoFactorEnabled: row.twoFactorEnabled ?? false,
+      instanceAdmin: hasInstanceAdminRole(role),
+    };
   }
 
   async rename(userId: string, name: string): Promise<void> {

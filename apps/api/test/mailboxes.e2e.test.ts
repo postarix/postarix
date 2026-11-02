@@ -166,6 +166,18 @@ describe('Mailboxes and aliases API', () => {
       expect(users).toEqual([]);
     });
 
+    it('leaves accounts that administer the instance to instance administrators', async () => {
+      const created = await alice.agent.post(url(orgA, 'mailboxes')).send(newMailbox('chief')).expect(201);
+      const db = app.get<Database>(DATABASE);
+      await db.update(user).set({ role: 'admin' }).where(eq(user.email, `chief@${domainA.name}`));
+      const path = `${url(orgA, 'mailboxes')}/${created.body.id}`;
+      await alice.agent.post(`${path}/password`).send({ password: 'a takeover long password' }).expect(403);
+      await alice.agent.delete(path).expect(403);
+      expect(engine.mailboxes.has(`chief@${domainA.name}`)).toBe(true);
+      await db.update(user).set({ role: 'user' }).where(eq(user.email, `chief@${domainA.name}`));
+      await alice.agent.delete(path).expect(204);
+    });
+
     it('blocks deleting a domain that still has mailboxes', async () => {
       await alice.agent.delete(`${url(orgA, 'domains')}/${domainA.id}`).expect(409);
     });
