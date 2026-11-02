@@ -74,16 +74,34 @@ describe('Organizations, members and audit', () => {
       await bob.agent.get(`/api/orgs/${orgA}/members`).expect(404);
     });
 
-    it('can be added by email when the account exists', async () => {
-      const erin = await signUp(app, 'org-erin');
-      const res = await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: erin.email }).expect(201);
-      expect(res.body).toMatchObject({ email: erin.email, role: 'member' });
-      await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: erin.email }).expect(409);
-      const unknown = await carol.agent
-        .post(`/api/orgs/${orgA}/members`)
-        .send({ email: 'nobody@example.test' })
-        .expect(422);
-      expect(unknown.body.code).toBe('UNKNOWN_ACCOUNT');
+    it('can be added back by email only if they own a mailbox here', async () => {
+      // A mailbox owner who was removed from the organization can be added back.
+      const domain = await alice.agent.post(`/api/orgs/${orgA}/domains`).send({ name: `members-${Date.now()}.example` });
+      await alice.agent.post(`/api/orgs/${orgA}/domains/${domain.body.id}/verify`).expect(200);
+      const mailbox = await alice.agent
+        .post(`/api/orgs/${orgA}/mailboxes`)
+        .send({ domainId: domain.body.id, localPart: 'erin', password: PASSWORD })
+        .expect(201);
+      const erinId = await memberIdOf(carol.agent, orgA, mailbox.body.address);
+      await carol.agent.delete(`/api/orgs/${orgA}/members/${erinId}`).expect(204);
+      const res = await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: mailbox.body.address }).expect(201);
+      expect(res.body).toMatchObject({ email: mailbox.body.address, role: 'member' });
+      await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: mailbox.body.address }).expect(409);
+
+      // Accounts of other organizations look exactly like unknown addresses.
+      const foreign = await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: bob.email }).expect(422);
+      const unknown = await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: 'nobody@example.test' }).expect(422);
+      expect(foreign.body).toEqual(unknown.body);
+      expect(unknown.body.code).toBe('NOT_ELIGIBLE');
+      const orgsOfBob = await bob.agent.get('/api/me/organizations').expect(200);
+      expect(orgsOfBob.body.data.map((o: { id: string }) => o.id)).toEqual([orgB]);
+    });
+
+    it('can be added from any account by instance administrators, and that is marked in the log', async () => {
+      const frida = await signUp(app, 'org-frida');
+      await root.post(`/api/orgs/${orgA}/members`).send({ email: frida.email }).expect(201);
+      const log = await alice.agent.get(`/api/orgs/${orgA}/audit?limit=1`).expect(200);
+      expect(log.body.data[0]).toMatchObject({ action: 'member.added', targetLabel: frida.email, details: { viaSuperAdmin: true } });
     });
 
     it('reserves the owner role to owners', async () => {
@@ -117,9 +135,26 @@ describe('Organizations, members and audit', () => {
 
     it('can be removed by admins', async () => {
       const gina = await signUp(app, 'org-gina');
-      const added = await carol.agent.post(`/api/orgs/${orgA}/members`).send({ email: gina.email }).expect(201);
+      const added = await root.post(`/api/orgs/${orgA}/members`).send({ email: gina.email }).expect(201);
       await carol.agent.delete(`/api/orgs/${orgA}/members/${added.body.id}`).expect(204);
       await gina.agent.get(`/api/orgs/${orgA}/overview`).expect(404);
+    });
+
+    it('never ends up without an owner, even under concurrent changes', async () => {
+      const harry = await signUp(app, 'org-harry');
+      const iris = await signUp(app, 'org-iris');
+      const orgC = await createOrg(harry, 'Charlie');
+      await addMember(app, orgC, iris.id, 'owner');
+      const harryId = await memberIdOf(harry.agent, orgC, harry.email);
+      const irisId = await memberIdOf(harry.agent, orgC, iris.email);
+      // Each owner demotes the other at the same time: at most one may succeed.
+      const results = await Promise.all([
+        harry.agent.patch(`/api/orgs/${orgC}/members/${irisId}`).send({ role: 'member' }),
+        iris.agent.patch(`/api/orgs/${orgC}/members/${harryId}`).send({ role: 'member' }),
+      ]);
+      expect(results.filter((r) => r.status === 200).length).toBeLessThanOrEqual(1);
+      const members = await root.get(`/api/orgs/${orgC}/members`).expect(200);
+      expect(members.body.data.filter((m: { role: string }) => m.role === 'owner')).toHaveLength(1);
     });
   });
 
@@ -138,16 +173,30 @@ describe('Organizations, members and audit', () => {
         actorEmail: alice.email,
       });
       expect(res.body.data[1]).toMatchObject({ action: 'domain.created' });
-      expect(res.body.data.some((e: { action: string }) => e.action === 'member.added')).toBe(true);
     });
 
-    it('pages with "before" and stays inside the organization', async () => {
-      const first = await alice.agent.get(`/api/orgs/${orgA}/audit?limit=1`).expect(200);
-      const next = await alice.agent
-        .get(`/api/orgs/${orgA}/audit?limit=1&before=${encodeURIComponent(first.body.data[0].createdAt)}`)
-        .expect(200);
-      expect(next.body.data[0].id).not.toBe(first.body.data[0].id);
+    it('pages through events created in the same instant without losing any', async () => {
+      const orgD = await createOrg(alice, 'Delta');
+      const names = Array.from({ length: 24 }, (_, i) => `burst-${Date.now()}-${i}.example`);
+      await Promise.all(names.map((name) => alice.agent.post(`/api/orgs/${orgD}/domains`).send({ name }).expect(201)));
 
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const res: { body: { data: { id: string }[]; nextCursor: string | null } } = await alice.agent
+          .get(`/api/orgs/${orgD}/audit`)
+          .query({ limit: 5, ...(cursor ? { cursor } : {}) })
+          .expect(200);
+        seen.push(...res.body.data.map((e) => e.id));
+        cursor = res.body.nextCursor;
+      } while (cursor);
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(seen.length).toBe(24);
+
+      await alice.agent.get(`/api/orgs/${orgD}/audit?cursor=not-a-cursor`).expect(400);
+    });
+
+    it('stays inside the organization', async () => {
       await dave.agent.get(`/api/orgs/${orgA}/audit`).expect(403);
       await bob.agent.get(`/api/orgs/${orgA}/audit`).expect(404);
       const own = await bob.agent.get(`/api/orgs/${orgB}/audit`).expect(200);

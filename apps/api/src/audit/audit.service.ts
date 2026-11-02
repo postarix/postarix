@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { type AuditEventRow, auditEvents } from '../db/schema/index.js';
@@ -15,6 +15,31 @@ export interface AuditActor {
   userId: string;
   userEmail: string;
   ipAddress: string | null;
+}
+
+/** Position in the audit log: a full-precision timestamp (as PostgreSQL prints it) and an ID. */
+export interface AuditCursor {
+  at: string;
+  id: string;
+}
+
+export function encodeCursor(cursor: AuditCursor): string {
+  return Buffer.from(JSON.stringify([cursor.at, cursor.id])).toString('base64url');
+}
+
+/** Returns null for anything that is not a cursor this API produced. */
+export function decodeCursor(value: string): AuditCursor | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    if (!Array.isArray(parsed) || parsed.length !== 2) return null;
+    const [at, id] = parsed as unknown[];
+    if (typeof at !== 'string' || typeof id !== 'string') return null;
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/.test(at)) return null;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+    return { at, id };
+  } catch {
+    return null;
+  }
 }
 
 export interface AuditEventDto {
@@ -60,7 +85,9 @@ export class AuditService {
     target: AuditTarget,
     details?: Record<string, unknown>,
   ): Promise<void> {
-    return this.write(ctx.organizationId, ctx, action, target, details);
+    // Changes made through instance-administrator access are marked as such.
+    const marked = ctx.viaSuperAdmin ? { ...details, viaSuperAdmin: true } : details;
+    return this.write(ctx.organizationId, ctx, action, target, marked);
   }
 
   /** Records an instance-level action (not tied to one organization). */
@@ -97,16 +124,30 @@ export class AuditService {
     }
   }
 
-  /** Newest first, scoped to the organization. */
-  async list(ctx: TenantContext, options: { limit: number; before?: Date | undefined }): Promise<AuditEventDto[]> {
+  /**
+   * Newest first, scoped to the organization. Pages with an opaque keyset
+   * cursor on (created_at, id) at full (microsecond) precision, so events
+   * created in the same instant are neither skipped nor repeated.
+   */
+  async list(
+    ctx: TenantContext,
+    options: { limit: number; cursor?: AuditCursor | undefined },
+  ): Promise<{ data: AuditEventDto[]; nextCursor: string | null }> {
     const conditions = [eq(auditEvents.organizationId, ctx.organizationId)];
-    if (options.before) conditions.push(lt(auditEvents.createdAt, options.before));
+    if (options.cursor) {
+      conditions.push(sql`(${auditEvents.createdAt}, ${auditEvents.id}) < (${options.cursor.at}::timestamptz, ${options.cursor.id}::uuid)`);
+    }
     const rows = await this.db
-      .select()
+      .select({ row: auditEvents, at: sql<string>`${auditEvents.createdAt}::text` })
       .from(auditEvents)
       .where(and(...conditions))
-      .orderBy(desc(auditEvents.createdAt))
-      .limit(options.limit);
-    return rows.map(toDto);
+      .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+      .limit(options.limit + 1);
+    const page = rows.slice(0, options.limit);
+    const last = page.at(-1);
+    return {
+      data: page.map(({ row }) => toDto(row)),
+      nextCursor: rows.length > options.limit && last ? encodeCursor({ at: last.at, id: last.row.id }) : null,
+    };
   }
 }

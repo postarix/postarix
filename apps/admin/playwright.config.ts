@@ -40,6 +40,8 @@ export default defineConfig({
         AUTH_SECRET: 'e2e-auth-secret-that-is-long-enough-for-better-auth',
         TRUSTED_PROXIES: '127.0.0.1,::1',
         MAIL_ENGINE: 'memory',
+        // Set, so the internal endpoint exists and the test of the /api rewrite means something.
+        INTERNAL_API_TOKEN: 'e2e-internal-token-that-is-long-enough-for-real',
         DOMAIN_VERIFICATION: 'skip',
         MAIL_HOSTNAME: 'mail.postarix.test',
         ADMIN_EMAIL: superAdmin.email,
