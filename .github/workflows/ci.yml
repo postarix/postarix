@@ -259,7 +259,7 @@ jobs:
           done
           # Everything but the tests that need the test-only spam rule.
           pnpm --filter @postarix/integration-tests exec vitest run src/mail-flow.test.ts src/sieve.test.ts \
-            -t "provisioning|submission and delivery|vacation|redirect|another organization"
+            -t "provisioning|submission and delivery|vacation|redirect|another organization|colleague|forges|bounces|webmail settings"
 
       - name: Cluster state on failure
         if: failure()

@@ -37,9 +37,10 @@ with your server's name.
 
 Filters can file, flag, reject or forward mail (`redirect`) and send automatic
 replies while you are away (`vacation`), e.g. with Thunderbird's Sieve add-on or
-a phone app that speaks ManageSieve. An automatic reply always comes from your
-own address on your own domain; the server refuses to send one that claims
-someone else's.
+a phone app that speaks ManageSieve, or the webmail's settings. An automatic
+reply always comes from your own address; the server refuses to send one that
+claims someone else's. Forwarding is limited to 100 messages an hour per
+mailbox, and spam is never forwarded.
 
 Most calendar and contacts apps only need `https://mail.example.com`: they find
 the rest through `/.well-known/caldav` and `/.well-known/carddav`.

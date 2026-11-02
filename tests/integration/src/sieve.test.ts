@@ -52,6 +52,23 @@ describe('Mail Cyrus sends by itself', () => {
     expect(reply).toContain(`From: <${away.address}>`);
     expect(reply).toMatch(new RegExp(`^DKIM-Signature:[^]*?d=${domain.name.replace(/\./g, '\\.')};`, 'im'));
     expect(reply).toMatch(/^Return-Path: <>/im);
+    // The note naming the sending mailbox is for the server only.
+    expect(reply).not.toMatch(/^X-Postarix-Sieve-Owner:/im);
+  });
+
+  it('answers a message that also went to a colleague', async () => {
+    // A new sender: Cyrus answers each sender once a day.
+    const sender = await mailbox(orgId, domain.id, 'cc-sender');
+    const subject = unique('cc');
+    await smtp(config.submissionPort, { user: sender.address, pass: PASSWORD }).sendMail({
+      from: sender.address,
+      to: away.address,
+      cc: writer.address,
+      subject,
+      text: 'Both of you, please.',
+    });
+    const reply = await waitForMessage(sender.address, PASSWORD, 'Out of office');
+    expect(reply).toContain(`From: <${away.address}>`);
   });
 
   it('redirects with the server as envelope sender, without signing for the original sender', async () => {
@@ -60,10 +77,30 @@ describe('Mail Cyrus sends by itself', () => {
     await smtp(config.smtpPort).sendMail({ from: 'someone@outside.example', to: forwarder.address, subject, text: 'Please forward.' });
     const copy = await waitForMessage(target.address, PASSWORD, subject);
     expect(copy).toMatch(/^X-Sieve-Action: redirect/im);
-    expect(copy).toMatch(/^Return-Path: <sieve-redirect@mail\.postarix\.test>/im);
+    expect(copy).toMatch(/^Return-Path: <SRS0=[0-9a-f]{8}=[a-z2-7]{2}=outside\.example=someone@mail\.postarix\.test>/im);
     expect(copy).not.toMatch(/^DKIM-Signature:/im);
     // The original stays in the forwarder's inbox (:copy).
     await waitForMessage(forwarder.address, PASSWORD, subject);
+  });
+
+  it('returns bounces of forwarded mail to the original sender, and nothing else', async () => {
+    const subject = unique('srs');
+    await smtp(config.submissionPort, { user: writer.address, pass: PASSWORD }).sendMail({ from: writer.address, to: forwarder.address, subject, text: 'Forward me.' });
+    const copy = await waitForMessage(target.address, PASSWORD, subject);
+    const srs = /^Return-Path: <(SRS0=[^>]+)>/im.exec(copy)?.[1];
+    expect(srs).toBeDefined();
+    // A bounce (null sender) to that address reaches the writer.
+    const bounce = unique('bounce');
+    await smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [srs!] }, from: 'MAILER-DAEMON@outside.example', to: srs!, subject: bounce, text: 'Delivery failed.' });
+    await waitForMessage(writer.address, PASSWORD, bounce);
+    // Ordinary mail to it, or to a forged address, is refused.
+    await expect(
+      smtp(config.smtpPort).sendMail({ envelope: { from: 'spammer@outside.example', to: [srs!] }, from: 'spammer@outside.example', to: srs!, subject: 'relay?', text: 'x' }),
+    ).rejects.toThrow(/5\d\d/);
+    const forged = srs!.replace(/^SRS0=[0-9a-f]{8}/i, 'SRS0=00000000');
+    await expect(
+      smtp(config.smtpPort).sendMail({ envelope: { from: '', to: [forged] }, from: 'MAILER-DAEMON@outside.example', to: forged, subject: 'forged', text: 'x' }),
+    ).rejects.toThrow(/5\d\d/);
   });
 
   it('refuses a vacation reply that claims another organization’s address', async () => {
@@ -97,6 +134,27 @@ describe('Mail Cyrus sends by itself', () => {
     await smtp(config.smtpPort).sendMail({ from: `ceo@${otherDomain.name}`, to: forwarder.address, subject, text: 'Urgent: pay now.' });
     await waitForMessage(forwarder.address, PASSWORD, subject);
     await expectNoMessage(target.address, PASSWORD, subject);
+  });
+
+  it('sets the automatic reply and forwarding from the webmail settings', async () => {
+    const owner = await mailbox(orgId, domain.id, 'settings');
+    const sender = await mailbox(orgId, domain.id, 'settings-sender');
+    const user = new ApiClient();
+    await user.signIn(owner.address, PASSWORD);
+    const saved = await user.ok<{ vacation: { enabled: boolean }; forwarding: { enabled: boolean } }>('PUT', '/api/me/mail-settings', {
+      vacation: { enabled: true, subject: 'On leave', message: 'I am on leave this week.', until: null },
+      forwarding: { enabled: true, address: target.address, keepCopy: true },
+    });
+    expect(saved).toMatchObject({ vacation: { enabled: true }, forwarding: { enabled: true } });
+    const subject = unique('settings');
+    await smtp(config.submissionPort, { user: sender.address, pass: PASSWORD }).sendMail({ from: sender.address, to: owner.address, subject, text: 'Hello' });
+    const reply = await waitForMessage(sender.address, PASSWORD, 'On leave');
+    expect(reply).toContain(`From: <${owner.address}>`);
+    await waitForMessage(target.address, PASSWORD, subject);
+    await waitForMessage(owner.address, PASSWORD, subject);
+    // And read back as saved.
+    const read = await user.ok<{ forwarding: { address: string } }>('GET', '/api/me/mail-settings');
+    expect(read.forwarding.address).toBe(target.address);
   });
 
   it('files spam sent to an alias in the Junk folder of its hosted destinations', async () => {

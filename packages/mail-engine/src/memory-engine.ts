@@ -4,6 +4,7 @@ import {
   type EngineHealth,
   type MailboxUsage,
   type MailEngine,
+  type SieveScriptInfo,
   MailEngineError,
 } from './types.js';
 
@@ -77,6 +78,40 @@ export class MemoryMailEngine implements MailEngine {
   }
 
   async close(): Promise<void> {}
+
+  /** Sieve scripts per address: name → { content, active }. */
+  readonly sieve = new Map<string, Map<string, { content: string; active: boolean }>>();
+
+  private scripts(address: string): Map<string, { content: string; active: boolean }> {
+    this.checkFailure();
+    this.get(address);
+    let scripts = this.sieve.get(address);
+    if (!scripts) {
+      scripts = new Map();
+      this.sieve.set(address, scripts);
+    }
+    return scripts;
+  }
+
+  async listSieveScripts(address: string): Promise<SieveScriptInfo[]> {
+    return [...this.scripts(address)].map(([name, s]) => ({ name, active: s.active }));
+  }
+
+  async readSieveScript(address: string, name: string): Promise<string | null> {
+    return this.scripts(address).get(name)?.content ?? null;
+  }
+
+  async writeSieveScript(address: string, name: string, content: string, options: { activate: boolean }): Promise<void> {
+    const scripts = this.scripts(address);
+    if (!/^require\b|^\/\*|^#|^\s*$/m.test(content)) throw new MailEngineError('Invalid Sieve script', 'rejected');
+    const wasActive = scripts.get(name)?.active ?? false;
+    if (options.activate) for (const script of scripts.values()) script.active = false;
+    scripts.set(name, { content, active: options.activate || wasActive });
+  }
+
+  async deleteSieveScript(address: string, name: string): Promise<void> {
+    this.scripts(address).delete(name);
+  }
 
   async jmap(address: string, request: JmapRequest): Promise<Response> {
     this.checkFailure();

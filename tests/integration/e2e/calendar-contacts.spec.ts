@@ -55,3 +55,23 @@ test('keeps contacts and suggests them when writing', async ({ page }) => {
   await option.click();
   await expect(page.getByRole('dialog').getByLabel('To')).toHaveValue(new RegExp(`lucia\\.${last.toLowerCase()}@acme\\.example`));
 });
+
+test('sets an automatic reply and forwarding', async ({ page }) => {
+  await signIn(page);
+  await page.getByRole('button', { name: new RegExp(address.replace(/[.]/g, '\\.')) }).first().click();
+  await page.getByRole('menuitem', { name: 'Automatic reply and forwarding' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Reply to people who write to me').check();
+  await dialog.getByLabel('Message').fill('I am away until Monday.');
+  await dialog.getByLabel('Forward my mail').check();
+  await dialog.getByLabel('To', { exact: true }).fill('olga.private@outside.example');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Saved.');
+  await dialog.getByRole('button', { name: 'Close' }).first().click();
+
+  // Reopened, it shows what the server keeps.
+  await page.getByRole('button', { name: new RegExp(address.replace(/[.]/g, '\\.')) }).first().click();
+  await page.getByRole('menuitem', { name: 'Automatic reply and forwarding' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Message')).toHaveValue('I am away until Monday.');
+  await expect(page.getByRole('dialog').getByLabel('To', { exact: true })).toHaveValue('olga.private@outside.example');
+});

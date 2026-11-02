@@ -38,3 +38,6 @@ docker/compose/external-certs/
 *.tsbuildinfo
 test-results/
 playwright-report/
+
+# Local Valkey/Redis snapshots
+dump.rdb

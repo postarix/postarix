@@ -1,0 +1,7 @@
+# Generated at container start. Valid SRS0 addresses on the server's own name
+# (the only recipients accepted there).
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT 'OK' WHERE mail.srs_reverse('%s') IS NOT NULL

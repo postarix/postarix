@@ -12,6 +12,7 @@ import {
   type MailboxUsage,
   type MailEngine,
   MailEngineError,
+  type SieveScriptInfo,
 } from './types.js';
 
 export interface CyrusEngineOptions extends ImapConnectOptions {
@@ -43,6 +44,10 @@ export const DEFAULT_FOLDERS = [
  * Each operation opens a short-lived admin connection: provisioning is rare,
  * and this avoids managing a long-lived session that the server may drop.
  */
+const JMAP_CORE = 'urn:ietf:params:jmap:core';
+const JMAP_SIEVE = 'https://cyrusimap.org/ns/jmap/sieve';
+const JMAP_BLOB = 'https://cyrusimap.org/ns/jmap/blob';
+
 export class CyrusEngine implements MailEngine {
   constructor(private readonly options: CyrusEngineOptions) {}
 
@@ -159,6 +164,87 @@ export class CyrusEngine implements MailEngine {
       if (request.signal?.aborted) throw error;
       throw new MailEngineError('Cannot reach the Cyrus JMAP service', 'unavailable', { cause: error });
     }
+  }
+
+  // --- Sieve, through Cyrus' JMAP sieve extension, as the mailbox owner ------
+
+  private async sieveSession(address: string): Promise<string> {
+    const res = await this.jmap(address, { method: 'GET', path: '', query: '' });
+    if (!res.ok) throw new MailEngineError(`Cyrus JMAP answered ${res.status}`, 'unavailable');
+    const session = (await res.json()) as { primaryAccounts?: Record<string, string> };
+    const accountId = session.primaryAccounts?.['urn:ietf:params:jmap:mail'];
+    if (!accountId) throw new MailEngineError(`No mail account for ${address}`, 'not_found');
+    return accountId;
+  }
+
+  private async sieveCall(address: string, calls: [string, Record<string, unknown>, string][]) {
+    const res = await this.jmap(address, {
+      method: 'POST',
+      path: '',
+      query: '',
+      contentType: 'application/json',
+      body: new TextEncoder().encode(JSON.stringify({ using: [JMAP_CORE, JMAP_SIEVE, JMAP_BLOB], methodCalls: calls })),
+    });
+    if (!res.ok) throw new MailEngineError(`Cyrus JMAP answered ${res.status}`, 'unavailable');
+    const body = (await res.json()) as { methodResponses: [string, Record<string, unknown>, string][] };
+    for (const [name, args] of body.methodResponses) {
+      if (name === 'error') throw new MailEngineError(`Sieve request failed: ${String(args.type)}`, 'rejected');
+    }
+    return body.methodResponses;
+  }
+
+  private async sieveScripts(address: string, accountId: string) {
+    const result = (await this.sieveCall(address, [['SieveScript/get', { accountId }, 'g']]))[0]?.[1] ?? {};
+    return (result.list as { id: string; name: string; isActive: boolean; blobId: string }[]) ?? [];
+  }
+
+  async listSieveScripts(address: string): Promise<SieveScriptInfo[]> {
+    const accountId = await this.sieveSession(address);
+    return (await this.sieveScripts(address, accountId)).map((s) => ({ name: s.name, active: s.isActive }));
+  }
+
+  async readSieveScript(address: string, name: string): Promise<string | null> {
+    const accountId = await this.sieveSession(address);
+    const script = (await this.sieveScripts(address, accountId)).find((s) => s.name === name);
+    if (!script) return null;
+    const res = await this.jmap(address, {
+      method: 'GET',
+      path: `download/${encodeURIComponent(accountId)}/${encodeURIComponent(script.blobId)}/script`,
+      query: 'accept=application%2Fsieve',
+    });
+    if (!res.ok) throw new MailEngineError(`Cannot read the Sieve script (${res.status})`, 'unavailable');
+    return res.text();
+  }
+
+  async writeSieveScript(address: string, name: string, content: string, options: { activate: boolean }): Promise<void> {
+    const accountId = await this.sieveSession(address);
+    const upload = await this.jmap(address, {
+      method: 'POST',
+      path: `upload/${encodeURIComponent(accountId)}/`,
+      query: '',
+      contentType: 'application/sieve',
+      body: new TextEncoder().encode(content),
+    });
+    if (!upload.ok) throw new MailEngineError(`Cannot upload the Sieve script (${upload.status})`, 'unavailable');
+    const { blobId } = (await upload.json()) as { blobId: string };
+    const existing = (await this.sieveScripts(address, accountId)).find((s) => s.name === name);
+    const args: Record<string, unknown> = existing
+      ? { accountId, update: { [existing.id]: { blobId } } }
+      : { accountId, create: { s: { name, blobId } } };
+    if (options.activate) args.onSuccessActivateScript = existing ? existing.id : '#s';
+    const result = (await this.sieveCall(address, [['SieveScript/set', args, 's']]))[0]?.[1] ?? {};
+    const failed = (result.notCreated ?? result.notUpdated) as Record<string, { type?: string; description?: string }> | null;
+    const problem = failed ? Object.values(failed)[0] : undefined;
+    if (problem) throw new MailEngineError(`Sieve script rejected: ${problem.description ?? problem.type ?? 'invalid'}`, 'rejected');
+  }
+
+  async deleteSieveScript(address: string, name: string): Promise<void> {
+    const accountId = await this.sieveSession(address);
+    const existing = (await this.sieveScripts(address, accountId)).find((s) => s.name === name);
+    if (!existing) return;
+    // An active script cannot be destroyed: deactivate it first.
+    if (existing.isActive) await this.sieveCall(address, [['SieveScript/set', { accountId, onSuccessDeactivateScript: true }, 'd']]);
+    await this.sieveCall(address, [['SieveScript/set', { accountId, destroy: [existing.id] }, 'x']]);
   }
 
   async health(): Promise<EngineHealth> {
