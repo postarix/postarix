@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eventPatch, eventProperties, eventSpan, formatDuration, monthGrid, overlapsDay, parseDuration, toLocalDateTime, usableTimeZone, zonedToDate } from './calendar';
+import { eventPatch, eventProperties, eventSpan, formatDuration, layoutDay, monthGrid, overlapsDay, parseDuration, shiftDate, toLocalDateTime, usableTimeZone, weekDays, zonedToDate } from './calendar';
 
 describe('time zones', () => {
   it('converts wall-clock times in a zone to instants and back', () => {
@@ -118,5 +118,40 @@ describe('editing an event', () => {
     const moved = { ...before, start: '2026-11-10T04:00', end: '2026-11-10T05:00' };
     expect(Object.keys(eventPatch(original, before, moved, false)).sort()).toEqual(['duration', 'showWithoutTime', 'start', 'timeZone']);
     expect(eventPatch(original, before, moved, true)).toEqual({});
+  });
+});
+
+describe('week and day views', () => {
+  it('shows the week from Monday, and steps by month, week or day', () => {
+    const week = weekDays(new Date(2026, 10, 4)); // Wednesday 4 November 2026
+    expect(week[0]).toEqual(new Date(2026, 10, 2));
+    expect(week[6]).toEqual(new Date(2026, 10, 8));
+    expect(weekDays(new Date(2026, 10, 8))[0]).toEqual(new Date(2026, 10, 2)); // a Sunday
+    expect(shiftDate(new Date(2026, 10, 4), 'week', 1)).toEqual(new Date(2026, 10, 11));
+    expect(shiftDate(new Date(2026, 10, 4), 'day', -1)).toEqual(new Date(2026, 10, 3));
+    expect(shiftDate(new Date(2026, 10, 30), 'month', 1)).toEqual(new Date(2026, 11, 1));
+  });
+
+  it('places timed events by minute, side by side when they overlap', () => {
+    const day = new Date(2026, 10, 4);
+    const at = (h: number, m: number) => new Date(2026, 10, 4, h, m);
+    const items = [
+      { item: 'a', span: { start: at(9, 0), end: at(10, 0), allDay: false } },
+      { item: 'b', span: { start: at(9, 30), end: at(11, 0), allDay: false } },
+      { item: 'c', span: { start: at(10, 0), end: at(10, 30), allDay: false } },
+      { item: 'd', span: { start: at(14, 0), end: at(14, 5), allDay: false } },
+      { item: 'all-day', span: { start: day, end: new Date(2026, 10, 5), allDay: true } },
+      { item: 'late', span: { start: at(23, 0), end: new Date(2026, 10, 5, 2, 0), allDay: false } },
+    ];
+    const placed = Object.fromEntries(layoutDay(items, day).map((p) => [p.item, p]));
+    expect(placed['all-day']).toBeUndefined();
+    expect(placed.a).toMatchObject({ startMinute: 540, endMinute: 600, column: 0, columns: 2 });
+    expect(placed.b).toMatchObject({ column: 1, columns: 2 });
+    // c starts when a ends: it reuses a's column.
+    expect(placed.c).toMatchObject({ column: 0, columns: 2 });
+    // Short events keep a readable height; others are alone in their group.
+    expect(placed.d).toMatchObject({ startMinute: 840, endMinute: 860, column: 0, columns: 1 });
+    // Clipped at midnight.
+    expect(placed.late).toMatchObject({ startMinute: 1380, endMinute: 1440 });
   });
 });
