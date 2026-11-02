@@ -5,6 +5,7 @@ import { Checkbox } from '@postarix/ui/components/checkbox';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
+import { Textarea } from '@postarix/ui/components/textarea';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +28,7 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [protocol, setProtocol] = useState<'oidc' | 'saml'>('oidc');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,12 +36,24 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
     setPending(true);
     setError(null);
     try {
-      await api.post(`/orgs/${orgId}/sso`, {
-        domainId: String(data.get('domainId')),
-        issuer: String(data.get('issuer')).trim(),
-        clientId: String(data.get('clientId')),
-        clientSecret: String(data.get('clientSecret')),
-      });
+      await api.post(
+        `/orgs/${orgId}/sso`,
+        protocol === 'saml'
+          ? {
+              type: 'saml',
+              domainId: String(data.get('domainId')),
+              entityId: String(data.get('entityId')).trim(),
+              ssoUrl: String(data.get('ssoUrl')).trim(),
+              certificate: String(data.get('certificate')),
+            }
+          : {
+              type: 'oidc',
+              domainId: String(data.get('domainId')),
+              issuer: String(data.get('issuer')).trim(),
+              clientId: String(data.get('clientId')),
+              clientSecret: String(data.get('clientSecret')),
+            },
+      );
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'sso') });
       onClose();
     } catch (e) {
@@ -54,7 +68,7 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
       open
       onClose={onClose}
       title="Connect an identity provider"
-      description="Any OpenID Connect provider works: Microsoft Entra ID, Google Workspace, Okta, Keycloak, Authentik…"
+      description="OpenID Connect or SAML 2.0: Microsoft Entra ID, Google Workspace, Okta, Keycloak, Authentik, ADFS…"
     >
       <form onSubmit={submit}>
         <FieldGroup>
@@ -70,13 +84,37 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
               </NativeSelect>
             )}
           </FormField>
-          <FormField label="Issuer URL" hint="Postarix reads the rest from its /.well-known/openid-configuration.">
-            {(props) => <Input {...props} name="issuer" type="url" required placeholder="https://login.example.com/realms/acme" />}
+          <FormField label="Protocol">
+            {(props) => (
+              <NativeSelect {...props} value={protocol} onChange={(e) => setProtocol(e.target.value as 'oidc' | 'saml')} className="w-full">
+                <NativeSelectOption value="oidc">OpenID Connect</NativeSelectOption>
+                <NativeSelectOption value="saml">SAML 2.0</NativeSelectOption>
+              </NativeSelect>
+            )}
           </FormField>
-          <FormField label="Client ID">{(props) => <Input {...props} name="clientId" required autoComplete="off" />}</FormField>
-          <FormField label="Client secret" hint="Stored on the server and never shown again.">
-            {(props) => <Input {...props} name="clientSecret" type="password" required autoComplete="off" />}
-          </FormField>
+          {protocol === 'oidc' ? (
+            <>
+              <FormField label="Issuer URL" hint="Postarix reads the rest from its /.well-known/openid-configuration.">
+                {(props) => <Input {...props} name="issuer" type="url" required placeholder="https://login.example.com/realms/acme" />}
+              </FormField>
+              <FormField label="Client ID">{(props) => <Input {...props} name="clientId" required autoComplete="off" />}</FormField>
+              <FormField label="Client secret" hint="Stored on the server and never shown again.">
+                {(props) => <Input {...props} name="clientSecret" type="password" required autoComplete="off" />}
+              </FormField>
+            </>
+          ) : (
+            <>
+              <FormField label="Identity provider identifier" hint="Its entity ID, also called Identifier or Issuer.">
+                {(props) => <Input {...props} name="entityId" required placeholder="https://sts.windows.net/…/" autoComplete="off" />}
+              </FormField>
+              <FormField label="Sign-in URL" hint="Where people are sent to sign in (SAML single sign-on URL).">
+                {(props) => <Input {...props} name="ssoUrl" type="url" required placeholder="https://login.example.com/saml2" />}
+              </FormField>
+              <FormField label="Signing certificate" hint="The certificate (Base64 or PEM) the provider signs its answers with.">
+                {(props) => <Textarea {...props} name="certificate" required rows={5} className="font-mono text-xs" />}
+              </FormField>
+            </>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
@@ -188,15 +226,32 @@ export default function SsoPage() {
                   Disconnect
                 </Button>
               </div>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[10rem_1fr]">
-                <dt className="text-muted-foreground">Redirect URI</dt>
-                <dd className="flex min-w-0 items-center gap-1">
-                  <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.callbackUrl}</code>
-                  <CopyButton value={provider.callbackUrl} />
-                </dd>
-                <dt className="text-muted-foreground">Client ID</dt>
-                <dd className="truncate">{provider.clientId}</dd>
-              </dl>
+              {provider.type === 'saml' ? (
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
+                  <dt className="text-muted-foreground">Identifier (entity ID)</dt>
+                  <dd className="flex min-w-0 items-center gap-1">
+                    <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.entityId}</code>
+                    <CopyButton value={provider.entityId ?? ''} />
+                  </dd>
+                  <dt className="text-muted-foreground">Reply URL (ACS)</dt>
+                  <dd className="flex min-w-0 items-center gap-1">
+                    <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.callbackUrl}</code>
+                    <CopyButton value={provider.callbackUrl} />
+                  </dd>
+                  <dt className="text-muted-foreground">Certificate expires</dt>
+                  <dd>{provider.certificateExpiresAt ? new Date(provider.certificateExpiresAt).toLocaleDateString() : 'Unknown'}</dd>
+                </dl>
+              ) : (
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
+                  <dt className="text-muted-foreground">Redirect URI</dt>
+                  <dd className="flex min-w-0 items-center gap-1">
+                    <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.callbackUrl}</code>
+                    <CopyButton value={provider.callbackUrl} />
+                  </dd>
+                  <dt className="text-muted-foreground">Client ID</dt>
+                  <dd className="truncate">{provider.clientId}</dd>
+                </dl>
+              )}
             </li>
           ))}
         </ul>

@@ -33,6 +33,8 @@ Thumbs.db
 docker/compose/external-certs/
 # Test-only certificate (mail.example.test) used by the TLS verification tests.
 !packages/mail-engine/src/fixtures/*.pem
+# Test-only SAML identity provider key and certificate.
+!apps/api/test/fixtures/*.pem
 
 # Next.js and Playwright
 *.tsbuildinfo

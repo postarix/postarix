@@ -38,7 +38,14 @@ function isSsoSignInPath(pathname: string): boolean {
 }
 
 function isOpenSsoEndpoint(path: string): boolean {
-  return path === '/sign-in/sso' || path === '/sso/callback' || path.startsWith('/sso/callback/');
+  return (
+    path === '/sign-in/sso' ||
+    path === '/sso/callback' ||
+    path.startsWith('/sso/callback/') ||
+    // SAML: the identity provider posts its response here, and reads Postarix' metadata.
+    path.startsWith('/sso/saml2/sp/acs/') ||
+    path === '/sso/saml2/sp/metadata'
+  );
 }
 
 type AdapterFactory = ReturnType<typeof drizzleAdapter>;
@@ -173,6 +180,14 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
         // Registration through Better Auth's endpoint is closed (see the hook above).
         providersLimit: 0,
         resolveUser: (input) => resolveSsoUser(db, input),
+        saml: {
+          // Only answers to requests Postarix made, signed, on time.
+          enableInResponseToValidation: true,
+          allowIdpInitiated: false,
+          requireTimestamps: true,
+          clockSkew: 3 * 60 * 1000,
+          algorithms: { onDeprecated: 'reject' },
+        },
       }),
     ],
   });

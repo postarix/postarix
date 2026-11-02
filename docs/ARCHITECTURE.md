@@ -94,7 +94,7 @@ Postarix is a modern, self-hosted, open-source email platform. It is meant as an
 - `twoFactor`: TOTP and recovery codes.
 - `passkey`: WebAuthn / security keys.
 - `admin`: banning users and audited impersonation for support.
-- `sso`: sign-in with the organization's OpenID Connect identity provider (Microsoft Entra ID, Google Workspace, Okta, Keycloak…). Providers are managed through our API (`orgs/:orgId/sso`, organization admins), one per verified domain; Better Auth's own provider endpoints are closed. SSO never creates accounts: on every sign-in the asserted email must be an **active mailbox of the provider's organization**, and never an instance administrator. Issuer URLs must be public https addresses (checked again after DNS resolution); an internal IdP must be added to `TRUSTED_ORIGINS` by the operator. Mail clients keep using app passwords. SAML is not offered yet.
+- `sso`: sign-in with the organization's OpenID Connect identity provider (Microsoft Entra ID, Google Workspace, Okta, Keycloak…). Providers are managed through our API (`orgs/:orgId/sso`, organization admins), one per verified domain; Better Auth's own provider endpoints are closed. SSO never creates accounts: on every sign-in the asserted email must be an **active mailbox of the provider's organization**, and never an instance administrator. Issuer URLs must be public https addresses (checked again after DNS resolution); an internal IdP must be added to `TRUSTED_ORIGINS` by the operator. Mail clients keep using app passwords. SAML 2.0 providers are set up with the identity provider's entity ID, sign-in URL and signing certificate (nothing is fetched from it); Postarix publishes its own metadata, accepts only signed assertions addressed to it, in answer to a request it made (no IdP-initiated sign-in), within their validity, and rejects SHA-1 and other deprecated algorithms.
 
 ### 4.2 Mail clients (IMAP, SMTP, CalDAV, CardDAV)
 
@@ -383,7 +383,7 @@ out the account password after repeated failures (app passwords keep working).
 - Later: rooms and other shared resources.
 
 ### Phase 5 — Enterprise and scale
-- [x] SSO with OpenID Connect. Later: SAML.
+- [x] SSO with OpenID Connect and SAML 2.0.
 - [x] Two-step sign-in required by organization (authenticator app or passkey): until people set one up they only reach their account settings; mail apps then need app passwords.
 - [x] CrowdSec (optional `crowdsec` profile) reading the Postfix and Cyrus logs, with the firewall bouncer on the host (see `docs/CROWDSEC.md`).
 - Replication and Cyrus Murder; Helm chart.
