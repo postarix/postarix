@@ -16,6 +16,13 @@ services:
       # A body marker that scores as ordinary spam (unlike GTUBE, which skips
       # the remaining rules), to test spam handling end to end.
       RSPAMD_TEST_RULES: "true"
+      CLAMAV_SERVERS: clamav:3310
+  # Virus scanning is tested too, with the EICAR test signature only (no
+  # Internet access to download the real ones).
+  clamav:
+    profiles: !reset []
+    environment:
+      CLAMAV_TEST_SIGNATURES: "true"
   # The webmail on its own port, forwarding /api to the API (no reverse proxy in the tests).
   webmail:
     environment:

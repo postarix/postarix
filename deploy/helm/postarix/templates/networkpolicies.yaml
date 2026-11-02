@@ -49,7 +49,9 @@ spec:
         - { port: 3443 }
 ---
 # Data stores and the spam filter accept only Postarix' own pods.
-{{- range $component := list "postgres" "valkey" "rspamd" "unbound" }}
+{{- $components := list "postgres" "valkey" "rspamd" "unbound" }}
+{{- if .Values.clamav.enabled }}{{- $components = append $components "clamav" }}{{- end }}
+{{- range $component := $components }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Gets the signatures (freshclam), keeps them updated in the background and
+# runs clamd in the foreground.
+set -eu
+log() { echo "[clamav-entrypoint] $*"; }
+
+install -d -o clamav -g clamav /var/lib/clamav /run/clamav
+
+if [ "${CLAMAV_TEST_SIGNATURES:-false}" = "true" ]; then
+  # Test environments without Internet access: one signature, the EICAR
+  # test file (never use this in production).
+  eicar='X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+  printf '%s:%s:Postarix.Test.EICAR\n' "$(printf '%s' "$eicar" | md5sum | cut -d' ' -f1)" "$(printf '%s' "$eicar" | wc -c)" \
+    > /var/lib/clamav/postarix-test.hdb
+  chown clamav:clamav /var/lib/clamav/postarix-test.hdb
+  log "test signatures only (CLAMAV_TEST_SIGNATURES=true)"
+else
+  if ! ls /var/lib/clamav/*.cvd /var/lib/clamav/*.cld >/dev/null 2>&1; then
+    log "downloading signatures (first start)"
+    until freshclam --config-file=/etc/clamav/freshclam.conf --foreground=yes --stdout; do
+      log "download failed; retrying in 60 s"
+      sleep 60
+    done
+  fi
+  freshclam --config-file=/etc/clamav/freshclam.conf --daemon --foreground=yes --stdout &
+fi
+
+log "starting clamd"
+exec clamd --config-file=/etc/clamav/clamd.conf

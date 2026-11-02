@@ -28,6 +28,31 @@ else
   rm -f /etc/rspamd/local.d/regexp.conf
 fi
 
+# Virus scanning with ClamAV (optional: the clamav profile / Helm clamav.enabled).
+if [ -n "${CLAMAV_SERVERS:-}" ]; then
+  cat > /etc/rspamd/local.d/antivirus.conf <<AV
+clamav {
+  type = "clamav";
+  servers = "${CLAMAV_SERVERS}";
+  symbol = "CLAM_VIRUS";
+  # Attachments and the message itself.
+  scan_mime_parts = true;
+  scan_text_mime = false;
+  scan_image_mime = false;
+  action = "reject";
+  message = '\${SCANNER}: virus found: "\${VIRUS}"';
+  # If ClamAV cannot be reached, mail is still delivered (CLAM_VIRUS_FAIL
+  # is logged with no score) rather than held up.
+  log_clean = false;
+  timeout = 30.0;
+  retransmits = 2;
+}
+AV
+  printf 'symbols = {\n  CLAM_VIRUS_FAIL = { score = 0.0; }\n}\n' > /etc/rspamd/local.d/antivirus_group.conf
+else
+  rm -f /etc/rspamd/local.d/antivirus.conf /etc/rspamd/local.d/antivirus_group.conf
+fi
+
 : "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
 umask 027
 printf 'servers = "%s";\npassword = "%s";\n' "$REDIS_SERVERS" "$REDIS_PASSWORD" > /etc/rspamd/local.d/redis.conf

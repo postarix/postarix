@@ -103,6 +103,17 @@ unbound:
   # DNSSEC-validating resolver for Rspamd (DNS blocklists, SPF, DKIM, DMARC).
   resources: {}
 
+# Virus scanning (Rspamd asks ClamAV about every message). Needs about 1.5 GB
+# of memory and outbound access to database.clamav.net for the signatures.
+clamav:
+  enabled: false
+  storage:
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests:
+      memory: 1536Mi
+
 postgresql:
   # Built-in single-instance PostgreSQL. For production, prefer a managed
   # database or an operator (CloudNativePG…) and set enabled: false + host.

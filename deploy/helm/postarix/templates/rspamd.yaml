@@ -33,6 +33,10 @@ spec:
               value: {{ include "postarix.name" (list . "unbound") }}
             - name: RSPAMD_GREYLIST
               value: {{ .Values.rspamd.greylist | quote }}
+            {{- if .Values.clamav.enabled }}
+            - name: CLAMAV_SERVERS
+              value: "{{ include "postarix.name" (list . "clamav") }}:3310"
+            {{- end }}
           ports:
             - { name: milter, containerPort: 11332 }
             - { name: controller, containerPort: 11334 }
