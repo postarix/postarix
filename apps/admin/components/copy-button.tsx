@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@postarix/ui';
+import { Button } from '@postarix/ui/components/button';
 import { Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 
@@ -8,6 +8,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
   const [copied, setCopied] = useState(false);
   return (
     <Button
+      type="button"
       variant="ghost"
       size="sm"
       aria-label={`${label}: ${value.slice(0, 40)}`}
@@ -17,7 +18,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+      {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
       <span className="sr-only sm:not-sr-only">{copied ? 'Copied' : label}</span>
     </Button>
   );

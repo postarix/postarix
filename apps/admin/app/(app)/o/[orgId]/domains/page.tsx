@@ -1,16 +1,29 @@
 'use client';
 
-import { Alert, Badge, Button, Card, Dialog, EmptyState, Field, Input, PageHeader, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { FieldGroup } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Globe, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
+import { AppDialog } from '@/components/app-dialog';
 import { ConfirmDialog } from '@/components/confirm';
 import { CopyButton } from '@/components/copy-button';
+import { EmptyState } from '@/components/empty-state';
+import { FormField } from '@/components/form-field';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { keys, useOrgList } from '@/lib/queries';
-import type { DnsRecord, Domain } from '@/lib/types';
+import type { DnsRecord, DnsRecordCheck, Domain } from '@/lib/types';
 
 const purposeLabel: Record<DnsRecord['purpose'], string> = {
   verification: 'Ownership',
@@ -20,40 +33,63 @@ const purposeLabel: Record<DnsRecord['purpose'], string> = {
   dmarc: 'DMARC',
 };
 
+const statusBadge: Record<DnsRecordCheck['status'], { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' }> = {
+  ok: { label: 'Published', variant: 'success' },
+  missing: { label: 'Missing', variant: 'destructive' },
+  mismatch: { label: 'Different', variant: 'warning' },
+  unknown: { label: 'Could not check', variant: 'secondary' },
+};
+
 function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
   const records = useQuery({
     queryKey: [...keys.orgPart(orgId, 'domains'), domain.id, 'dns'],
-    queryFn: () => api.get<{ data: DnsRecord[] }>(`/orgs/${orgId}/domains/${domain.id}/dns-records`).then((r) => r.data),
+    queryFn: () => api.get<{ data: DnsRecordCheck[] }>(`/orgs/${orgId}/domains/${domain.id}/dns-check`).then((r) => r.data),
   });
-  if (records.isLoading) return <Spinner />;
-  if (records.error) return <Alert>{errorMessage(records.error)}</Alert>;
+  if (records.isLoading) return <Skeleton className="h-32 w-full" />;
+  if (records.error) return <Notice>{errorMessage(records.error)}</Notice>;
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <thead>
-          <tr>
-            <Th>Purpose</Th>
-            <Th>Type</Th>
-            <Th>Name</Th>
-            <Th>Value</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.data?.map((record) => (
-            <tr key={`${record.purpose}-${record.name}`}>
-              <Td>{purposeLabel[record.purpose]}</Td>
-              <Td className="font-mono text-xs">{record.type}</Td>
-              <Td className="font-mono text-xs">{record.name}</Td>
-              <Td>
-                <div className="flex items-start gap-2">
-                  <code className="block max-w-md break-all text-xs">{record.value}</code>
-                  <CopyButton value={record.value} />
-                </div>
-              </Td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+    <div className="space-y-2">
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Purpose</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Value</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {records.data?.map((record) => (
+              <TableRow key={`${record.purpose}-${record.name}`}>
+                <TableCell>{purposeLabel[record.purpose]}</TableCell>
+                <TableCell>
+                  <Badge variant={statusBadge[record.status].variant}>{statusBadge[record.status].label}</Badge>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{record.type}</TableCell>
+                <TableCell className="font-mono text-xs">{record.name}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <div className="flex items-start gap-2">
+                    <code className="block max-w-md text-xs break-all">{record.value}</code>
+                    <CopyButton value={record.value} />
+                  </div>
+                  {record.found.length > 0 ? (
+                    <p className="mt-1 text-xs break-all text-muted-foreground">Published now: {record.found.join(' · ')}</p>
+                  ) : null}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>DNS changes can take a while to appear.</span>
+        <LoadingButton size="sm" variant="ghost" loading={records.isFetching} onClick={() => void records.refetch()}>
+          <RefreshCw aria-hidden />
+          Check again
+        </LoadingButton>
+      </div>
     </div>
   );
 }
@@ -71,21 +107,24 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
   };
 
   return (
-    <Card className="p-5" data-testid={`domain-${domain.name}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">{domain.name}</h2>
+    <Card data-testid={`domain-${domain.name}`}>
+      <CardHeader>
+        <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
+          {domain.name}
           {domain.status === 'active' ? (
-            <Badge tone="success">Verified</Badge>
+            <Badge variant="success">Verified</Badge>
           ) : domain.status === 'pending' ? (
-            <Badge tone="warning">Pending verification</Badge>
+            <Badge variant="warning">Pending verification</Badge>
           ) : (
-            <Badge>Disabled</Badge>
+            <Badge variant="secondary">Disabled</Badge>
           )}
-        </div>
-        <div className="flex gap-2">
+        </CardTitle>
+        <CardDescription>
+          {domain.verifiedAt ? `Verified ${formatDate(domain.verifiedAt)}` : `Added ${formatDate(domain.createdAt)}`}
+        </CardDescription>
+        <CardAction className="flex gap-2">
           {domain.status === 'pending' ? (
-            <Button
+            <LoadingButton
               size="sm"
               loading={verifying}
               onClick={async () => {
@@ -101,36 +140,33 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
                 }
               }}
             >
-              <ShieldCheck className="size-4" aria-hidden />
+              <ShieldCheck aria-hidden />
               Verify
-            </Button>
+            </LoadingButton>
           ) : null}
-          <Button size="sm" variant="secondary" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
+          <Button size="sm" variant="outline" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
             {showDns ? 'Hide DNS records' : 'DNS records'}
           </Button>
-          <Button size="sm" variant="ghost" aria-label={`Delete ${domain.name}`} onClick={() => setDeleting(true)}>
-            <Trash2 className="size-4" aria-hidden />
+          <Button size="icon-sm" variant="ghost" aria-label={`Delete ${domain.name}`} onClick={() => setDeleting(true)}>
+            <Trash2 aria-hidden />
           </Button>
-        </div>
-      </div>
-      <p className="mt-1 text-sm text-ink-muted">
-        {domain.verifiedAt ? `Verified ${formatDate(domain.verifiedAt)}` : `Added ${formatDate(domain.createdAt)}`}
-      </p>
-      {error ? (
-        <div className="mt-4">
-          <Alert>{error}</Alert>
-        </div>
-      ) : null}
-      {showDns ? (
-        <div className="mt-4 space-y-3">
-          {domain.status === 'pending' ? (
-            <p className="text-sm text-ink-muted">
-              Publish the ownership record, then press Verify. The other records make mail delivery work and should be
-              published too.
-            </p>
+        </CardAction>
+      </CardHeader>
+      {error || showDns ? (
+        <CardContent className="space-y-3">
+          {error ? <Notice>{error}</Notice> : null}
+          {showDns ? (
+            <>
+              {domain.status === 'pending' ? (
+                <p className="text-sm text-muted-foreground">
+                  Publish the ownership record, then press Verify. The other records make mail delivery work and should
+                  be published too.
+                </p>
+              ) : null}
+              <DnsRecords orgId={orgId} domain={domain} />
+            </>
           ) : null}
-          <DnsRecords orgId={orgId} domain={domain} />
-        </div>
+        </CardContent>
       ) : null}
       <ConfirmDialog
         open={deleting}
@@ -160,7 +196,6 @@ function AddDomainDialog({ orgId, open, onClose }: { orgId: string; open: boolea
       await api.post(`/orgs/${orgId}/domains`, { name: String(new FormData(form).get('name')) });
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
       await queryClient.invalidateQueries({ queryKey: keys.org(orgId) });
-      form.reset();
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -170,22 +205,24 @@ function AddDomainDialog({ orgId, open, onClose }: { orgId: string; open: boolea
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Add domain" description="You will prove ownership with a DNS record.">
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        <Field label="Domain name">
-          {(props) => <Input {...props} name="name" placeholder="example.com" required autoFocus />}
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            Add domain
-          </Button>
-        </div>
+    <AppDialog open={open} onClose={onClose} title="Add domain" description="You will prove ownership with a DNS record.">
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <FormField label="Domain name">
+            {(props) => <Input {...props} name="name" placeholder="example.com" required autoFocus />}
+          </FormField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Add domain
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -201,15 +238,15 @@ export default function DomainsPage() {
         description="Domains this organization receives and sends mail for."
         actions={
           <Button onClick={() => setAdding(true)}>
-            <Plus className="size-4" aria-hidden />
+            <Plus aria-hidden />
             Add domain
           </Button>
         }
       />
       {domains.isLoading ? (
-        <Spinner />
+        <Skeleton className="h-28 w-full rounded-xl" />
       ) : domains.error ? (
-        <Alert>{errorMessage(domains.error)}</Alert>
+        <Notice>{errorMessage(domains.error)}</Notice>
       ) : domains.data?.length ? (
         <div className="space-y-4">
           {domains.data.map((domain) => (
@@ -217,7 +254,7 @@ export default function DomainsPage() {
           ))}
         </div>
       ) : (
-        <EmptyState title="No domains yet" description="Add a domain to start creating mailboxes." />
+        <EmptyState icon={Globe} title="No domains yet" description="Add a domain to start creating mailboxes." />
       )}
       <AddDomainDialog orgId={orgId} open={adding} onClose={() => setAdding(false)} />
     </>

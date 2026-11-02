@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, Input } from '@postarix/ui';
+import { Button } from '@postarix/ui/components/button';
+import { Input } from '@postarix/ui/components/input';
 import { Eye, EyeOff, Wand2 } from 'lucide-react';
 import { type InputHTMLAttributes, useState } from 'react';
 
@@ -39,18 +40,26 @@ export function PasswordInput({
         autoComplete="new-password"
         className="font-mono"
       />
-      <Button variant="secondary" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible((v) => !v)}>
-        {visible ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label={visible ? 'Hide password' : 'Show password'}
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
       </Button>
       <Button
-        variant="secondary"
+        type="button"
+        variant="outline"
+        size="icon"
         aria-label="Generate password"
         onClick={() => {
           onChange(generatePassword());
           setVisible(true);
         }}
       >
-        <Wand2 className="size-4" aria-hidden />
+        <Wand2 aria-hidden />
       </Button>
     </div>
   );

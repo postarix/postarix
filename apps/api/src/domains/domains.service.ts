@@ -8,7 +8,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { Env } from '../config/env.js';
-import type { DnsResolver } from '../core/dns.js';
+import { type DnsResolver, isNoRecordError } from '../core/dns.js';
 import { DNS_RESOLVER, ENV } from '../core/tokens.js';
 import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js';
 import { AuditService } from '../audit/audit.service.js';
@@ -16,6 +16,7 @@ import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto } from './domains.dto.js';
 import { DomainsRepository } from './domains.repository.js';
+import { checkDnsRecords, type DnsRecordCheckDto } from './dns-check.js';
 
 @Injectable()
 export class DomainsService {
@@ -62,6 +63,11 @@ export class DomainsService {
   }
 
   /** The DNS records the organization must publish for this domain. */
+  /** The records the domain should publish, with what DNS answers for each today. */
+  async dnsCheck(ctx: TenantContext, id: string): Promise<DnsRecordCheckDto[]> {
+    return checkDnsRecords(this.dns, await this.dnsRecords(ctx, id), this.env.MAIL_HOSTNAME);
+  }
+
   async dnsRecords(ctx: TenantContext, id: string): Promise<DnsRecordDto[]> {
     const domain = await this.repository.findById(ctx, id);
     if (!domain) throw new NotFoundException('Domain not found');
@@ -147,8 +153,7 @@ export class DomainsService {
       // A TXT record may be split into several strings; they form one value.
       return records.map((chunks) => chunks.join(''));
     } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code === 'ENOTFOUND' || code === 'ENODATA' || code === 'NXDOMAIN') return [];
+      if (isNoRecordError(error)) return [];
       throw new ServiceUnavailableException('DNS lookup failed; try again later');
     }
   }

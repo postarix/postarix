@@ -1,12 +1,29 @@
 'use client';
 
-import { Alert, Badge, Button, Card, Dialog, EmptyState, Field, Input, PageHeader, Select, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import { Checkbox } from '@postarix/ui/components/checkbox';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { Progress } from '@postarix/ui/components/progress';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
+import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Inbox, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
+import { AddressFields } from '@/components/address-fields';
+import { AppDialog } from '@/components/app-dialog';
 import { ConfirmDialog } from '@/components/confirm';
+import { EmptyState } from '@/components/empty-state';
+import { FormField } from '@/components/form-field';
+import { ListTable } from '@/components/list-table';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
@@ -25,22 +42,27 @@ function useRefresh(orgId: string) {
 function Usage({ orgId, mailbox }: { orgId: string; mailbox: Mailbox }) {
   const usage = useQuery({
     queryKey: [...keys.orgPart(orgId, 'mailboxes'), mailbox.id, 'usage'],
-    queryFn: () => api.get<{ usedBytes: number | null; quotaBytes: number | null }>(`/orgs/${orgId}/mailboxes/${mailbox.id}/usage`),
+    queryFn: () =>
+      api.get<{ usedBytes: number | null; quotaBytes: number | null }>(`/orgs/${orgId}/mailboxes/${mailbox.id}/usage`),
     staleTime: 60_000,
     retry: false,
   });
-  if (!usage.data || usage.data.usedBytes === null) return <span className="text-ink-muted">{formatBytes(mailbox.quotaBytes)}</span>;
+  if (!usage.data || usage.data.usedBytes === null) {
+    return <span className="text-muted-foreground">{formatBytes(mailbox.quotaBytes)}</span>;
+  }
   const { usedBytes, quotaBytes } = usage.data;
   const percent = quotaBytes ? Math.min(100, Math.round((usedBytes / quotaBytes) * 100)) : null;
   return (
-    <div className="min-w-32">
-      <span className="text-sm">
+    <div className="min-w-32 space-y-1">
+      <span className="text-sm tabular-nums">
         {formatBytes(usedBytes)} / {formatBytes(quotaBytes)}
       </span>
       {percent !== null ? (
-        <div className="mt-1 h-1.5 rounded-full bg-surface-muted" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Storage used">
-          <div className={`h-full rounded-full ${percent >= 90 ? 'bg-danger' : 'bg-accent'}`} style={{ width: `${percent}%` }} />
-        </div>
+        <Progress
+          value={percent}
+          aria-label="Storage used"
+          className={cn('h-1.5', percent >= 90 && '[&>[data-slot=progress-indicator]]:bg-destructive')}
+        />
       ) : null}
     </div>
   );
@@ -54,8 +76,7 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
+    const data = new FormData(event.currentTarget);
     setPending(true);
     setError(null);
     try {
@@ -67,7 +88,6 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
         quotaBytes: quotaFromGiB(String(data.get('quota'))),
       });
       refresh();
-      form.reset();
       setPassword('');
       onClose();
     } catch (e) {
@@ -78,41 +98,29 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="New mailbox">
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-          <Field label="Address">{(props) => <Input {...props} name="localPart" placeholder="jane" required autoFocus />}</Field>
-          <span className="pb-2.5 text-ink-muted">@</span>
-          <Field label="Domain">
-            {(props) => (
-              <Select {...props} name="domainId" required>
-                {domains.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </div>
-        <Field label="Display name">{(props) => <Input {...props} name="displayName" placeholder="Jane Doe" maxLength={128} />}</Field>
-        <Field label="Password" hint="At least 12 characters.">
-          {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
-        </Field>
-        <Field label="Quota (GB)" hint="Leave empty for unlimited.">
-          {(props) => <Input {...props} name="quota" inputMode="decimal" placeholder="5" />}
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            Create mailbox
-          </Button>
-        </div>
+    <AppDialog open={open} onClose={onClose} title="New mailbox">
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <AddressFields domains={domains} placeholder="jane" />
+          <FormField label="Display name">{(props) => <Input {...props} name="displayName" placeholder="Jane Doe" maxLength={128} />}</FormField>
+          <FormField label="Password" hint="At least 12 characters.">
+            {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
+          </FormField>
+          <FormField label="Quota (GB)" hint="Leave empty for unlimited.">
+            {(props) => <Input {...props} name="quota" inputMode="decimal" placeholder="5" />}
+          </FormField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Create mailbox
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -142,29 +150,33 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
   }
 
   return (
-    <Dialog open onClose={onClose} title={`Edit ${mailbox.address}`}>
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        <Field label="Display name">
-          {(props) => <Input {...props} name="displayName" defaultValue={mailbox.displayName} maxLength={128} />}
-        </Field>
-        <Field label="Quota (GB)" hint="Leave empty for unlimited.">
-          {(props) => <Input {...props} name="quota" inputMode="decimal" defaultValue={quotaToGiB(mailbox.quotaBytes)} />}
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="enabled" defaultChecked={mailbox.status === 'active'} className="size-4 accent-[var(--color-accent)]" />
-          Enabled (a disabled mailbox cannot sign in and does not receive mail)
-        </label>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            Save
-          </Button>
-        </div>
+    <AppDialog open onClose={onClose} title={`Edit ${mailbox.address}`}>
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <FormField label="Display name">
+            {(props) => <Input {...props} name="displayName" defaultValue={mailbox.displayName} maxLength={128} />}
+          </FormField>
+          <FormField label="Quota (GB)" hint="Leave empty for unlimited.">
+            {(props) => <Input {...props} name="quota" inputMode="decimal" defaultValue={quotaToGiB(mailbox.quotaBytes)} />}
+          </FormField>
+          <Field orientation="horizontal">
+            <Checkbox id="mailbox-enabled" name="enabled" defaultChecked={mailbox.status === 'active'} />
+            <FieldLabel htmlFor="mailbox-enabled" className="font-normal">
+              Enabled (a disabled mailbox cannot sign in and does not receive mail)
+            </FieldLabel>
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Save
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -189,31 +201,33 @@ function ResetPasswordDialog({ orgId, mailbox, onClose }: { orgId: string; mailb
   }
 
   return (
-    <Dialog open onClose={onClose} title={`Reset password for ${mailbox.address}`}>
+    <AppDialog open onClose={onClose} title={`Reset password for ${mailbox.address}`}>
       {done ? (
-        <div className="space-y-4">
-          <Alert tone="success">Password changed. Share it with the user over a secure channel.</Alert>
-          <div className="flex justify-end">
+        <FieldGroup>
+          <Notice tone="success">Password changed. Share it with the user over a secure channel.</Notice>
+          <DialogFooter>
             <Button onClick={onClose}>Done</Button>
-          </div>
-        </div>
+          </DialogFooter>
+        </FieldGroup>
       ) : (
-        <form onSubmit={submit} className="space-y-4">
-          {error ? <Alert>{error}</Alert> : null}
-          <Field label="New password" hint="At least 12 characters.">
-            {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required autoFocus />}
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={pending}>
-              Set password
-            </Button>
-          </div>
+        <form onSubmit={submit}>
+          <FieldGroup>
+            {error ? <Notice>{error}</Notice> : null}
+            <FormField label="New password" hint="At least 12 characters.">
+              {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required autoFocus />}
+            </FormField>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <LoadingButton type="submit" loading={pending}>
+                Set password
+              </LoadingButton>
+            </DialogFooter>
+          </FieldGroup>
         </form>
       )}
-    </Dialog>
+    </AppDialog>
   );
 }
 
@@ -235,68 +249,73 @@ export default function MailboxesPage() {
         description="Accounts that sign in and store mail."
         actions={
           <Button onClick={() => setCreating(true)} disabled={activeDomains.length === 0}>
-            <Plus className="size-4" aria-hidden />
+            <Plus aria-hidden />
             New mailbox
           </Button>
         }
       />
       {domains.data && activeDomains.length === 0 ? (
         <div className="mb-4">
-          <Alert tone="warning">
+          <Notice tone="warning">
             Verify a domain before creating mailboxes.{' '}
-            <Link href={`/o/${orgId}/domains`} className="font-medium underline">
+            <Link href={`/o/${orgId}/domains`} className="font-medium underline underline-offset-4">
               Go to domains
             </Link>
-          </Alert>
+          </Notice>
         </div>
       ) : null}
       {mailboxes.isLoading ? (
-        <Spinner />
+        <Skeleton className="h-40 w-full rounded-xl" />
       ) : mailboxes.error ? (
-        <Alert>{errorMessage(mailboxes.error)}</Alert>
+        <Notice>{errorMessage(mailboxes.error)}</Notice>
       ) : mailboxes.data?.length ? (
-        <Card className="overflow-x-auto">
-          <Table>
-            <thead>
-              <tr>
-                <Th>Address</Th>
-                <Th>Name</Th>
-                <Th>Storage</Th>
-                <Th>Status</Th>
-                <Th className="text-right">
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {mailboxes.data.map((mailbox) => (
-                <tr key={mailbox.id}>
-                  <Td className="font-medium">{mailbox.address}</Td>
-                  <Td>{mailbox.displayName || <span className="text-ink-muted">—</span>}</Td>
-                  <Td>
-                    <Usage orgId={orgId} mailbox={mailbox} />
-                  </Td>
-                  <Td>{mailbox.status === 'active' ? <Badge tone="success">Active</Badge> : <Badge>Disabled</Badge>}</Td>
-                  <Td>
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" aria-label={`Edit ${mailbox.address}`} onClick={() => setEditing(mailbox)}>
-                        <Pencil className="size-4" aria-hidden />
-                      </Button>
-                      <Button size="sm" variant="ghost" aria-label={`Reset password for ${mailbox.address}`} onClick={() => setResetting(mailbox)}>
-                        <KeyRound className="size-4" aria-hidden />
-                      </Button>
-                      <Button size="sm" variant="ghost" aria-label={`Delete ${mailbox.address}`} onClick={() => setDeleting(mailbox)}>
-                        <Trash2 className="size-4" aria-hidden />
-                      </Button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
+        <ListTable>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-4">Address</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Storage</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-4 text-right">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {mailboxes.data.map((mailbox) => (
+              <TableRow key={mailbox.id}>
+                <TableCell className="pl-4 font-medium">{mailbox.address}</TableCell>
+                <TableCell>{mailbox.displayName || <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell>
+                  <Usage orgId={orgId} mailbox={mailbox} />
+                </TableCell>
+                <TableCell>
+                  {mailbox.status === 'active' ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Disabled</Badge>}
+                </TableCell>
+                <TableCell className="pr-4">
+                  <div className="flex justify-end gap-1">
+                    <Button size="icon-sm" variant="ghost" aria-label={`Edit ${mailbox.address}`} onClick={() => setEditing(mailbox)}>
+                      <Pencil aria-hidden />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Reset password for ${mailbox.address}`}
+                      onClick={() => setResetting(mailbox)}
+                    >
+                      <KeyRound aria-hidden />
+                    </Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Delete ${mailbox.address}`} onClick={() => setDeleting(mailbox)}>
+                      <Trash2 aria-hidden />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </ListTable>
       ) : (
-        <EmptyState title="No mailboxes yet" />
+        <EmptyState icon={Inbox} title="No mailboxes yet" description="Each mailbox is an account with its own storage." />
       )}
       <CreateMailboxDialog orgId={orgId} domains={activeDomains} open={creating} onClose={() => setCreating(false)} />
       {editing ? <EditMailboxDialog orgId={orgId} mailbox={editing} onClose={() => setEditing(null)} /> : null}
@@ -316,3 +335,4 @@ export default function MailboxesPage() {
     </>
   );
 }
+

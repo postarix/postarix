@@ -103,7 +103,7 @@ Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 1. Users create **app passwords** in their portal. Each has a name, a scope (IMAP, SMTP, DAV) and a last-used timestamp, and can be revoked individually.
 2. They are stored as **argon2id** hashes in PostgreSQL.
 3. Cyrus and Postfix validate logins through **saslauthd** with PAM. A `pam_exec` helper posts the credentials to an internal endpoint of `apps/api` (`/api/internal/mail-auth`), authenticated with a shared secret. (`saslauthd`'s `httpform` mechanism would be simpler, but Debian does not compile it in.) saslauthd's credential cache stays off so revoking an app password takes effect immediately.
-4. Failed attempts are rate-limited per username in the API, on top of CrowdSec watching the mail logs.
+4. Failed account-password attempts are limited per username in the API (app passwords, which cannot be guessed, keep working), on top of CrowdSec watching the mail logs (Phase 5).
 5. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
 
 **OAUTHBEARER / XOAUTH2** for clients that support it will be evaluated later.
@@ -340,13 +340,16 @@ postarix/
 CrowdSec moved to Phase 5: blocking at the firewall needs a bouncer on the host,
 which a container cannot provide without host networking. Until then, Postfix
 limits authentication, connection and message rates per client, and the API locks
-out usernames after repeated failures.
+out the account password after repeated failures (app passwords keep working).
 
 ### Phase 2 — Admin panel
-- Organizations, domains, mailboxes, aliases, roles.
-- DNS status per domain (MX, SPF, DKIM, DMARC, MTA-STS).
-- Rspamd quarantine and logs.
-- Audit log.
+- [x] `apps/admin` (Next.js, shadcn/ui) served under `/admin`, with a strict nonce-based CSP.
+- [x] Organizations, domains, mailboxes, aliases and members with their roles.
+- [x] Live DNS status per domain (verification, MX, SPF, DKIM, DMARC), with the records to publish.
+- [x] Audit log of every change, per organization.
+- [x] Account page: profile, password, TOTP two-factor, passkeys, app passwords.
+- [x] Playwright end-to-end tests (including cross-organization access) in CI; Docker image and proxy routes.
+- Moved to Phase 5: MTA-STS (needs its policy host) and the Rspamd quarantine and logs view (needs per-organization filtering of Rspamd's history, which is instance-wide).
 
 ### Phase 3 — Webmail
 - JMAP client, inbox, threads, safe HTML rendering, composing, attachments.
@@ -363,6 +366,8 @@ out usernames after repeated failures.
 - Replication and Cyrus Murder; Helm chart.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.
+- Rspamd quarantine and logs per organization; MTA-STS policy host.
+- Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
 - External security audit → **1.0**.
 
 ## Decision log
@@ -374,6 +379,7 @@ out usernames after repeated failures.
 | 2026-11-01 | MTA: **Postfix**. Spam filter: **Rspamd**. |
 | 2026-11-01 | Backend: **NestJS**. Identity: **Better Auth**. |
 | 2026-11-01 | Admin with **Next.js**; webmail as a **React + Vite SPA** over **JMAP**. |
+| 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |
 | 2026-11-01 | License **AGPL-3.0**. |

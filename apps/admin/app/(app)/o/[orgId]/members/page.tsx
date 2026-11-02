@@ -1,18 +1,31 @@
 'use client';
 
-import { Alert, Badge, Button, Card, Dialog, Field, Input, PageHeader, Select, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { FieldGroup } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQueryClient } from '@tanstack/react-query';
 import { Trash2, UserPlus } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
+import { AppDialog } from '@/components/app-dialog';
 import { ConfirmDialog } from '@/components/confirm';
+import { FormField } from '@/components/form-field';
+import { ListTable } from '@/components/list-table';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { formatDate } from '@/lib/format';
 import { keys, useOrganization, useOrgList } from '@/lib/queries';
 import type { Member, OrgRole } from '@/lib/types';
 
-const roleTone = { owner: 'accent', admin: 'success', member: 'neutral' } as const;
+const roleVariant = { owner: 'default', admin: 'secondary', member: 'outline' } as const;
 
 function useRefresh(orgId: string) {
   const queryClient = useQueryClient();
@@ -22,6 +35,16 @@ function useRefresh(orgId: string) {
   };
 }
 
+function RoleOptions({ canGrantOwner }: { canGrantOwner: boolean }) {
+  return (
+    <>
+      <NativeSelectOption value="member">Member</NativeSelectOption>
+      <NativeSelectOption value="admin">Admin</NativeSelectOption>
+      {canGrantOwner ? <NativeSelectOption value="owner">Owner</NativeSelectOption> : null}
+    </>
+  );
+}
+
 function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: string; canGrantOwner: boolean; open: boolean; onClose: () => void }) {
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +52,12 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
+    const data = new FormData(event.currentTarget);
     setPending(true);
     setError(null);
     try {
       await api.post(`/orgs/${orgId}/members`, { email: String(data.get('email')), role: String(data.get('role')) });
       refresh();
-      form.reset();
       onClose();
     } catch (e) {
       setError(errorMessage(e));
@@ -46,42 +67,48 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Add member" description="The person needs an account on this instance, for example a mailbox.">
-      <form onSubmit={submit} className="space-y-4">
-        {error ? <Alert>{error}</Alert> : null}
-        <Field label="Email">{(props) => <Input {...props} name="email" type="email" required autoFocus />}</Field>
-        <Field label="Role" hint="Admins manage domains, mailboxes and aliases. Owners can also manage other owners.">
-          {(props) => (
-            <Select {...props} name="role" defaultValue="member">
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              {canGrantOwner ? <option value="owner">Owner</option> : null}
-            </Select>
-          )}
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={pending}>
-            Add member
-          </Button>
-        </div>
+    <AppDialog
+      open={open}
+      onClose={onClose}
+      title="Add member"
+      description="The person needs an account on this instance. Mailbox owners are members already."
+    >
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <FormField label="Email">{(props) => <Input {...props} name="email" type="email" required autoFocus />}</FormField>
+          <FormField label="Role" hint="Admins manage domains, mailboxes and aliases. Owners can also manage other owners.">
+            {(props) => (
+              <NativeSelect {...props} name="role" defaultValue="member">
+                <RoleOptions canGrantOwner={canGrantOwner} />
+              </NativeSelect>
+            )}
+          </FormField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Add member
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
       </form>
-    </Dialog>
+    </AppDialog>
   );
 }
 
 function RoleSelect({ orgId, member, canGrantOwner }: { orgId: string; member: Member; canGrantOwner: boolean }) {
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
-  const editable = canGrantOwner || member.role !== 'owner';
-  if (!editable) return <Badge tone={roleTone[member.role]}>{member.role}</Badge>;
+  if (!canGrantOwner && member.role === 'owner') {
+    return <Badge variant={roleVariant[member.role]}>Owner</Badge>;
+  }
   return (
-    <div>
-      <Select
+    <div className="w-32">
+      <NativeSelect
+        size="sm"
         aria-label={`Role of ${member.email}`}
-        className="h-8 w-32"
         value={member.role}
         onChange={async (event) => {
           setError(null);
@@ -93,11 +120,9 @@ function RoleSelect({ orgId, member, canGrantOwner }: { orgId: string; member: M
           }
         }}
       >
-        <option value="member">Member</option>
-        <option value="admin">Admin</option>
-        {canGrantOwner ? <option value="owner">Owner</option> : null}
-      </Select>
-      {error ? <p className="mt-1 text-xs text-danger">{error}</p> : null}
+        <RoleOptions canGrantOwner={canGrantOwner} />
+      </NativeSelect>
+      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -116,59 +141,57 @@ export default function MembersPage() {
     <>
       <PageHeader
         title="Members"
-        description="People who can manage this organization."
+        description="People who belong to this organization and what they may manage."
         actions={
           <Button onClick={() => setAdding(true)}>
-            <UserPlus className="size-4" aria-hidden />
+            <UserPlus aria-hidden />
             Add member
           </Button>
         }
       />
       {members.isLoading ? (
-        <Spinner />
+        <Skeleton className="h-40 w-full rounded-xl" />
       ) : members.error ? (
-        <Alert>{errorMessage(members.error)}</Alert>
+        <Notice>{errorMessage(members.error)}</Notice>
       ) : (
-        <Card className="overflow-x-auto">
-          <Table>
-            <thead>
-              <tr>
-                <Th>Person</Th>
-                <Th>Role</Th>
-                <Th>Since</Th>
-                <Th className="text-right">
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.data?.map((member) => (
-                <tr key={member.id}>
-                  <Td>
-                    <div className="font-medium">
-                      {member.name}
-                      {member.userId === session?.user.id ? <span className="ml-2 text-xs text-ink-muted">(you)</span> : null}
-                    </div>
-                    <div className="text-sm text-ink-muted">{member.email}</div>
-                  </Td>
-                  <Td>
-                    <RoleSelect orgId={orgId} member={member} canGrantOwner={canGrantOwner} />
-                  </Td>
-                  <Td className="text-sm text-ink-muted">{formatDate(member.createdAt)}</Td>
-                  <Td>
-                    <div className="flex justify-end">
-                      {canGrantOwner || member.role !== 'owner' ? (
-                        <Button size="sm" variant="ghost" aria-label={`Remove ${member.email}`} onClick={() => setRemoving(member)}>
-                          <Trash2 className="size-4" aria-hidden />
-                        </Button>
-                      ) : null}
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
+        <ListTable>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="pl-4">Person</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Since</TableHead>
+              <TableHead className="pr-4 text-right">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.data?.map((member) => (
+              <TableRow key={member.id}>
+                <TableCell className="pl-4">
+                  <div className="font-medium">
+                    {member.name}
+                    {member.userId === session?.user.id ? <span className="ml-2 text-xs text-muted-foreground">(you)</span> : null}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{member.email}</div>
+                </TableCell>
+                <TableCell>
+                  <RoleSelect orgId={orgId} member={member} canGrantOwner={canGrantOwner} />
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{formatDate(member.createdAt)}</TableCell>
+                <TableCell className="pr-4">
+                  <div className="flex justify-end">
+                    {canGrantOwner || member.role !== 'owner' ? (
+                      <Button size="icon-sm" variant="ghost" aria-label={`Remove ${member.email}`} onClick={() => setRemoving(member)}>
+                        <Trash2 aria-hidden />
+                      </Button>
+                    ) : null}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </ListTable>
       )}
       <AddMemberDialog orgId={orgId} canGrantOwner={canGrantOwner} open={adding} onClose={() => setAdding(false)} />
       <ConfirmDialog

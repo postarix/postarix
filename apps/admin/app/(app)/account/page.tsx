@@ -1,21 +1,38 @@
 'use client';
 
-import { Alert, Badge, Button, Card, CardHeader, Dialog, EmptyState, Field, Input, PageHeader, Spinner, Table, Td, Th } from '@postarix/ui';
+import { Badge } from '@postarix/ui/components/badge';
+import { Button } from '@postarix/ui/components/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
+import { Checkbox } from '@postarix/ui/components/checkbox';
+import { DialogFooter } from '@postarix/ui/components/dialog';
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@postarix/ui/components/field';
+import { Input } from '@postarix/ui/components/input';
+import { Skeleton } from '@postarix/ui/components/skeleton';
+import { Spinner } from '@postarix/ui/components/spinner';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fingerprint, KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { type FormEvent, useEffect, useState } from 'react';
+import { AppDialog } from '@/components/app-dialog';
 import { ConfirmDialog } from '@/components/confirm';
 import { CopyButton } from '@/components/copy-button';
+import { EmptyState } from '@/components/empty-state';
+import { FormField } from '@/components/form-field';
+import { LoadingButton } from '@/components/loading-button';
+import { Notice } from '@/components/notice';
+import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { api, errorMessage } from '@/lib/api';
 import { authClient, useSession } from '@/lib/auth-client';
 import { formatDate } from '@/lib/format';
 import type { AppPassword } from '@/lib/types';
 
+type Status = { tone: 'success' | 'destructive'; text: string } | null;
+
 function ProfileCard() {
   const { data: session, refetch } = useSession();
-  const [status, setStatus] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+  const [status, setStatus] = useState<Status>(null);
   const [pending, setPending] = useState(false);
   if (!session) return null;
 
@@ -25,21 +42,32 @@ function ProfileCard() {
     setStatus(null);
     const { error } = await authClient.updateUser({ name: String(new FormData(event.currentTarget).get('name')).trim() });
     setPending(false);
-    if (error) return setStatus({ tone: 'danger', text: error.message ?? 'Could not save' });
+    if (error) return setStatus({ tone: 'destructive', text: error.message ?? 'Could not save' });
     await refetch();
     setStatus({ tone: 'success', text: 'Saved.' });
   }
 
   return (
     <Card>
-      <CardHeader title="Profile" description={session.user.email} />
-      <form onSubmit={submit} className="space-y-4 p-5">
-        {status ? <Alert tone={status.tone}>{status.text}</Alert> : null}
-        <Field label="Name">{(props) => <Input {...props} name="name" defaultValue={session.user.name} required maxLength={128} />}</Field>
-        <Button type="submit" loading={pending}>
-          Save
-        </Button>
-      </form>
+      <CardHeader>
+        <CardTitle>Profile</CardTitle>
+        <CardDescription>{session.user.email}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit}>
+          <FieldGroup>
+            {status ? <Notice tone={status.tone}>{status.text}</Notice> : null}
+            <FormField label="Name">
+              {(props) => <Input {...props} name="name" defaultValue={session.user.name} required maxLength={128} />}
+            </FormField>
+            <div>
+              <LoadingButton type="submit" loading={pending}>
+                Save
+              </LoadingButton>
+            </div>
+          </FieldGroup>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -47,7 +75,7 @@ function ProfileCard() {
 function PasswordCard() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
-  const [status, setStatus] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+  const [status, setStatus] = useState<Status>(null);
   const [pending, setPending] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -56,7 +84,7 @@ function PasswordCard() {
     setStatus(null);
     const { error } = await authClient.changePassword({ currentPassword: current, newPassword: next, revokeOtherSessions: true });
     setPending(false);
-    if (error) return setStatus({ tone: 'danger', text: error.message ?? 'Could not change the password' });
+    if (error) return setStatus({ tone: 'destructive', text: error.message ?? 'Could not change the password' });
     setCurrent('');
     setNext('');
     setStatus({ tone: 'success', text: 'Password changed. Other sessions were signed out.' });
@@ -64,21 +92,37 @@ function PasswordCard() {
 
   return (
     <Card>
-      <CardHeader title="Password" description="Also used by mail apps while two-factor authentication is off." />
-      <form onSubmit={submit} className="space-y-4 p-5">
-        {status ? <Alert tone={status.tone}>{status.text}</Alert> : null}
-        <Field label="Current password">
-          {(props) => (
-            <Input {...props} type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
-          )}
-        </Field>
-        <Field label="New password" hint="At least 12 characters.">
-          {(props) => <PasswordInput {...props} value={next} onChange={setNext} required />}
-        </Field>
-        <Button type="submit" loading={pending}>
-          Change password
-        </Button>
-      </form>
+      <CardHeader>
+        <CardTitle>Password</CardTitle>
+        <CardDescription>Also used by mail apps while two-factor authentication is off.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit}>
+          <FieldGroup>
+            {status ? <Notice tone={status.tone}>{status.text}</Notice> : null}
+            <FormField label="Current password">
+              {(props) => (
+                <Input
+                  {...props}
+                  type="password"
+                  autoComplete="current-password"
+                  value={current}
+                  onChange={(e) => setCurrent(e.target.value)}
+                  required
+                />
+              )}
+            </FormField>
+            <FormField label="New password" hint="At least 12 characters.">
+              {(props) => <PasswordInput {...props} value={next} onChange={setNext} required />}
+            </FormField>
+            <div>
+              <LoadingButton type="submit" loading={pending}>
+                Change password
+              </LoadingButton>
+            </div>
+          </FieldGroup>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -91,7 +135,7 @@ function QrCode({ value }: { value: string }) {
   return src ? (
     <img src={src} alt="QR code for your authenticator app" width={192} height={192} className="rounded-md bg-white p-1" />
   ) : (
-    <Spinner />
+    <Skeleton className="size-48" />
   );
 }
 
@@ -141,7 +185,7 @@ function TwoFactorCard() {
     setError(null);
     const { error: e } = await authClient.twoFactor.disable({ password });
     setPending(false);
-    if (e) return setError(e.message ?? 'Could not disable two-factor authentication');
+    if (e) return setError(e.message ?? 'Could not turn off two-factor authentication');
     await refetch();
     close();
   }
@@ -150,81 +194,99 @@ function TwoFactorCard() {
 
   return (
     <Card>
-      <CardHeader
-        title={
-          <span className="flex items-center gap-2">
-            Two-factor authentication {enabled ? <Badge tone="success">On</Badge> : <Badge>Off</Badge>}
-          </span>
-        }
-        description="With it on, mail apps need app passwords: your password alone can no longer read your mail."
-        bordered={false}
-        actions={
-          enabled ? (
-            <Button variant="secondary" onClick={() => setStep('disable')}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Two-factor authentication
+          {enabled ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>}
+        </CardTitle>
+        <CardDescription>
+          With it on, mail apps need app passwords: your password alone can no longer read your mail.
+        </CardDescription>
+        <CardAction>
+          {enabled ? (
+            <Button variant="outline" onClick={() => setStep('disable')}>
               Turn off
             </Button>
           ) : (
             <Button onClick={() => setStep('password')}>
-              <ShieldCheck className="size-4" aria-hidden />
+              <ShieldCheck aria-hidden />
               Turn on
             </Button>
-          )
-        }
-      />
-      <Dialog open={step === 'password' || step === 'disable'} onClose={close} title={step === 'disable' ? 'Turn off two-factor authentication' : 'Confirm your password'}>
-        <form onSubmit={step === 'disable' ? disable : start} className="space-y-4">
-          {error ? <Alert>{error}</Alert> : null}
-          <Field label="Password">
-            {(props) => (
-              <Input {...props} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
-            )}
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={close}>
-              Cancel
-            </Button>
-            <Button type="submit" variant={step === 'disable' ? 'danger' : 'primary'} loading={pending}>
-              {step === 'disable' ? 'Turn off' : 'Continue'}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-      <Dialog open={step === 'scan'} onClose={close} title="Set up your authenticator app">
-        {setup ? (
-          <form onSubmit={confirm} className="space-y-4">
-            {error ? <Alert>{error}</Alert> : null}
-            <div className="flex flex-col items-center gap-2">
-              <QrCode value={setup.totpURI} />
-              <code className="break-all text-center text-xs text-ink-muted">{secret}</code>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium">Backup codes</p>
-              <p className="mb-2 text-sm text-ink-muted">Each works once if you lose your device. Store them somewhere safe.</p>
-              <div className="grid grid-cols-2 gap-1 rounded-md bg-surface-muted p-3 font-mono text-sm">
-                {setup.backupCodes.map((c) => (
-                  <span key={c}>{c}</span>
-                ))}
-              </div>
-              <div className="mt-2">
-                <CopyButton value={setup.backupCodes.join('\n')} label="Copy codes" />
-              </div>
-            </div>
-            <Field label="Code from the app">
+          )}
+        </CardAction>
+      </CardHeader>
+
+      <AppDialog
+        open={step === 'password' || step === 'disable'}
+        onClose={close}
+        title={step === 'disable' ? 'Turn off two-factor authentication' : 'Confirm your password'}
+      >
+        <form onSubmit={step === 'disable' ? disable : start}>
+          <FieldGroup>
+            {error ? <Notice>{error}</Notice> : null}
+            <FormField label="Password">
               {(props) => (
-                <Input {...props} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required />
+                <Input
+                  {...props}
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoFocus
+                />
               )}
-            </Field>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={close}>
+            </FormField>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>
-              <Button type="submit" loading={pending}>
-                Turn on
-              </Button>
-            </div>
+              <LoadingButton type="submit" variant={step === 'disable' ? 'destructive' : 'default'} loading={pending}>
+                {step === 'disable' ? 'Turn off' : 'Continue'}
+              </LoadingButton>
+            </DialogFooter>
+          </FieldGroup>
+        </form>
+      </AppDialog>
+
+      <AppDialog open={step === 'scan'} onClose={close} title="Set up your authenticator app" description="Scan the code, then enter the 6 digits it shows.">
+        {setup ? (
+          <form onSubmit={confirm}>
+            <FieldGroup>
+              {error ? <Notice>{error}</Notice> : null}
+              <div className="flex flex-col items-center gap-2">
+                <QrCode value={setup.totpURI} />
+                <code className="text-center text-xs break-all text-muted-foreground">{secret}</code>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Backup codes</p>
+                <p className="mb-2 text-sm text-muted-foreground">Each works once if you lose your device. Store them somewhere safe.</p>
+                <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-3 font-mono text-sm">
+                  {setup.backupCodes.map((c) => (
+                    <span key={c}>{c}</span>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <CopyButton value={setup.backupCodes.join('\n')} label="Copy codes" />
+                </div>
+              </div>
+              <FormField label="Code from the app">
+                {(props) => (
+                  <Input {...props} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required />
+                )}
+              </FormField>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={close}>
+                  Cancel
+                </Button>
+                <LoadingButton type="submit" loading={pending}>
+                  Turn on
+                </LoadingButton>
+              </DialogFooter>
+            </FieldGroup>
           </form>
         ) : null}
-      </Dialog>
+      </AppDialog>
     </Card>
   );
 }
@@ -251,12 +313,12 @@ function PasskeysCard() {
 
   return (
     <Card>
-      <CardHeader
-        title="Passkeys"
-        description="Sign in with your fingerprint, face or a security key instead of a password."
-        actions={
-          <Button
-            variant="secondary"
+      <CardHeader>
+        <CardTitle>Passkeys</CardTitle>
+        <CardDescription>Sign in with your fingerprint, face or a security key instead of a password.</CardDescription>
+        <CardAction>
+          <LoadingButton
+            variant="outline"
             loading={adding}
             onClick={async () => {
               setAdding(true);
@@ -267,37 +329,33 @@ function PasskeysCard() {
               await queryClient.invalidateQueries({ queryKey: ['me', 'passkeys'] });
             }}
           >
-            <Fingerprint className="size-4" aria-hidden />
+            <Fingerprint aria-hidden />
             Add passkey
-          </Button>
-        }
-      />
-      <div className="p-5">
-        {error ? (
-          <div className="mb-3">
-            <Alert>{error}</Alert>
-          </div>
-        ) : null}
+          </LoadingButton>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error ? <Notice>{error}</Notice> : null}
         {passkeys.isLoading ? (
           <Spinner />
         ) : passkeys.data?.length ? (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y">
             {passkeys.data.map((p) => (
               <li key={p.id} className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-sm font-medium">{p.name || 'Passkey'}</p>
-                  <p className="text-xs text-ink-muted">Added {formatDate(new Date(p.createdAt).toISOString())}</p>
+                  <p className="text-xs text-muted-foreground">Added {formatDate(new Date(p.createdAt).toISOString())}</p>
                 </div>
-                <Button size="sm" variant="ghost" aria-label={`Remove passkey ${p.name ?? ''}`} onClick={() => setRemoving(p)}>
-                  <Trash2 className="size-4" aria-hidden />
+                <Button size="icon-sm" variant="ghost" aria-label={`Remove passkey ${p.name ?? ''}`} onClick={() => setRemoving(p)}>
+                  <Trash2 aria-hidden />
                 </Button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-ink-muted">No passkeys yet.</p>
+          <p className="text-sm text-muted-foreground">No passkeys yet.</p>
         )}
-      </div>
+      </CardContent>
       <ConfirmDialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
@@ -354,102 +412,113 @@ function AppPasswordsCard() {
 
   return (
     <Card>
-      <CardHeader
-        title="App passwords"
-        description="One per mail app or device, so you can revoke a lost phone without changing your password."
-        actions={
-          <Button variant="secondary" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden />
+      <CardHeader>
+        <CardTitle>App passwords</CardTitle>
+        <CardDescription>One per mail app or device, so you can revoke a lost phone without changing your password.</CardDescription>
+        <CardAction>
+          <Button variant="outline" onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
             New app password
           </Button>
-        }
-      />
-      <div className="overflow-x-auto p-5">
+        </CardAction>
+      </CardHeader>
+      <CardContent>
         {list.isLoading ? (
-          <Spinner />
+          <Skeleton className="h-24 w-full" />
         ) : list.error ? (
-          <Alert>{errorMessage(list.error)}</Alert>
+          <Notice>{errorMessage(list.error)}</Notice>
         ) : list.data?.length ? (
-          <Table>
-            <thead>
-              <tr>
-                <Th>Name</Th>
-                <Th>Access</Th>
-                <Th>Last used</Th>
-                <Th className="text-right">
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((p) => (
-                <tr key={p.id}>
-                  <Td className="font-medium">{p.name}</Td>
-                  <Td>
-                    <div className="flex flex-wrap gap-1">
-                      {p.scopes.map((s) => (
-                        <Badge key={s}>{scopeLabel[s]}</Badge>
-                      ))}
-                    </div>
-                  </Td>
-                  <Td className="text-sm text-ink-muted">{p.lastUsedAt ? formatDate(p.lastUsedAt) : 'Never'}</Td>
-                  <Td>
-                    <div className="flex justify-end">
-                      <Button size="sm" variant="ghost" aria-label={`Revoke ${p.name}`} onClick={() => setRevoking(p)}>
-                        <Trash2 className="size-4" aria-hidden />
-                      </Button>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Access</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.data.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {p.scopes.map((s) => (
+                          <Badge key={s} variant="secondary">
+                            {scopeLabel[s]}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{p.lastUsedAt ? formatDate(p.lastUsedAt) : 'Never'}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <Button size="icon-sm" variant="ghost" aria-label={`Revoke ${p.name}`} onClick={() => setRevoking(p)}>
+                          <Trash2 aria-hidden />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         ) : (
-          <EmptyState title="No app passwords" description="Create one for each mail, calendar or contacts app you use." />
+          <EmptyState icon={KeyRound} title="No app passwords" description="Create one for each mail, calendar or contacts app you use." />
         )}
-      </div>
-      <Dialog open={creating} onClose={closeCreate} title={created ? 'Your new app password' : 'New app password'}>
+      </CardContent>
+
+      <AppDialog open={creating} onClose={closeCreate} title={created ? 'Your new app password' : 'New app password'}>
         {created ? (
-          <div className="space-y-4">
-            <Alert tone="warning">Copy it now: it is shown only once.</Alert>
-            <div className="flex items-center justify-between gap-2 rounded-md bg-surface-muted p-3">
+          <FieldGroup>
+            <Notice tone="warning">Copy it now: it is shown only once.</Notice>
+            <div className="flex items-center justify-between gap-2 rounded-md bg-muted p-3">
               <code className="font-mono text-base tracking-wider" data-testid="app-password">
                 {created}
               </code>
               <CopyButton value={created} />
             </div>
-            <p className="text-sm text-ink-muted">Use your full email address as the user name in your mail app.</p>
-            <div className="flex justify-end">
+            <p className="text-sm text-muted-foreground">Use your full email address as the user name in your mail app.</p>
+            <DialogFooter>
               <Button onClick={closeCreate}>Done</Button>
-            </div>
-          </div>
+            </DialogFooter>
+          </FieldGroup>
         ) : (
-          <form onSubmit={submit} className="space-y-4">
-            {error ? <Alert>{error}</Alert> : null}
-            <Field label="Name" hint='For example "Thunderbird on my laptop".'>
-              {(props) => <Input {...props} name="name" required maxLength={64} autoFocus />}
-            </Field>
-            <fieldset className="space-y-2">
-              <legend className="mb-1 text-sm font-medium">Access</legend>
-              {(Object.keys(scopeLabel) as (keyof typeof scopeLabel)[]).map((scope) => (
-                <label key={scope} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="scopes" value={scope} defaultChecked={scope !== 'dav'} className="size-4 accent-[var(--color-accent)]" />
-                  {scopeLabel[scope]}
-                </label>
-              ))}
-            </fieldset>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={closeCreate}>
-                Cancel
-              </Button>
-              <Button type="submit" loading={pending}>
-                <KeyRound className="size-4" aria-hidden />
-                Create
-              </Button>
-            </div>
+          <form onSubmit={submit}>
+            <FieldGroup>
+              {error ? <Notice>{error}</Notice> : null}
+              <FormField label="Name" hint='For example "Thunderbird on my laptop".'>
+                {(props) => <Input {...props} name="name" required maxLength={64} autoFocus />}
+              </FormField>
+              <FieldSet>
+                <FieldLegend variant="label">Access</FieldLegend>
+                <FieldGroup className="gap-3">
+                  {(Object.keys(scopeLabel) as (keyof typeof scopeLabel)[]).map((scope) => (
+                    <Field key={scope} orientation="horizontal">
+                      <Checkbox id={`scope-${scope}`} name="scopes" value={scope} defaultChecked={scope !== 'dav'} />
+                      <FieldLabel htmlFor={`scope-${scope}`} className="font-normal">
+                        {scopeLabel[scope]}
+                      </FieldLabel>
+                    </Field>
+                  ))}
+                </FieldGroup>
+              </FieldSet>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={closeCreate}>
+                  Cancel
+                </Button>
+                <LoadingButton type="submit" loading={pending}>
+                  <KeyRound aria-hidden />
+                  Create
+                </LoadingButton>
+              </DialogFooter>
+            </FieldGroup>
           </form>
         )}
-      </Dialog>
+      </AppDialog>
       <ConfirmDialog
         open={revoking !== null}
         onClose={() => setRevoking(null)}

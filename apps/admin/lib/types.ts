@@ -26,6 +26,11 @@ export interface DnsRecord {
   value: string;
 }
 
+export interface DnsRecordCheck extends DnsRecord {
+  status: 'ok' | 'missing' | 'mismatch' | 'unknown';
+  found: string[];
+}
+
 export interface Mailbox {
   id: string;
   domainId: string;
