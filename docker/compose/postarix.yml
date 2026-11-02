@@ -137,10 +137,12 @@ services:
       # pins it even when it is self-signed.
       CYRUS_TLS_SERVERNAME: ${MAIL_HOSTNAME}
       CYRUS_TLS_CA_FILE: /certs/fullchain.pem
+      INTERNAL_TLS_CERT_FILE: /certs/fullchain.pem
+      INTERNAL_TLS_KEY_FILE: /certs/api-privkey.pem
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD:?set CYRUS_ADMIN_PASSWORD}
       # Cyrus' internal JMAP service, used to serve the webmail.
       # By address: the JMAP service listens on the internal network only.
-      CYRUS_JMAP_URL: http://${CYRUS_IP:-172.30.53.10}:8008
+      CYRUS_JMAP_URL: https://${CYRUS_IP:-172.30.53.10}:8008
       # Filtering history shown to organization admins.
       RSPAMD_CONTROLLER_URL: http://rspamd:11334
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
@@ -197,7 +199,7 @@ services:
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
-      POSTARIX_API_URL: http://api:3000
+      POSTARIX_API_INTERNAL: api:3443
       # The internal JMAP service (for the API) binds to this address only, so
       # containers on the proxy network cannot reach it.
       JMAP_LISTEN_ADDRESS: ${CYRUS_IP:-172.30.53.10}

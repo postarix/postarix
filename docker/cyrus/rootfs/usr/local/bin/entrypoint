@@ -5,7 +5,8 @@ set -eu
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
 : "${CYRUS_ADMIN_PASSWORD:?CYRUS_ADMIN_PASSWORD is required}"
 : "${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN is required}"
-POSTARIX_API_URL="${POSTARIX_API_URL:-http://api:3000}"
+# The API's internal HTTPS listener (host:port), for the mail-login bridge.
+POSTARIX_API_INTERNAL="${POSTARIX_API_INTERNAL:-api:3443}"
 CERT_DIR="${CERT_DIR:-/certs}"
 export MAIL_HOSTNAME
 
@@ -59,7 +60,7 @@ chmod 0640 /etc/imapd-lmtp.conf
 # --- Login bridge to the API (read by pam_exec as root only) -----------------
 umask 077
 mkdir -p /etc/postarix
-printf 'POSTARIX_API_URL=%s\n' "$POSTARIX_API_URL" > /etc/postarix/mail-auth.env
+printf 'POSTARIX_API_INTERNAL=%s\nMAIL_HOSTNAME=%s\n' "$POSTARIX_API_INTERNAL" "$MAIL_HOSTNAME" > /etc/postarix/mail-auth.env
 printf 'x-postarix-internal-token: %s\n' "$MAIL_AUTH_SECRET" > /etc/postarix/mail-auth.headers
 umask 022
 

@@ -55,8 +55,9 @@ spec:
             {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
             - name: MAIL_HOSTNAME
               value: {{ .Values.mailHostname | quote }}
-            - name: POSTARIX_API_URL
-              value: "http://{{ $api }}:3000"
+            # The API's internal HTTPS listener (mail-login bridge).
+            - name: POSTARIX_API_INTERNAL
+              value: "{{ $api }}:3443"
             # Reachable from the API only (see the network policy).
             - name: JMAP_LISTEN_ADDRESS
               value: 0.0.0.0

@@ -63,4 +63,20 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...base, SYSTEM_MAIL_FROM: 'notices@example.com' }).SYSTEM_MAIL_FROM).toBe('notices@example.com');
     expect(() => loadEnv({ ...base, SYSTEM_MAIL_FROM: 'not an address' })).toThrow(/SYSTEM_MAIL_FROM/);
   });
+  it('requires encrypted internal traffic in production', () => {
+    const production = {
+      ...base,
+      NODE_ENV: 'production',
+      AUTH_URL: 'https://mail.example.com',
+      VALKEY_URL: 'redis://valkey:6379',
+      DOMAIN_VERIFICATION: 'dns',
+      INTERNAL_API_TOKEN: 'internal-token-that-is-long-enough-for-this',
+      INTERNAL_TLS_CERT_FILE: '/certs/fullchain.pem',
+      INTERNAL_TLS_KEY_FILE: '/certs/api-privkey.pem',
+      CYRUS_JMAP_URL: 'https://cyrus:8008',
+    };
+    expect(() => loadEnv(production)).not.toThrow();
+    expect(() => loadEnv({ ...production, CYRUS_JMAP_URL: 'http://cyrus:8008' })).toThrow(/CYRUS_JMAP_URL/);
+    expect(() => loadEnv({ ...production, INTERNAL_TLS_KEY_FILE: undefined })).toThrow(/INTERNAL_TLS/);
+  });
 });

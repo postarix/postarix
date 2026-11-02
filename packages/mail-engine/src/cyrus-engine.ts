@@ -1,3 +1,6 @@
+import net from 'node:net';
+import tls from 'node:tls';
+import { Agent, fetch as undiciFetch } from 'undici';
 import {
   type ImapConnectOptions,
   ImapConnection,
@@ -50,6 +53,30 @@ const JMAP_BLOB = 'https://cyrusimap.org/ns/jmap/blob';
 
 export class CyrusEngine implements MailEngine {
   constructor(private readonly options: CyrusEngineOptions) {}
+
+  private agent: { ca: string | undefined; agent: Agent } | undefined;
+
+  /**
+   * TLS for the internal JMAP service, checked like the admin IMAP
+   * connection: the expected name (servername) and the extra trusted
+   * certificate. A new agent is made when the certificate file changes.
+   */
+  private jmapAgent(): Agent {
+    const ca = this.options.ca?.();
+    if (this.agent && this.agent.ca === ca) return this.agent.agent;
+    void this.agent?.agent.close();
+    const name = this.options.servername;
+    const agent = new Agent({
+      connect: {
+        rejectUnauthorized: this.options.rejectUnauthorized ?? true,
+        ...(name && !net.isIP(name) ? { servername: name } : {}),
+        ...(ca ? { ca: [...tls.rootCertificates, ca] } : {}),
+        ...(name ? { checkServerIdentity: (_host: string, cert: tls.PeerCertificate) => tls.checkServerIdentity(name, cert) } : {}),
+      },
+    });
+    this.agent = { ca, agent };
+    return agent;
+  }
 
   static mailboxName(address: string): string {
     if (!ADDRESS.test(address)) {
@@ -153,13 +180,14 @@ export class CyrusEngine implements MailEngine {
     if (request.lastEventId) headers.set('last-event-id', request.lastEventId);
 
     try {
-      return await fetch(url, {
+      return (await undiciFetch(url, {
         method: request.method,
         headers,
         redirect: 'manual',
         ...(request.body ? { body: request.body, duplex: 'half' } : {}),
         ...(request.signal ? { signal: request.signal } : {}),
-      } as RequestInit);
+        ...(url.protocol === 'https:' ? { dispatcher: this.jmapAgent() } : {}),
+      } as unknown as Parameters<typeof undiciFetch>[1])) as unknown as Response;
     } catch (error) {
       if (request.signal?.aborted) throw error;
       throw new MailEngineError('Cannot reach the Cyrus JMAP service', 'unavailable', { cause: error });
@@ -256,7 +284,9 @@ export class CyrusEngine implements MailEngine {
     }
   }
 
-  async close(): Promise<void> {}
+  async close(): Promise<void> {
+    await this.agent?.agent.close();
+  }
 }
 
 /**

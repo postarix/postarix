@@ -19,6 +19,6 @@ EXPOSE 80
 VOLUME ["/certs", "/var/lib/lego"]
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=120s --retries=3 \
-  CMD [ -s /certs/fullchain.pem ] && [ -s /certs/privkey.pem ]
+  CMD [ -s /certs/fullchain.pem ] && [ -s /certs/privkey.pem ] && [ -s /certs/api-privkey.pem ]
 
 ENTRYPOINT ["/usr/local/bin/certs"]

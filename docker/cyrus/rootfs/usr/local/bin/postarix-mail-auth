@@ -12,15 +12,21 @@ set -u
 # so read it from the parent process, the saslauthd worker).
 instance=$(tr '\000' '\n' <"/proc/$PPID/environ" 2>/dev/null | sed -n 's/^POSTARIX_SASL_INSTANCE=//p' | head -n 1)
 
+# Over TLS to the API's internal listener, which presents the mail server's
+# certificate: it is checked against MAIL_HOSTNAME while connecting to the
+# API's internal address, so passwords never cross the network in clear.
+port=${POSTARIX_API_INTERNAL##*:}
 status=$(
-  tr -d '\000' | curl --silent --show-error --max-time 10 \
+  tr -d '\000' | curl --silent --show-error --max-time 10 --proto '=https' \
+    --connect-to "${MAIL_HOSTNAME}:${port}:${POSTARIX_API_INTERNAL}" \
+    --cacert /etc/cyrus-tls/fullchain.pem --capath /etc/ssl/certs \
     --output /dev/null --write-out '%{http_code}' \
     --header @/etc/postarix/mail-auth.headers \
     --data-urlencode "username=${PAM_USER:-}" \
     --data-urlencode "service=${PAM_SERVICE:-}" \
     --data-urlencode "instance=${instance}" \
     --data-urlencode "password@-" \
-    "${POSTARIX_API_URL}/api/internal/mail-auth"
+    "https://${MAIL_HOSTNAME}:${port}/api/internal/mail-auth"
 ) || exit 1
 
 [ "$status" = "204" ]

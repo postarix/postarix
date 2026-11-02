@@ -1,4 +1,5 @@
 import { internalSecret } from '../config/internal-secrets.js';
+import { internalTlsEnabled, viaInternalTls } from '../internal-tls.js';
 import {
   Body,
   type CanActivate,
@@ -36,6 +37,8 @@ export class InternalTokenGuard implements CanActivate {
     if (!expected) throw new NotFoundException();
 
     const request = context.switchToHttp().getRequest<Request>();
+    // With the internal HTTPS listener on, nothing internal answers in clear.
+    if (internalTlsEnabled(this.env) && !viaInternalTls(request, this.env)) throw new NotFoundException();
     // The login bridge calls us directly inside the Docker network. A request
     // that went through a reverse proxy means the proxy exposes internal
     // routes by mistake: refuse it as if the route did not exist.
