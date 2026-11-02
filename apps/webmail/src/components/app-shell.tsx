@@ -44,7 +44,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         <span className="text-[1.05rem] leading-none font-semibold tracking-tight text-white">Postarix</span>
       </a>
 
-      <nav aria-label="Apps" className="grid grid-cols-3 gap-0.5 rounded-lg bg-white/[0.04] p-0.5 ring-1 ring-white/[0.06]">
+      <nav aria-label="Apps" className="grid grid-cols-3 gap-0.5 rounded-lg bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.4)] ring-1 ring-white/[0.05]">
         {APPS.map(({ name: app, label, href, icon: Icon }) => {
           const active = route.name === app;
           return (
@@ -56,7 +56,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
               className={cn(
                 'flex flex-col items-center gap-1 rounded-md py-1.5 text-[0.7rem] font-medium transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                active ? 'bg-sidebar-accent text-white shadow-sm ring-1 ring-white/[0.06]' : 'text-sidebar-muted hover:text-white',
+                active ? 'bg-sidebar-accent text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_1px_3px_rgb(0_0_0/0.4)]' : 'text-sidebar-muted hover:text-white',
               )}
             >
               <Icon className={cn('size-4', active ? 'text-stamp' : 'opacity-80')} aria-hidden />

@@ -144,7 +144,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search contacts"
                 aria-label="Search contacts"
-                className="h-9 bg-background pl-9 shadow-none"
+                className="h-9 bg-background pl-9"
               />
             </div>
           </div>

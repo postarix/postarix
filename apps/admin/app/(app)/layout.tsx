@@ -76,7 +76,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                       'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
                       active
-                        ? 'bg-sidebar-accent font-medium text-white'
+                        ? 'bg-sidebar-accent font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07),0_1px_2px_rgb(0_0_0/0.35)]'
                         : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
                     )}
                   >

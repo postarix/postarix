@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInternalPath } from './server.mjs';
+import { forwardUrl, isInternalPath } from './server.mjs';
 
 describe('isInternalPath', () => {
   it('catches every spelling of /api/internal', () => {
@@ -12,5 +12,15 @@ describe('isInternalPath', () => {
     for (const p of ['/api/jmap/', '/api/jmap/download/ann%40x.com/B1/a.pdf', '/api/auth/get-session', '/api/internalize']) {
       expect(isInternalPath(p), p).toBe(false);
     }
+  });
+});
+
+describe('forwardUrl', () => {
+  const target = new URL('http://api:3000');
+  it('always forwards to the API origin, whatever the path looks like', () => {
+    for (const p of ['/api/x', '//api/x', '///evil.example/api/x', '//evil.example:80/api/x?y=1']) {
+      expect(forwardUrl(p, target).origin, p).toBe('http://api:3000');
+    }
+    expect(forwardUrl('//api/auth/get-session?x=1', target).href).toBe('http://api:3000/api/auth/get-session?x=1');
   });
 });
