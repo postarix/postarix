@@ -1,5 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { ApiClient, config, unique } from '../src/support.js';
+import { signInToWebmail } from './support.js';
 
 const PASSWORD = 'organizer browser password';
 let address = '';
@@ -13,13 +14,7 @@ test.beforeAll(async () => {
   address = (await admin.ok<{ address: string }>('POST', `/api/orgs/${org.id}/mailboxes`, { domainId: domain.id, localPart: 'olga', password: PASSWORD, displayName: 'Olga' })).address;
 });
 
-async function signIn(page: Page) {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(address);
-  await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('navigation', { name: 'Apps' }).first()).toBeVisible();
-}
+const signIn = (page: Page) => signInToWebmail(page, address, PASSWORD);
 
 test('plans an event in the calendar', async ({ page }) => {
   const title = unique('Design review');
