@@ -10,7 +10,7 @@
     "test:integration": "vitest run && playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
+    "@playwright/test": "1.64.1",
     "@postarix/config": "workspace:*",
     "@types/node": "^22.19.0",
     "@types/nodemailer": "^8.0.2",
