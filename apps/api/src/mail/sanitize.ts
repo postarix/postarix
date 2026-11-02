@@ -23,13 +23,18 @@ const LAYOUT_ATTRIBUTES = ['style', 'align', 'valign', 'width', 'height', 'bgcol
 
 /**
  * Removes anything in a stylesheet that could load or run something: url(),
- * @import, expression(), behaviours. The sandboxed iframe's CSP blocks such
- * loads too; this keeps them from even being attempted.
+ * image-set(), @import, @font-face, expression(), behaviours. CSS escapes
+ * (\75rl, @\69mport…) are dropped first so they cannot spell those out. The
+ * sandboxed iframe's CSP blocks such loads too; this keeps them from even
+ * being attempted.
  */
 export function sanitizeCss(css: string): string {
   return css
     .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\\/g, '')
     .replace(/@import[^;]*;?/gi, '')
+    .replace(/@font-face\s*\{[^}]*\}?/gi, '')
+    .replace(/(?:-webkit-)?image-set\s*\(/gi, 'invalid(')
     .replace(/url\s*\([^)]*\)/gi, 'none')
     .replace(/expression\s*\(/gi, 'invalid(')
     .replace(/(-moz-binding|behavior)\s*:/gi, 'x-removed:')

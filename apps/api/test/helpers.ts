@@ -73,3 +73,25 @@ export async function addMember(
 ): Promise<void> {
   await authOf(app).api.addMember({ body: { organizationId, userId, role } });
 }
+
+/**
+ * An organization (owned by a fresh account) with a verified domain and one
+ * mailbox, signed in as that mailbox. Used by cross-organization tests.
+ */
+export async function mailboxInNewOrg(
+  app: INestApplication,
+  prefix: string,
+  localPart = 'user',
+): Promise<{ agent: TestAgent; address: string; orgId: string; domainId: string; domainName: string; owner: TestUser }> {
+  const owner = await signUp(app, `${prefix}-owner`);
+  const orgId = await createOrg(owner, prefix);
+  const domainName = `${prefix}-${Date.now()}-${++counter}.example`;
+  const domain = await owner.agent.post(`/api/orgs/${orgId}/domains`).send({ name: domainName });
+  await owner.agent.post(`/api/orgs/${orgId}/domains/${domain.body.id}/verify`).expect(200);
+  const mailbox = await owner.agent
+    .post(`/api/orgs/${orgId}/mailboxes`)
+    .send({ domainId: domain.body.id, localPart, password: PASSWORD })
+    .expect(201);
+  const address = mailbox.body.address as string;
+  return { agent: await signIn(app, address), address, orgId, domainId: domain.body.id as string, domainName, owner };
+}

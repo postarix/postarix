@@ -389,7 +389,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-01 | MTA: **Postfix**. Spam filter: **Rspamd**. |
 | 2026-11-01 | Backend: **NestJS**. Identity: **Better Auth**. |
 | 2026-11-01 | Admin with **Next.js**; webmail as a **React + Vite SPA** over **JMAP**. |
-| 2026-11-02 | Webmail JMAP goes through the API, which logs in to an internal Cyrus JMAP service **as the user** with short-lived HMAC tokens checked by the normal login bridge (Cyrus only allows `Authorize-As` proxying on Murder backends). The client never chooses the account. |
+| 2026-11-02 | Webmail JMAP goes through the API, which logs in to an internal Cyrus JMAP service **as the user** with short-lived HMAC tokens checked by the normal login bridge (Cyrus only allows `Authorize-As` proxying on Murder backends). The client never chooses the account. The proxy only lets through the JMAP capabilities and methods the webmail uses (no EmailSubmission, Sieve, backup or admin methods), and the JMAP service listens on the internal network address only. |
 | 2026-11-02 | Webmail sending goes through the API (From must be in `mail.sender_logins`, Bcc removed) to an internal Postfix port with its own account; Rspamd still requires From = envelope and signs DKIM. |
 | 2026-11-02 | Email HTML is sanitized on the server and shown in a sandboxed iframe (no scripts, opaque origin) with a CSP; remote images are blocked by default and loaded through a signed proxy that only reaches public addresses. |
 | 2026-11-02 | Calendar and contacts in the webmail use **JMAP** (Cyrus' JMAP service loads the CalDAV/CardDAV stores behind it), so the webmail, CalDAV and CardDAV clients share one copy of the data. |
@@ -419,6 +419,9 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
 
 ## Known limitations
+
+- Cyrus never sends mail by itself (`smtp_backend` points at a closed port so attempts fail at once): Sieve `redirect` and vacation replies do not work yet; forwarding is done with aliases.
+- The internal JMAP service authenticates through the same `http` login service as CalDAV/CardDAV, so a DAV app password would work there too. It is reachable only from the internal network (bound to Cyrus' address on it); a dedicated login service is planned.
 
 - Accepting organization invitations requires a verified email; email delivery arrives in Phase 1. Until then admins add members directly.
 - Better Auth's rate limiter and the mail-login failure counters live in memory; they will move to Valkey so they work across API instances.
