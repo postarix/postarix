@@ -87,3 +87,17 @@ export interface SsoProvider {
   clientId: string;
   callbackUrl: string;
 }
+
+export interface MailLogEntry {
+  id: string;
+  time: string;
+  direction: 'in' | 'out';
+  from: string;
+  to: string[];
+  subject: string;
+  outcome: 'delivered' | 'spam' | 'greylisted' | 'deferred' | 'rejected';
+  score: number;
+  requiredScore: number;
+  reasons: { name: string; score: number }[];
+  ip: string | null;
+}

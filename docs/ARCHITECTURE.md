@@ -376,7 +376,7 @@ out the account password after repeated failures (app passwords keep working).
 - Replication and Cyrus Murder; Helm chart.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.
-- Rspamd quarantine and logs per organization; MTA-STS policy host.
+- [x] Filtering history per organization (from Rspamd's history, filtered to the organization's domains); MTA-STS policy host.
 - [x] Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
 - External security audit → **1.0**.
 

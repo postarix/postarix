@@ -139,6 +139,9 @@ services:
       # Cyrus' internal JMAP service, used to serve the webmail.
       # By address: the JMAP service listens on the internal network only.
       CYRUS_JMAP_URL: http://${CYRUS_IP:-172.30.53.10}:8008
+      # Filtering history shown to organization admins.
+      RSPAMD_CONTROLLER_URL: http://rspamd:11334
+      RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
       DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}

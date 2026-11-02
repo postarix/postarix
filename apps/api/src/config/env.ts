@@ -78,6 +78,9 @@ const envSchema = z
      * domain's mta-sts host serves a valid certificate.
      */
     MTA_STS_MODE: z.enum(['enforce', 'testing', 'none']).default('testing'),
+    /** Rspamd's controller (e.g. http://rspamd:11334), for the filtering history. Unset hides it. */
+    RSPAMD_CONTROLLER_URL: z.url({ protocol: /^https?$/ }).optional(),
+    RSPAMD_CONTROLLER_PASSWORD: z.string().optional(),
     /** Public name of the mail server, used in the DNS records shown to admins (MX target). */
     MAIL_HOSTNAME: z.string().min(1).default('localhost'),
     /**
