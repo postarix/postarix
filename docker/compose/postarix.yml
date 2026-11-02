@@ -4,7 +4,7 @@
 #   docker compose -f docker/compose/postarix.yml --env-file docker/compose/postarix.env up -d --build
 #
 # Mail ports (25, 465, 587, 143, 993, 995, 4190) are published directly.
-# HTTP services (api, Cyrus CalDAV/CardDAV) are meant to sit behind your reverse
+# HTTP services (api, admin, Cyrus CalDAV/CardDAV) are meant to sit behind your reverse
 # proxy, which joins the "proxy" network (postarix_proxy); see deploy/proxies.
 # /api/internal/* must never be proxied. Databases, Valkey, Rspamd and Postfix
 # stay on the "default" network, out of the proxy's reach.
@@ -151,6 +151,21 @@ services:
       certs:
         condition: service_healthy
 
+  admin:
+    <<: *restart
+    image: postarix/admin:${POSTARIX_VERSION:-dev}
+    build:
+      context: ../..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-trixie-slim}
+    # Serves /admin. It only talks to the browser (and, for setups whose proxy
+    # does not route /api itself, forwards /api to the API).
+    networks: [proxy]
+    depends_on:
+      api:
+        condition: service_started
+
   cyrus:
     <<: *restart
     image: postarix/cyrus:${POSTARIX_VERSION:-dev}
@@ -226,8 +241,8 @@ networks:
     ipam:
       config:
         - subnet: ${POSTARIX_SUBNET:-172.30.53.0/24}
-  # What the reverse proxy joins: the API, Cyrus (CalDAV/CardDAV) and the
-  # certs service (ACME HTTP challenges) only. Set TRUSTED_PROXIES to its range.
+  # What the reverse proxy joins: the API, the admin panel, Cyrus (CalDAV/CardDAV)
+  # and the certs service (ACME HTTP challenges) only. Set TRUSTED_PROXIES to its range.
   proxy:
     ipam:
       config:

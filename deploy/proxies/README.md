@@ -12,6 +12,7 @@ they see real client IPs.
 | `/api/*` | `api:3000` | Postarix API (auth, admin operations). |
 | `/.well-known/caldav`, `/.well-known/carddav` | `cyrus:8080` | DAV discovery for calendar/contact clients. |
 | `/dav/*` | `cyrus:8080` | CalDAV / CardDAV. |
+| `/admin`, `/admin/*` | `admin:3001` | Admin panel. |
 | `/.well-known/acme-challenge/*` | `certs:80` | Only with `CERTS_MODE=acme` and `ACME_CHALLENGE=http`. |
 | `/` | webmail | Arrives in Phase 3. |
 

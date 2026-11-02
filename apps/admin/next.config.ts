@@ -1,13 +1,17 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 // Where the Next.js server forwards /api requests. In production the reverse
 // proxy usually routes /api itself; this keeps development and simple setups
-// same-origin (cookies, no CORS).
+// same-origin (cookies, no CORS). Next.js resolves rewrites when it builds, so
+// this is a build-time setting (the Docker image uses http://api:3000).
 const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
 
 const config: NextConfig = {
   basePath: '/admin',
   output: 'standalone',
+  // Trace dependencies from the monorepo root so the standalone build includes workspace packages.
+  outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@postarix/ui'],

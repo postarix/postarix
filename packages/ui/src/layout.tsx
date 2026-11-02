@@ -10,9 +10,20 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-export function CardHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+export function CardHeader({
+  title,
+  description,
+  actions,
+  bordered = true,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  /** Draws the divider above the card body; turn off for header-only cards. */
+  bordered?: boolean;
+}) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+    <div className={cn('flex flex-wrap items-start justify-between gap-3 px-5 py-4', bordered && 'border-b border-border')}>
       <div className="min-w-0">
         <h2 className="text-base font-semibold text-ink">{title}</h2>
         {description ? <p className="mt-0.5 text-sm text-ink-muted">{description}</p> : null}
