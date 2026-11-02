@@ -130,7 +130,7 @@ export const auditEvents = pgTable(
     ipAddress: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('audit_events_org_created_idx').on(table.organizationId, table.createdAt)],
+  (table) => [index('audit_events_org_created_idx').on(table.organizationId, table.createdAt, table.id)],
 );
 
 export type AuditEventRow = typeof auditEvents.$inferSelect;

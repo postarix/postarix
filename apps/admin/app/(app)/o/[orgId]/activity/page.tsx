@@ -29,12 +29,12 @@ export default function ActivityPage() {
     queryKey: keys.orgPart(orgId, 'audit'),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
-      api
-        .get<{ data: AuditEvent[] }>(`/orgs/${orgId}/audit?limit=${PAGE}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`)
-        .then((r) => r.data),
-    getNextPageParam: (last) => (last.length === PAGE ? (last.at(-1)?.createdAt ?? null) : null),
+      api.get<{ data: AuditEvent[]; nextCursor: string | null }>(
+        `/orgs/${orgId}/audit?limit=${PAGE}${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`,
+      ),
+    getNextPageParam: (last) => last.nextCursor,
   });
-  const rows = events.data?.pages.flat() ?? [];
+  const rows = events.data?.pages.flatMap((page) => page.data) ?? [];
 
   return (
     <>
@@ -61,7 +61,10 @@ export default function ActivityPage() {
                   <TableCell className="pl-4 text-muted-foreground">{formatDate(event.createdAt)}</TableCell>
                   <TableCell>{describe(event)}</TableCell>
                   <TableCell className="font-medium">{event.targetLabel ?? '—'}</TableCell>
-                  <TableCell>{event.actorEmail ?? 'System'}</TableCell>
+                  <TableCell>
+                    {event.actorEmail ?? 'System'}
+                    {event.details?.viaSuperAdmin ? <span className="ml-1 text-xs text-muted-foreground">(instance admin)</span> : null}
+                  </TableCell>
                   <TableCell className="pr-4 font-mono text-xs text-muted-foreground">{event.ipAddress ?? '—'}</TableCell>
                 </TableRow>
               ))}

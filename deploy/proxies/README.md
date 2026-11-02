@@ -16,6 +16,10 @@ they see real client IPs.
 | `/.well-known/acme-challenge/*` | `certs:80` | Only with `CERTS_MODE=acme` and `ACME_CHALLENGE=http`. |
 | `/` | webmail | Arrives in Phase 3. |
 
+Route `/api` to the API from the proxy itself, as these templates do. The admin
+server can also forward `/api` (handy in development), but it passes on any
+`X-Forwarded-For` it receives, so never expose the admin server directly.
+
 The proxy must pass the client address in `X-Forwarded-For`. Tell the API which
 proxies to trust with `TRUSTED_PROXIES` (their IP or the Docker network's CIDR),
 otherwise it ignores the header and every request seems to come from the proxy.

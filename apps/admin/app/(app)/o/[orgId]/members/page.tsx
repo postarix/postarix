@@ -71,7 +71,7 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
       open={open}
       onClose={onClose}
       title="Add member"
-      description="The person needs an account on this instance. Mailbox owners are members already."
+      description="Mailbox owners are members automatically. Use this to add back someone with a mailbox here who was removed."
     >
       <form onSubmit={submit}>
         <FieldGroup>

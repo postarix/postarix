@@ -1,6 +1,7 @@
 import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
@@ -12,6 +13,14 @@ import { hasInstanceAdminRole } from './roles.js';
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
 
 export const AUTH_BASE_PATH = '/api/auth';
+
+/**
+ * Better Auth's organization endpoints that stay open. Everything else under
+ * /organization/ (members, roles, invitations, renaming, listing members…) goes
+ * through our own API instead, which applies our rules (owner-only grants, never
+ * zero owners, admin-only listings) and writes the audit log.
+ */
+const OPEN_ORGANIZATION_ENDPOINTS = new Set(['/organization/create']);
 
 export function createAuth(db: Database, env: Env) {
   const authUrl = new URL(env.AUTH_URL);
@@ -57,6 +66,13 @@ export function createAuth(db: Database, env: Env) {
       },
     },
     telemetry: { enabled: false },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path.startsWith('/organization/') && !OPEN_ORGANIZATION_ENDPOINTS.has(ctx.path)) {
+          throw new APIError('NOT_FOUND');
+        }
+      }),
+    },
     plugins: [
       admin(),
       organization({
