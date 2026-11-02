@@ -27,21 +27,40 @@ export function matchesContact(contact: Contact, query: string): boolean {
     .some((value) => value?.toLocaleLowerCase().includes(q));
 }
 
-/** All contacts of the user's address books (personal address books stay small enough to load at once). */
+/** A contact, with the account it belongs to: the person's own, or a colleague's who shares their contacts. */
+export type AccountContact = Contact & { accountId: string; sharedBy: string | null };
+
+const CONTACT_PROPERTIES = ['firstName', 'lastName', 'company', 'jobTitle', 'nickname', 'notes', 'emails', 'phones', 'addressbookId'];
+
+async function accountContacts(accountId: string): Promise<Contact[]> {
+  const results = await jmap.batch((b) => {
+    const q = b.add('Contact/query', { accountId, limit: 5000 });
+    b.add('Contact/get', { accountId, '#ids': b.ref(q, 'Contact/query', '/ids'), properties: CONTACT_PROPERTIES });
+  }, USING_CONTACTS);
+  return (results.get('c1') as { list: Contact[] }).list;
+}
+
+/**
+ * All contacts of the person's address book, then those colleagues share with
+ * them (address books stay small enough to load at once). An account shared
+ * for its calendar only has no readable contacts and is skipped.
+ */
 export function useContacts() {
   return useQuery({
     queryKey: contactKeys.all,
-    queryFn: async () => {
-      const accountId = await jmap.accountId();
-      const results = await jmap.batch((b) => {
-        const q = b.add('Contact/query', { accountId, limit: 5000 });
-        b.add('Contact/get', {
-          accountId,
-          '#ids': b.ref(q, 'Contact/query', '/ids'),
-          properties: ['firstName', 'lastName', 'company', 'jobTitle', 'nickname', 'notes', 'emails', 'phones', 'addressbookId'],
-        });
-      }, USING_CONTACTS);
-      return sortContacts((results.get('c1') as { list: Contact[] }).list);
+    queryFn: async (): Promise<AccountContact[]> => {
+      const session = await jmap.session();
+      const own = await jmap.accountId();
+      const shared = Object.entries(session.accounts).filter(([id, a]) => id !== own && CAPABILITIES.contacts in a.accountCapabilities);
+      const lists = await Promise.all([
+        accountContacts(own).then((list) => list.map((c) => ({ ...c, accountId: own, sharedBy: null }))),
+        ...shared.map(([id, account]) =>
+          accountContacts(id)
+            .then((list) => list.map((c) => ({ ...c, accountId: id, sharedBy: account.name })))
+            .catch(() => [] as AccountContact[]),
+        ),
+      ]);
+      return sortContacts(lists.flat()) as AccountContact[];
     },
     staleTime: 5 * 60_000,
   });
@@ -52,7 +71,7 @@ export type ContactInput = Pick<Contact, 'firstName' | 'lastName' | 'company' | 
 export function useSaveContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, input }: { id: string | null; input: ContactInput }): Promise<string> => {
+    mutationFn: async ({ id, accountId, input }: { id: string | null; accountId?: string; input: ContactInput }): Promise<string> => {
       const cleaned = {
         ...input,
         emails: input.emails.filter((e) => e.value.trim()).map((e, i) => ({ ...e, value: e.value.trim(), isDefault: i === 0 })),
@@ -62,9 +81,11 @@ export function useSaveContact() {
         created?: Record<string, { id: string }>;
         notCreated?: Record<string, { type: string; description?: string }>;
         notUpdated?: Record<string, { type: string; description?: string }>;
-      }>('Contact/set', id ? { update: { [id]: cleaned } } : { create: { c: cleaned } }, USING_CONTACTS);
+      }>('Contact/set', { ...(accountId ? { accountId } : {}), ...(id ? { update: { [id]: cleaned } } : { create: { c: cleaned } }) }, USING_CONTACTS);
       const failure = Object.values(result.notCreated ?? {})[0] ?? Object.values(result.notUpdated ?? {})[0];
-      if (failure) throw new Error(`Could not save the contact (${failure.description ?? failure.type})`);
+      if (failure) {
+        throw new Error(failure.type === 'forbidden' ? 'You can only read these contacts.' : `Could not save the contact (${failure.description ?? failure.type})`);
+      }
       return id ?? result.created!.c!.id;
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: contactKeys.all }),
@@ -74,10 +95,14 @@ export function useSaveContact() {
 export function useDeleteContact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const result = await jmap.call<{ notDestroyed?: Record<string, { type: string }> }>('Contact/set', { destroy: [id] }, USING_CONTACTS);
+    mutationFn: async ({ id, accountId }: { id: string; accountId?: string }) => {
+      const result = await jmap.call<{ notDestroyed?: Record<string, { type: string }> }>(
+        'Contact/set',
+        { ...(accountId ? { accountId } : {}), destroy: [id] },
+        USING_CONTACTS,
+      );
       const failure = Object.values(result.notDestroyed ?? {})[0];
-      if (failure) throw new Error(`Could not delete the contact (${failure.type})`);
+      if (failure) throw new Error(failure.type === 'forbidden' ? 'You can only read these contacts.' : `Could not delete the contact (${failure.type})`);
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: contactKeys.all }),
   });

@@ -47,7 +47,20 @@ interface JmapEmail {
   htmlBody: BodyPart[];
   textBody: BodyPart[];
   attachments: BodyPart[];
+  bodyStructure?: StructurePart | null;
   bodyValues: Record<string, { value: string; isTruncated?: boolean }>;
+}
+
+interface StructurePart {
+  type: string;
+  subParts?: StructurePart[] | null;
+}
+
+/** Whether the message carries calendar data (an invitation, a reply, a cancellation). */
+function hasCalendarPart(part: StructurePart | null | undefined, depth = 0): boolean {
+  if (!part || depth > 10) return false;
+  if (part.type.toLowerCase() === 'text/calendar' || part.type.toLowerCase() === 'application/ics') return true;
+  return (part.subParts ?? []).some((p) => hasCalendarPart(p, depth + 1));
 }
 
 export interface RenderedMessage {
@@ -72,6 +85,8 @@ export interface RenderedMessage {
   truncated: boolean;
   blockedImages: number;
   attachments: { blobId: string; name: string; type: string; size: number }[];
+  /** True when the message carries calendar data: GET …/invitation tells what it is. */
+  calendar: boolean;
 }
 
 /** Reads a message from the user's own mailbox and renders it safely for the webmail. */
@@ -98,9 +113,9 @@ export class MessageService {
         ids: [emailId],
         properties: [
           'threadId', 'mailboxIds', 'keywords', 'subject', 'from', 'to', 'cc', 'bcc', 'replyTo', 'sentAt', 'receivedAt',
-          'messageId', 'inReplyTo', 'references', 'htmlBody', 'textBody', 'attachments', 'bodyValues',
+          'messageId', 'inReplyTo', 'references', 'htmlBody', 'textBody', 'attachments', 'bodyValues', 'bodyStructure',
         ],
-        bodyProperties: ['partId', 'blobId', 'type', 'name', 'size', 'cid', 'disposition'],
+        bodyProperties: ['partId', 'blobId', 'type', 'name', 'size', 'cid', 'disposition', 'subParts'],
         fetchHTMLBodyValues: true,
         fetchTextBodyValues: true,
         maxBodyValueBytes: MAX_BODY_BYTES,
@@ -167,6 +182,7 @@ export class MessageService {
       attachments: email.attachments
         .filter((p) => p.blobId && !(p.cid && inlined.has(p.cid.replace(/^<|>$/g, '').toLowerCase())))
         .map((p) => ({ blobId: p.blobId!, name: p.name ?? 'attachment', type: p.type, size: p.size })),
+      calendar: hasCalendarPart(email.bodyStructure),
     };
   }
 }

@@ -1,14 +1,14 @@
-import type { CalendarEvent } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { cn } from '@postarix/ui/lib/utils';
-import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Repeat } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Repeat, Share2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { type EventDraft, EventDialog } from '@/components/event-dialog';
 import { errorMessage } from '@/lib/api';
+import { ShareDialog } from '@/components/share-dialog';
 import { TimeGrid } from '@/components/time-grid';
-import { type CalendarView, dayKey, eventSpan, monthGrid, overlapsDay, shiftDate, useCalendars, useEvents, weekDays } from '@/lib/calendar';
+import { type AccountEvent, type CalendarView, dayKey, eventSpan, monthGrid, overlapsDay, shiftDate, useCalendars, useEvents, weekDays } from '@/lib/calendar';
 import { navigate } from '@/lib/router';
 
 const time = (d: Date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
@@ -28,7 +28,7 @@ function weekTitle(first: Date, last: Date): string {
   return `${format(first, { day: 'numeric', month: 'short' })} – ${format(last, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
-function EventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () => void }) {
+function EventChip({ event, onOpen }: { event: AccountEvent; onOpen: () => void }) {
   const span = eventSpan(event);
   return (
     <button
@@ -46,6 +46,7 @@ function EventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () => void
       {span.allDay ? null : <span className="size-1.5 shrink-0 rounded-full bg-ink" aria-hidden />}
       {span.allDay ? null : <span className="shrink-0 text-muted-foreground tabular-nums">{time(span.start)}</span>}
       <span className="truncate">{event.title}</span>
+      {event.participants ? <Users className="ml-auto size-3 shrink-0 text-muted-foreground" aria-label="With guests" /> : null}
     </button>
   );
 }
@@ -68,13 +69,17 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
   const from = days[0]!;
   const to = new Date(days.at(-1)!.getFullYear(), days.at(-1)!.getMonth(), days.at(-1)!.getDate() + 1);
   const calendars = useCalendars();
-  const events = useEvents(from, to);
+  const accountIds = useMemo(() => [...new Set((calendars.data ?? []).map((c) => c.accountId))], [calendars.data]);
+  const events = useEvents(from, to, accountIds);
   const [draft, setDraft] = useState<EventDraft | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
+  const own = (calendars.data ?? []).filter((c) => c.sharedBy === null);
+  const shared = (calendars.data ?? []).filter((c) => c.sharedBy !== null);
   const [dayList, setDayList] = useState<Date | null>(null);
   const todayKey = dayKey(new Date());
 
   const byDay = useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>();
+    const map = new Map<string, AccountEvent[]>();
     for (const event of events.data ?? []) {
       const span = eventSpan(event);
       for (const day of days) {
@@ -113,13 +118,37 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
       <div className="px-1">
         <p className="mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">Calendars</p>
         <ul className="space-y-1">
-          {(calendars.data ?? []).map((c) => (
-            <li key={c.id} className="flex items-center gap-2.5 px-1.5 py-1 text-sm">
+          {own.map((c) => (
+            <li key={`${c.accountId}-${c.id}`} className="group/cal flex items-center gap-2.5 px-1.5 py-1 text-sm">
               <span className="size-2.5 rounded-[3px] bg-ink ring-1 ring-white/20" aria-hidden />
-              <span className="truncate capitalize">{c.name}</span>
+              <span className="flex-1 truncate capitalize">{c.name}</span>
+              <button
+                type="button"
+                aria-label={`Share ${c.name}`}
+                onClick={() => setSharing(c.id)}
+                className="grid size-6 place-items-center rounded text-sidebar-muted hover:bg-sidebar-accent hover:text-white focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
+              >
+                <Share2 className="size-3.5" aria-hidden />
+              </button>
             </li>
           ))}
         </ul>
+        {shared.length ? (
+          <>
+            <p className="mt-4 mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">Shared with you</p>
+            <ul className="space-y-1" aria-label="Shared with you">
+              {shared.map((c) => (
+                <li key={`${c.accountId}-${c.id}`} className="flex items-center gap-2.5 px-1.5 py-1 text-sm">
+                  <span className="size-2.5 rounded-[3px] ring-1 ring-sidebar-muted" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate capitalize">{c.name}</span>
+                    <span className="block truncate text-xs text-sidebar-muted">{c.sharedBy}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -156,7 +185,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
             <TimeGrid
               days={days}
               events={events.data ?? []}
-              onOpen={(event) => setDraft({ event })}
+              onOpen={(event) => setDraft({ event: event as AccountEvent })}
               onNew={(start, allDay) => setDraft({ start: allDay ? new Date(start.getFullYear(), start.getMonth(), start.getDate(), 9, 0) : start, allDay })}
             />
           </div>
@@ -208,7 +237,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
                         {day.getDate()}
                       </span>
                       {list.slice(0, 3).map((event) => (
-                        <EventChip key={`${event.id}-${key}`} event={event} onOpen={() => setDraft({ event })} />
+                        <EventChip key={`${event.accountId}-${event.id}-${key}`} event={event} onOpen={() => setDraft({ event })} />
                       ))}
                       {list.length > 3 ? (
                         <button
@@ -245,7 +274,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
                     {(byDay.get(dayKey(day)) ?? []).map((event) => {
                       const span = eventSpan(event);
                       return (
-                        <li key={event.id}>
+                        <li key={`${event.accountId}-${event.id}`}>
                           <button type="button" onClick={() => setDraft({ event })} className="flex w-full gap-3 rounded-lg border bg-card p-3 text-left">
                             <span className="w-14 shrink-0 text-xs text-muted-foreground tabular-nums">{span.allDay ? 'All day' : time(span.start)}</span>
                             <span className="min-w-0">
@@ -269,7 +298,8 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
           )}
         </div>
       </div>
-      {draft ? <EventDialog draft={draft} calendars={calendars.data ?? []} onClose={() => setDraft(null)} /> : null}
+      {draft ? <EventDialog draft={draft} calendars={calendars.data ?? []} me={email} onClose={() => setDraft(null)} /> : null}
+      {sharing ? <ShareDialog kind="calendars" id={sharing} onClose={() => setSharing(null)} /> : null}
       <Dialog open={dayList !== null} onOpenChange={(open) => (open ? undefined : setDayList(null))}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -278,7 +308,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
           </DialogHeader>
           <ul className="grid gap-1">
             {(dayList ? (byDay.get(dayKey(dayList)) ?? []) : []).map((event) => (
-              <li key={event.id}>
+              <li key={`${event.accountId}-${event.id}`}>
                 <EventChip
                   event={event}
                   onOpen={() => {

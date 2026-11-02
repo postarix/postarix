@@ -1,4 +1,3 @@
-import type { Calendar, CalendarEvent } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
 import { Checkbox } from '@postarix/ui/components/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
@@ -8,14 +7,34 @@ import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Textarea } from '@postarix/ui/components/textarea';
 import { Trash2 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useMemo, useState } from 'react';
 import { errorMessage } from '@/lib/api';
-import { type EventInput, eventSpan, toLocalDateTime, useDeleteEvent, useSaveEvent } from '@/lib/calendar';
+import {
+  type AccountCalendar,
+  type AccountEvent,
+  type EventInput,
+  eventSpan,
+  guestsOf,
+  organizerOf,
+  STATUS_LABELS,
+  toLocalDateTime,
+  useAvailability,
+  useCancelEvent,
+  useDeleteEvent,
+  useSaveEvent,
+  useSetGuests,
+  zonedToDate,
+} from '@/lib/calendar';
+import { parseAddresses } from '@/lib/format';
+import { RecipientInput } from './recipient-input';
 
 /** What the dialog edits: an existing event (or occurrence), or a new one starting at `start`. */
-export type EventDraft = { event: CalendarEvent } | { start: Date; allDay: boolean };
+export type EventDraft = { event: AccountEvent } | { start: Date; allDay: boolean };
 
-function initialInput(draft: EventDraft, calendars: Calendar[]): EventInput {
+const calendarKey = (c: Pick<AccountCalendar, 'accountId' | 'id'>) => `${c.accountId}::${c.id}`;
+const clock = (d: Date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
+
+function initialInput(draft: EventDraft, calendars: AccountCalendar[]): EventInput {
   const calendarId = calendars[0]?.id ?? 'Default';
   if ('event' in draft) {
     const { event } = draft;
@@ -47,45 +66,121 @@ function initialInput(draft: EventDraft, calendars: Calendar[]): EventInput {
   };
 }
 
-export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; calendars: Calendar[]; onClose: () => void }) {
+export function EventDialog({
+  draft,
+  calendars,
+  me,
+  onClose,
+}: {
+  draft: EventDraft;
+  calendars: AccountCalendar[];
+  /** The person's own address. */
+  me: string;
+  onClose: () => void;
+}) {
   const existing = 'event' in draft ? draft.event : null;
   // Occurrences of a repeating event are edited through the series.
   const seriesId = existing?.baseEventId ?? null;
-  const [before] = useState<EventInput>(() => initialInput(draft, calendars));
+  const ownAccount = calendars.find((c) => c.sharedBy === null)?.accountId ?? null;
+  const writable = calendars.filter((c) => c.sharedBy === null || c.myRights?.mayWriteAll);
+  const eventCalendar = existing ? calendars.find((c) => c.accountId === existing.accountId && existing.calendarIds[c.id]) : undefined;
+  const readOnly = Boolean(existing && eventCalendar && eventCalendar.sharedBy !== null && !eventCalendar.myRights?.mayWriteAll);
+  const [before] = useState<EventInput>(() => initialInput(draft, writable.length ? writable : calendars));
   const [input, setInput] = useState<EventInput>(before);
+  // The account of the calendar chosen; calendars may still be loading when the dialog opens.
+  const [pickedAccount, setAccountId] = useState<string | null>(null);
+  const accountId = pickedAccount ?? existing?.accountId ?? writable[0]?.accountId ?? ownAccount;
+  const organizer = existing ? organizerOf(existing) : null;
+  const currentGuests = useMemo(() => (existing ? guestsOf(existing) : []), [existing]);
+  const canInvite = !readOnly && accountId === ownAccount && (!organizer || organizer === me);
+  const [guestText, setGuestText] = useState(() => currentGuests.map((g) => g.email).join(', '));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const save = useSaveEvent();
   const remove = useDeleteEvent();
+  const cancel = useCancelEvent();
+  const setGuests = useSetGuests();
   const set = (patch: Partial<EventInput>) => setInput((current) => ({ ...current, ...patch }));
+
+  const parsedGuests = useMemo(() => parseAddresses(guestText), [guestText]);
+  const guestEmails = useMemo(
+    () => [...new Set(parsedGuests.addresses.map((a) => a.email.toLowerCase()))].filter((e) => e !== me),
+    [parsedGuests, me],
+  );
+
+  // When the guests are busy, for timed events on one day.
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const startAt = input.allDay ? null : safeDate(input.start, zone);
+  const endAt = input.allDay ? null : safeDate(input.end, zone);
+  const windowFrom = startAt ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate()) : new Date(0);
+  const windowTo = startAt ? new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate() + 1) : new Date(0);
+  const availability = useAvailability(guestEmails.slice(0, 20), windowFrom, windowTo, canInvite && Boolean(startAt));
+  const conflicts = useMemo(() => {
+    if (!availability.data || !startAt || !endAt) return null;
+    const busyNow = availability.data.data.filter((p) =>
+      p.busy.some((b) => Date.parse(b.start) < endAt.getTime() && Date.parse(b.end) > startAt.getTime()),
+    );
+    return { busyNow, data: availability.data.data, unavailable: availability.data.unavailable };
+  }, [availability.data, startAt, endAt]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    if (readOnly) return onClose();
     if (!input.allDay && input.end <= input.start) return setError('The event must end after it starts.');
     if (input.allDay && input.end.slice(0, 10) < input.start.slice(0, 10)) return setError('The last day cannot be before the first.');
+    if (canInvite && parsedGuests.invalid.length) return setError(`Check these guests: ${parsedGuests.invalid.join(', ')}`);
     try {
-      await save.mutateAsync({
+      const id = await save.mutateAsync({
         id: existing ? (seriesId ?? existing.id) : null,
+        ...(accountId ? { accountId } : {}),
         input,
         ...(existing ? { edit: { original: existing, before, textOnly: Boolean(seriesId) } } : {}),
       });
+      const changed = JSON.stringify(input) !== JSON.stringify(before);
+      const guestsChanged = guestEmails.join(',') !== currentGuests.map((g) => g.email).join(',');
+      if (canInvite && (guestsChanged || (guestEmails.length > 0 && changed))) {
+        await setGuests.mutateAsync({ id, guests: guestEmails });
+      }
       onClose();
     } catch (e) {
       setError(errorMessage(e));
     }
   }
 
+  async function destroy() {
+    // A second click confirms: deleting also removes the event from synced devices.
+    if (!confirmDelete) return setConfirmDelete(true);
+    try {
+      const id = seriesId ?? existing!.id;
+      if (canInvite && currentGuests.length) await cancel.mutateAsync(id);
+      else await remove.mutateAsync({ id, accountId: existing!.accountId });
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
+  const busy = save.isPending || setGuests.isPending;
+  const dialogTitle = readOnly ? (existing?.title ?? 'Event') : existing ? 'Edit event' : 'New event';
+
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">{existing ? 'Edit event' : 'New event'}</DialogTitle>
-          <DialogDescription className={seriesId ? undefined : 'sr-only'}>
-            {seriesId ? 'This event repeats. Title, place and notes change for every occurrence; times stay as they are.' : 'Event details'}
+          <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
+          <DialogDescription className={seriesId || readOnly || (organizer && organizer !== me) ? undefined : 'sr-only'}>
+            {readOnly
+              ? `In ${eventCalendar?.sharedBy ?? 'a shared'} calendar, which you can only read.`
+              : organizer && organizer !== me
+                ? `Organized by ${organizer}. Changes here only affect your calendar.`
+                : seriesId
+                  ? 'This event repeats. Title, place and notes change for every occurrence; times stay as they are.'
+                  : 'Event details'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit}>
+          <fieldset disabled={readOnly} className="contents">
           <FieldGroup className="gap-4">
             <Input
               aria-label="Title"
@@ -139,13 +234,24 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
                   <NativeSelectOption value="yearly">Every year</NativeSelectOption>
                 </NativeSelect>
               </Field>
-              {calendars.length > 1 ? (
+              {writable.length > 1 && !readOnly ? (
                 <Field>
                   <FieldLabel htmlFor="event-calendar">Calendar</FieldLabel>
-                  <NativeSelect id="event-calendar" value={input.calendarId} onChange={(e) => set({ calendarId: e.target.value })}>
-                    {calendars.map((c) => (
-                      <NativeSelectOption key={c.id} value={c.id}>
-                        {c.name}
+                  <NativeSelect
+                    id="event-calendar"
+                    value={`${accountId}::${input.calendarId}`}
+                    // Events stay in their account: moving them to someone else's calendar is not possible.
+                    disabled={Boolean(existing)}
+                    onChange={(e) => {
+                      const picked = writable.find((c) => calendarKey(c) === e.target.value);
+                      if (!picked) return;
+                      set({ calendarId: picked.id });
+                      setAccountId(picked.accountId);
+                    }}
+                  >
+                    {writable.map((c) => (
+                      <NativeSelectOption key={calendarKey(c)} value={calendarKey(c)}>
+                        {c.sharedBy ? `${c.name} (${c.sharedBy})` : c.name}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
@@ -160,48 +266,107 @@ export function EventDialog({ draft, calendars, onClose }: { draft: EventDraft; 
               <FieldLabel htmlFor="event-description">Notes</FieldLabel>
               <Textarea id="event-description" rows={3} value={input.description} onChange={(e) => set({ description: e.target.value })} />
             </Field>
+            {canInvite ? (
+              <Field>
+                <FieldLabel htmlFor="event-guests">Guests</FieldLabel>
+                <RecipientInput id="event-guests" value={guestText} onChange={setGuestText} placeholder="Add people by email" />
+                <GuestList guests={currentGuests} />
+                {conflicts && guestEmails.length ? (
+                  <p className="text-xs text-muted-foreground" role="status">
+                    {conflicts.busyNow.length
+                      ? `Busy at this time: ${conflicts.busyNow.map((p) => p.email).join(', ')}.`
+                      : conflicts.data.length
+                        ? 'Your colleagues are free at this time.'
+                        : null}
+                    {conflicts.data.some((p) => p.busy.length) ? (
+                      <span className="block">
+                        {conflicts.data
+                          .filter((p) => p.busy.length)
+                          .map((p) => `${p.email}: ${p.busy.map((b) => `${clock(new Date(b.start))}–${clock(new Date(b.end))}`).join(', ')}`)
+                          .join(' · ')}
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
+              </Field>
+            ) : currentGuests.length ? (
+              <Field>
+                <FieldLabel>Guests</FieldLabel>
+                <GuestList guests={currentGuests} />
+              </Field>
+            ) : null}
             {error ? (
               <p role="alert" className="text-sm text-destructive">
                 {error}
               </p>
             ) : null}
-            <DialogFooter className="items-center sm:justify-between">
-              {existing ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  disabled={remove.isPending}
-                  onClick={async () => {
-                    // A second click confirms: deleting also removes the event from synced devices.
-                    if (!confirmDelete) return setConfirmDelete(true);
-                    try {
-                      await remove.mutateAsync(seriesId ?? existing.id);
-                      onClose();
-                    } catch (e) {
-                      setError(errorMessage(e));
-                    }
-                  }}
-                >
-                  <Trash2 aria-hidden />
-                  {confirmDelete ? (seriesId ? 'Delete every occurrence' : 'Delete for good') : seriesId ? 'Delete the series' : 'Delete'}
+          </FieldGroup>
+          </fieldset>
+          <DialogFooter className="mt-4 items-center sm:justify-between">
+            {existing && !readOnly ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                disabled={remove.isPending || cancel.isPending}
+                onClick={() => void destroy()}
+              >
+                <Trash2 aria-hidden />
+                {confirmDelete
+                  ? canInvite && currentGuests.length
+                    ? 'Delete and tell the guests'
+                    : seriesId
+                      ? 'Delete every occurrence'
+                      : 'Delete for good'
+                  : seriesId
+                    ? 'Delete the series'
+                    : 'Delete'}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              {readOnly ? (
+                <Button type="button" onClick={onClose}>
+                  Close
                 </Button>
               ) : (
-                <span />
+                <>
+                  <Button type="button" variant="outline" onClick={onClose}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={busy}>
+                    {busy ? <Spinner /> : null}
+                    {canInvite && guestEmails.length ? 'Save and send' : 'Save'}
+                  </Button>
+                </>
               )}
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? <Spinner /> : null}
-                  Save
-                </Button>
-              </div>
-            </DialogFooter>
-          </FieldGroup>
+            </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function safeDate(local: string, zone: string): Date | null {
+  try {
+    return zonedToDate(local, zone);
+  } catch {
+    return null;
+  }
+}
+
+function GuestList({ guests }: { guests: { email: string; name: string | null; status: string }[] }) {
+  if (!guests.length) return null;
+  return (
+    <ul className="grid gap-1 text-sm" aria-label="Answers">
+      {guests.map((g) => (
+        <li key={g.email} className="flex items-center justify-between gap-3">
+          <span className="truncate">{g.name ? `${g.name} <${g.email}>` : g.email}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{STATUS_LABELS[g.status] ?? g.status}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

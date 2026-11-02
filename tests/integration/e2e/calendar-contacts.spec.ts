@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
-import { ApiClient, config, unique } from '../src/support.js';
+import { ApiClient, config, unique, waitForMessage } from '../src/support.js';
 import { signInToWebmail } from './support.js';
 
 const PASSWORD = 'organizer browser password';
 let address = '';
+let colleague = '';
 
 test.beforeAll(async () => {
   const admin = new ApiClient();
@@ -12,6 +13,7 @@ test.beforeAll(async () => {
   const domain = await admin.ok<{ id: string }>('POST', `/api/orgs/${org.id}/domains`, { name: `${unique('org')}.test` });
   await admin.ok('POST', `/api/orgs/${org.id}/domains/${domain.id}/verify`);
   address = (await admin.ok<{ address: string }>('POST', `/api/orgs/${org.id}/mailboxes`, { domainId: domain.id, localPart: 'olga', password: PASSWORD, displayName: 'Olga' })).address;
+  colleague = (await admin.ok<{ address: string }>('POST', `/api/orgs/${org.id}/mailboxes`, { domainId: domain.id, localPart: 'pablo', password: PASSWORD, displayName: 'Pablo' })).address;
 });
 
 const signIn = (page: Page) => signInToWebmail(page, address, PASSWORD);
@@ -95,4 +97,51 @@ test('sets an automatic reply and forwarding', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Automatic reply and forwarding' }).click();
   await expect(page.getByRole('dialog').getByLabel('Message')).toHaveValue('I am away until Monday.');
   await expect(page.getByRole('dialog').getByLabel('To', { exact: true })).toHaveValue('olga.private@outside.example');
+});
+
+test('invites a colleague, who answers from the message', async ({ browser }) => {
+  const title = unique('Budget');
+  const olga = await browser.newPage();
+  await signInToWebmail(olga, address, PASSWORD);
+  await olga.goto('/calendar');
+  await olga.getByRole('button', { name: 'New event' }).click();
+  const dialog = olga.getByRole('dialog');
+  await dialog.getByLabel('Title').fill(title);
+  await dialog.getByLabel('Guests').fill(`${colleague}, `);
+  await dialog.getByRole('button', { name: 'Save and send' }).click();
+  await expect(dialog).toBeHidden();
+  await olga.getByRole('grid').getByRole('button', { name: new RegExp(title) }).click();
+  await expect(olga.getByRole('dialog').getByRole('list', { name: 'Answers' })).toContainText(`${colleague}Not answered`);
+  await olga.close();
+
+  await waitForMessage(colleague, PASSWORD, `Invitation: ${title}`);
+  const pablo = await browser.newPage();
+  await signInToWebmail(pablo, colleague, PASSWORD);
+  await pablo.getByRole('list', { name: 'Messages' }).getByRole('link', { name: new RegExp(`Invitation: ${title}`) }).click();
+  const card = pablo.getByRole('region', { name: 'Invitation' });
+  await expect(card).toContainText(title);
+  await card.getByRole('button', { name: 'Going', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Going', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await pablo.goto('/calendar');
+  await expect(pablo.getByRole('grid').getByRole('button', { name: new RegExp(title) })).toBeVisible();
+  await pablo.close();
+});
+
+test('shares a calendar with a colleague', async ({ browser }) => {
+  const olga = await browser.newPage();
+  await signInToWebmail(olga, address, PASSWORD);
+  await olga.goto('/calendar');
+  await olga.getByRole('button', { name: /^Share / }).first().click();
+  const dialog = olga.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Add person' }).click();
+  await dialog.getByLabel('Person 1', { exact: true }).fill(colleague);
+  await dialog.getByRole('button', { name: 'Save sharing' }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Sharing saved.');
+  await olga.close();
+
+  const pablo = await browser.newPage();
+  await signInToWebmail(pablo, colleague, PASSWORD);
+  await pablo.goto('/calendar');
+  await expect(pablo.getByRole('list', { name: 'Shared with you' })).toContainText(address);
+  await pablo.close();
 });

@@ -1,0 +1,1 @@
+ALTER TABLE "mailboxes" ADD COLUMN "collections_restricted_at" timestamp with time zone;

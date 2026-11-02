@@ -1,27 +1,27 @@
-import type { Contact } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
 import { Input } from '@postarix/ui/components/input';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { cn } from '@postarix/ui/lib/utils';
-import { ArrowLeft, Mail, Pencil, Phone, Search, Trash2, UserPlus, UsersRound } from 'lucide-react';
+import { ArrowLeft, Mail, Pencil, Phone, Search, Share2, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { Avatar } from '@/components/avatar';
 import { ContactDialog } from '@/components/contact-dialog';
+import { ShareDialog } from '@/components/share-dialog';
 import { errorMessage } from '@/lib/api';
 import { emptyDraft } from '@/lib/compose';
-import { contactName, matchesContact, primaryEmail, useContacts, useDeleteContact } from '@/lib/contacts';
+import { type AccountContact, contactName, matchesContact, primaryEmail, useContacts, useDeleteContact } from '@/lib/contacts';
 import { navigate } from '@/lib/router';
 import { useComposer } from './mail';
 
 const contactPath = (id: string | null, search: string) => `/contacts${id ? `/${encodeURIComponent(id)}` : ''}${search ? `?q=${encodeURIComponent(search)}` : ''}`;
 
-function initialOf(contact: Contact): string {
+function initialOf(contact: AccountContact): string {
   const letter = (contact.lastName || contact.firstName || contact.company || primaryEmail(contact) || '#').charAt(0).toLocaleUpperCase();
   return /\p{L}/u.test(letter) ? letter : '#';
 }
 
-function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Contact; onEdit: () => void; onWrite: (email: string) => void; onDeleted: () => void }) {
+function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: AccountContact; onEdit: () => void; onWrite: (email: string) => void; onDeleted: () => void }) {
   const remove = useDeleteContact();
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -40,6 +40,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
           {contact.jobTitle || contact.company ? (
             <p className="mt-1 text-muted-foreground">{[contact.jobTitle, contact.company].filter(Boolean).join(', ')}</p>
           ) : null}
+          {contact.sharedBy ? <p className="mt-1 text-sm text-muted-foreground">In the contacts {contact.sharedBy} shares with you</p> : null}
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
@@ -61,7 +62,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Conta
             // A second click confirms: the contact also disappears from synced phones.
             if (!confirmDelete) return setConfirmDelete(true);
             try {
-              await remove.mutateAsync(contact.id);
+              await remove.mutateAsync({ id: contact.id, accountId: contact.accountId });
               onDeleted();
             } catch (e) {
               setError(errorMessage(e));
@@ -111,7 +112,8 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
   const contacts = useContacts();
   const composer = useComposer(email);
   const [query, setQuery] = useState(search);
-  const [editing, setEditing] = useState<Contact | 'new' | null>(null);
+  const [editing, setEditing] = useState<AccountContact | 'new' | null>(null);
+  const [sharing, setSharing] = useState(false);
   const list = useMemo(() => (contacts.data ?? []).filter((c) => matchesContact(c, query)), [contacts.data, query]);
   const selected = contacts.data?.find((c) => c.id === contactId) ?? null;
   const write = (to: string) => composer.open({ ...emptyDraft(composer.defaultFrom), to: [{ email: to }] });
@@ -125,6 +127,10 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
       <p className="px-1.5 text-sm text-sidebar-foreground">
         {contacts.data ? `${contacts.data.length} ${contacts.data.length === 1 ? 'contact' : 'contacts'}` : ' '}
       </p>
+      <Button variant="ghost" size="sm" className="justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white" onClick={() => setSharing(true)}>
+        <Share2 aria-hidden />
+        Share contacts
+      </Button>
       <p className="px-1.5 text-xs leading-relaxed text-sidebar-muted">
         Your contacts also sync to phones and desktop apps over CardDAV, with an app password.
       </p>
@@ -174,7 +180,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
                   const active = contact.id === contactId;
                   const cName = contactName(contact);
                   return (
-                    <li key={contact.id}>
+                    <li key={`${contact.accountId}-${contact.id}`}>
                       {showLetter ? <div className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground">{letter}</div> : null}
                       <a
                         data-nav
@@ -222,6 +228,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
           }}
         />
       ) : null}
+      {sharing ? <ShareDialog kind="address-books" id="Default" onClose={() => setSharing(false)} /> : null}
       {composer.element}
     </AppShell>
   );

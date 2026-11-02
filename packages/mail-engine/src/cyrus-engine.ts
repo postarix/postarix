@@ -16,6 +16,9 @@ import {
   type MailEngine,
   MailEngineError,
   type SieveScriptInfo,
+  type CollectionKind,
+  type CollectionShare,
+  type ShareAccess,
 } from './types.js';
 
 export interface CyrusEngineOptions extends ImapConnectOptions {
@@ -47,6 +50,17 @@ export const DEFAULT_FOLDERS = [
  * Each operation opens a short-lived admin connection: provisioning is rare,
  * and this avoids managing a long-lived session that the server may drop.
  */
+/**
+ * Cyrus ACL rights for shared collections: the same rights Cyrus' own JMAP
+ * sharing (Calendar shareWith) grants. "9" is reading free/busy.
+ */
+export const SHARE_RIGHTS: Record<CollectionKind, Record<ShareAccess, string>> = {
+  calendar: { read: 'lrw9', write: 'lrswitedn5679' },
+  addressbook: { read: 'lrs', write: 'lrswitedn' },
+};
+const COLLECTION_ID = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/;
+const COLLECTION_FOLDER: Record<CollectionKind, string> = { calendar: '#calendars', addressbook: '#addressbooks' };
+
 const JMAP_CORE = 'urn:ietf:params:jmap:core';
 const JMAP_SIEVE = 'https://cyrusimap.org/ns/jmap/sieve';
 const JMAP_BLOB = 'https://cyrusimap.org/ns/jmap/blob';
@@ -275,6 +289,74 @@ export class CyrusEngine implements MailEngine {
     await this.sieveCall(address, [['SieveScript/set', { accountId, destroy: [existing.id] }, 'x']]);
   }
 
+  private collectionName(address: string, kind: CollectionKind, collectionId: string): string {
+    if (!COLLECTION_ID.test(collectionId)) throw new MailEngineError(`Invalid collection: ${collectionId}`, 'not_found');
+    return CyrusEngine.folderName(address, `${COLLECTION_FOLDER[kind]}/${collectionId}`);
+  }
+
+  async listShares(address: string, kind: CollectionKind, collectionId: string): Promise<CollectionShare[]> {
+    const name = this.collectionName(address, kind, collectionId);
+    return this.withAdmin(async (imap) => {
+      const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+      return sharesFromAcl(acl, address, this.options.adminUser);
+    });
+  }
+
+  async setShares(address: string, kind: CollectionKind, collectionId: string, shares: CollectionShare[]): Promise<void> {
+    const name = this.collectionName(address, kind, collectionId);
+    for (const share of shares) {
+      if (!ADDRESS.test(share.grantee) || share.grantee === address) {
+        throw new MailEngineError(`Cannot share with ${share.grantee}`, 'rejected');
+      }
+    }
+    await this.withAdmin(async (imap) => {
+      const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+      const wanted = new Map(shares.map((s) => [s.grantee, SHARE_RIGHTS[kind][s.access]]));
+      for (const identifier of acl.keys()) {
+        if (identifier === address || identifier === this.options.adminUser || wanted.has(identifier)) continue;
+        await imap.expectOk(`DELETEACL ${quote(name)} ${quote(identifier)}`);
+      }
+      for (const [grantee, rights] of wanted) {
+        if (acl.get(grantee) !== rights) await imap.expectOk(`SETACL ${quote(name)} ${quote(grantee)} ${rights}`);
+      }
+    });
+  }
+
+  async restrictCollections(address: string): Promise<void> {
+    // Cyrus creates the default calendar and address book on first use.
+    if (this.options.jmap) {
+      const res = await this.jmap(address, {
+        method: 'POST',
+        path: '',
+        query: '',
+        contentType: 'application/json',
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            using: [JMAP_CORE, 'urn:ietf:params:jmap:calendars', 'https://cyrusimap.org/ns/jmap/contacts'],
+            methodCalls: [
+              ['Calendar/get', { accountId: address, properties: ['id'] }, 'c'],
+              ['Contact/query', { accountId: address, limit: 1 }, 'a'],
+            ],
+          }),
+        ),
+      });
+      await res.body?.cancel();
+    }
+    const at = address.lastIndexOf('@');
+    const pattern = `user/${address.slice(0, at)}/*${address.slice(at)}`;
+    await this.withAdmin(async (imap) => {
+      const names = parseList((await imap.expectOk(`LIST "" ${quote(pattern)}`)).untagged).filter((n) =>
+        /\/#(?:calendars|addressbooks)(?:\/|@)/.test(n),
+      );
+      for (const name of names) {
+        const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+        for (const identifier of acl.keys()) {
+          if (identifier === 'anyone' || identifier === 'anonymous') await imap.expectOk(`DELETEACL ${quote(name)} ${quote(identifier)}`);
+        }
+      }
+    });
+  }
+
   async health(): Promise<EngineHealth> {
     try {
       await this.withAdmin((imap) => imap.expectOk('NOOP'));
@@ -336,6 +418,45 @@ export function parseQuota(response: ImapResponse): MailboxUsage {
   }
   // No quota root: Cyrus does not track usage, and the mailbox is unlimited.
   return { usedBytes: null, quotaBytes: null };
+}
+
+/** Splits an untagged IMAP response into atoms and quoted strings. */
+function tokens(line: string): string[] {
+  const out: string[] = [];
+  const pattern = /"((?:[^"\\]|\\.)*)"|(\S+)/g;
+  for (const match of line.matchAll(pattern)) {
+    out.push(match[1] !== undefined ? match[1].replace(/\\(.)/g, '$1') : match[2]!);
+  }
+  return out;
+}
+
+/** "ACL <mailbox> <id> <rights> …" → id → rights. */
+export function parseAcl(untagged: string[]): Map<string, string> {
+  const acl = new Map<string, string>();
+  for (const line of untagged) {
+    const parts = tokens(line);
+    if (parts[0]?.toUpperCase() !== 'ACL') continue;
+    for (let i = 2; i + 1 < parts.length; i += 2) acl.set(parts[i]!, parts[i + 1]!);
+  }
+  return acl;
+}
+
+/** Mailbox names from "LIST (<flags>) <delimiter> <name>" responses. */
+function parseList(untagged: string[]): string[] {
+  return untagged.flatMap((line) => {
+    const match = /^LIST \([^)]*\) (?:"[^"]*"|NIL) (.+)$/i.exec(line);
+    return match ? [tokens(match[1]!)[0]!] : [];
+  });
+}
+
+export function sharesFromAcl(acl: Map<string, string>, owner: string, admin: string): CollectionShare[] {
+  const shares: CollectionShare[] = [];
+  for (const [identifier, rights] of acl) {
+    if (identifier === owner || identifier === admin || !ADDRESS.test(identifier)) continue;
+    if (rights.includes('i')) shares.push({ grantee: identifier, access: 'write' });
+    else if (rights.includes('r')) shares.push({ grantee: identifier, access: 'read' });
+  }
+  return shares.sort((a, b) => a.grantee.localeCompare(b.grantee));
 }
 
 function toEngineError(error: unknown): MailEngineError {

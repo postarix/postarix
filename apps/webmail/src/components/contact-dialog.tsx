@@ -52,7 +52,15 @@ function ListField({
   );
 }
 
-export function ContactDialog({ contact, onClose, onSaved }: { contact: Contact | null; onClose: () => void; onSaved: (id: string) => void }) {
+export function ContactDialog({
+  contact,
+  onClose,
+  onSaved,
+}: {
+  contact: (Contact & { accountId?: string }) | null;
+  onClose: () => void;
+  onSaved: (id: string) => void;
+}) {
   const [input, setInput] = useState<ContactInput>(() =>
     contact
       ? {
@@ -77,7 +85,7 @@ export function ContactDialog({ contact, onClose, onSaved }: { contact: Contact 
     }
     setError(null);
     try {
-      onSaved(await save.mutateAsync({ id: contact?.id ?? null, input }));
+      onSaved(await save.mutateAsync({ id: contact?.id ?? null, ...(contact?.accountId ? { accountId: contact.accountId } : {}), input }));
     } catch (e) {
       setError(errorMessage(e));
     }

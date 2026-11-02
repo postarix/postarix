@@ -15,6 +15,18 @@ export interface CreateMailboxOptions {
   quotaBytes: number | null;
 }
 
+/** Calendars and address books, the collections a mailbox owner can share. */
+export type CollectionKind = 'calendar' | 'addressbook';
+
+/** Read: see the items (and, for calendars, free/busy). Write: also add, change and delete them. */
+export type ShareAccess = 'read' | 'write';
+
+export interface CollectionShare {
+  /** The address of the mailbox the collection is shared with. */
+  grantee: string;
+  access: ShareAccess;
+}
+
 export interface SieveScriptInfo {
   name: string;
   active: boolean;
@@ -65,6 +77,15 @@ export interface MailEngine {
   writeSieveScript(address: string, name: string, content: string, options: { activate: boolean }): Promise<void>;
   /** Deletes a script (deactivating it first); nothing happens if it does not exist. */
   deleteSieveScript(address: string, name: string): Promise<void>;
+  /** Who a calendar or address book is shared with (not the owner). Unknown collections raise "not_found". */
+  listShares(address: string, kind: CollectionKind, collectionId: string): Promise<CollectionShare[]>;
+  /** Replaces who a calendar or address book is shared with. Unknown collections raise "not_found". */
+  setShares(address: string, kind: CollectionKind, collectionId: string, shares: CollectionShare[]): Promise<void>;
+  /**
+   * Makes sure the mailbox's calendars and address books exist and are shared
+   * with nobody by default (Cyrus lets "anyone" read calendar free/busy).
+   */
+  restrictCollections(address: string): Promise<void>;
   health(): Promise<EngineHealth>;
   close(): Promise<void>;
 }

@@ -78,6 +78,13 @@
       "when": 1793629763029,
       "tag": "0010_glossy_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793631519002,
+      "tag": "0011_abnormal_chamber",
+      "breakpoints": true
     }
   ]
 }

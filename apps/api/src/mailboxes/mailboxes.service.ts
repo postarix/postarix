@@ -23,6 +23,7 @@ import {
   toMailboxDto,
   type UpdateMailboxInput,
 } from './mailboxes.dto.js';
+import { MailboxCollectionsService } from './mailbox-collections.service.js';
 import { MailboxesRepository } from './mailboxes.repository.js';
 
 export interface MailboxUsageDto {
@@ -41,6 +42,7 @@ export class MailboxesService {
     @Inject(AddressRegistry) private readonly addresses: AddressRegistry,
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(MailboxCollectionsService) private readonly collections: MailboxCollectionsService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -118,6 +120,9 @@ export class MailboxesService {
       }
       throw engineErrorToHttp(error);
     }
+    // Calendars must not be readable by everyone (Cyrus' default for free/busy).
+    // Not fatal: the background check retries mailboxes it missed.
+    await this.collections.restrict(address);
 
     await this.audit.record(
       ctx,

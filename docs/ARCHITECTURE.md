@@ -376,8 +376,11 @@ out the account password after repeated failures (app passwords keep working).
 - [x] The same calendars and address books sync to phones and desktop apps over CalDAV/CardDAV (`/dav`, discovery through `/.well-known`) with DAV-scoped app passwords; default calendar and address book created on first use.
 - [x] A visual identity of its own for every interface (ink, postal yellow, airmail edge; Bricolage Grotesque and Instrument Sans, self-hosted).
 - [x] Integration and browser tests: JMAP ↔ CalDAV/CardDAV sync, privacy between users, calendar and contacts in the browser.
-- Later: week and day views, invitations (iTIP) and free/busy, shared calendars and address books.
-- Invitations (iMIP), shared resources.
+- [x] Week and day views.
+- [x] Invitations by email (iTIP over iMIP, RFC 5546/6047): guests on events, invitations and updates sent from the organizer's address, answers (going, maybe, not going) from the message, replies and cancellations applied to the calendar. Cyrus' own scheduling stays off; the API sends, under the person's sending limits. See `docs/CALENDAR.md`.
+- [x] Free/busy of colleagues (same organization only, times without details) while inviting.
+- [x] Calendars and contacts shared with colleagues (same organization), to see or to edit; shared calendars and contacts appear in the webmail and over CalDAV/CardDAV. Calendars are no longer readable by "anyone" (Cyrus' default free/busy right).
+- Later: rooms and other shared resources.
 
 ### Phase 5 — Enterprise and scale
 - [x] SSO with OpenID Connect. Later: SAML, passkeys enforceable by policy.
@@ -403,6 +406,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Email HTML is sanitized on the server and shown in a sandboxed iframe (no scripts, opaque origin) with a CSP; remote images are blocked by default and loaded through a signed proxy that only reaches public addresses. |
 | 2026-11-02 | Calendar and contacts in the webmail use **JMAP** (Cyrus' JMAP service loads the CalDAV/CardDAV stores behind it), so the webmail, CalDAV and CardDAV clients share one copy of the data. |
 | 2026-11-02 | Visual identity: shadcn/ui's quiet neutral system tinted with ink blue (structure, actions) and postal yellow used sparingly (compose, today, the unread count). Navigation sits on an ink rail and content on an inset panel. One self-hosted typeface (Instrument Sans), so the strict CSP stays `font-src 'self'`. |
+| 2026-11-02 | Calendar scheduling is done by the API, not by Cyrus: invitations, replies and cancellations are built from Cyrus' own iCalendar for the event and sent through the internal submission port from the person's address; an incoming one changes the calendar only when the person asks and only when its sender is the organizer (cancellations) or the attendee (replies) it speaks for. Sharing is set through the API (colleagues only) as Cyrus ACLs. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |

@@ -5,6 +5,8 @@ import {
   type MailboxUsage,
   type MailEngine,
   type SieveScriptInfo,
+  type CollectionKind,
+  type CollectionShare,
   MailEngineError,
 } from './types.js';
 
@@ -78,6 +80,35 @@ export class MemoryMailEngine implements MailEngine {
   }
 
   async close(): Promise<void> {}
+
+  /** Shares per "<address> <kind> <collection>"; collections are "Default" only. */
+  readonly shares = new Map<string, CollectionShare[]>();
+  /** Addresses whose collections were restricted. */
+  readonly restricted = new Set<string>();
+
+  private collectionKey(address: string, kind: CollectionKind, collectionId: string): string {
+    this.get(address);
+    if (collectionId !== 'Default') throw new MailEngineError(`No collection ${collectionId}`, 'not_found');
+    return `${address} ${kind} ${collectionId}`;
+  }
+
+  async listShares(address: string, kind: CollectionKind, collectionId: string): Promise<CollectionShare[]> {
+    this.checkFailure();
+    return [...(this.shares.get(this.collectionKey(address, kind, collectionId)) ?? [])];
+  }
+
+  async setShares(address: string, kind: CollectionKind, collectionId: string, shares: CollectionShare[]): Promise<void> {
+    this.checkFailure();
+    const key = this.collectionKey(address, kind, collectionId);
+    if (shares.some((s) => s.grantee === address)) throw new MailEngineError('Cannot share with the owner', 'rejected');
+    this.shares.set(key, [...shares].sort((a, b) => a.grantee.localeCompare(b.grantee)));
+  }
+
+  async restrictCollections(address: string): Promise<void> {
+    this.checkFailure();
+    this.get(address);
+    this.restricted.add(address);
+  }
 
   /** Sieve scripts per address: name → { content, active }. */
   readonly sieve = new Map<string, Map<string, { content: string; active: boolean }>>();

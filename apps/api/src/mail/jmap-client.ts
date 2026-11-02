@@ -2,13 +2,20 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
 
 export const MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
-const USING = ['urn:ietf:params:jmap:core', MAIL_CAPABILITY];
+const USING = [
+  'urn:ietf:params:jmap:core',
+  MAIL_CAPABILITY,
+  'urn:ietf:params:jmap:calendars',
+  'https://cyrusimap.org/ns/jmap/calendars',
+  'https://cyrusimap.org/ns/jmap/contacts',
+];
 
 export type MethodCall = [string, Record<string, unknown>, string];
 export type MethodResponse = [string, Record<string, unknown>, string];
 
 /**
- * Server-side JMAP for the API's own needs (sending, rendering), always as
+ * Server-side JMAP for the API's own needs (sending, rendering, calendar
+ * invitations and free/busy), always as
  * the owner of `address`, through the MailEngine.
  */
 export class ServerJmap {

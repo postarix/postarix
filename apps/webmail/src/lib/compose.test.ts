@@ -22,6 +22,7 @@ const message: RenderedMessage = {
   truncated: false,
   blockedImages: 0,
   attachments: [{ blobId: 'B1', name: 'a.pdf', type: 'application/pdf', size: 10 }],
+  calendar: false,
 };
 
 describe('replyDraft', () => {
