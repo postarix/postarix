@@ -16,6 +16,11 @@ install_pair() {
   openssl pkey -in "$key" -noout >/dev/null
   install -m 0644 "$cert" "$OUT/.fullchain.pem.new"
   install -m 0600 "$key" "$OUT/.privkey.pem.new"
+  # A copy the API (user 1000 in its image) can read, for its internal HTTPS
+  # listener (the mail-login bridge).
+  install -m 0400 "$key" "$OUT/.api-privkey.pem.new"
+  chown 1000:1000 "$OUT/.api-privkey.pem.new"
+  mv -f "$OUT/.api-privkey.pem.new" "$OUT/api-privkey.pem"
   mv -f "$OUT/.privkey.pem.new" "$OUT/privkey.pem"
   mv -f "$OUT/.fullchain.pem.new" "$OUT/fullchain.pem"
   log "installed certificate: $(openssl x509 -in "$OUT/fullchain.pem" -noout -subject -enddate | tr '\n' ' ')"
@@ -84,6 +89,12 @@ case "$MODE" in
   selfsigned|acme|external) ;;
   *) log "unknown CERTS_MODE: $MODE"; exit 1 ;;
 esac
+
+# Installations made before the API's copy of the key existed get it now.
+if [ -s "$OUT/privkey.pem" ] && [ ! -s "$OUT/api-privkey.pem" ]; then
+  install -m 0400 "$OUT/privkey.pem" "$OUT/api-privkey.pem"
+  chown 1000:1000 "$OUT/api-privkey.pem"
+fi
 
 # External certificates change outside our control: check them more often.
 [ "$MODE" = external ] && CHECK_INTERVAL="${CERTS_CHECK_INTERVAL:-300}"

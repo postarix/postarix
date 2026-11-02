@@ -58,7 +58,7 @@ const envSchema = z
      * self-signed certificate; publicly trusted ones validate either way.
      */
     CYRUS_TLS_CA_FILE: z.string().optional(),
-    /** Cyrus' internal JMAP service (for the webmail), e.g. http://cyrus:8008. Unset disables the webmail API. */
+    /** Cyrus' internal JMAP service (for the webmail), e.g. https://cyrus:8008 (TLS checked like CYRUS_HOST). Unset disables the webmail API. */
     CYRUS_JMAP_URL: z.url({ protocol: /^https?$/ }).optional(),
     /** Postfix's internal submission port, used to send webmail messages (logs in with INTERNAL_API_TOKEN). */
     SUBMISSION_HOST: z.string().default('postfix'),
@@ -73,6 +73,14 @@ const envSchema = z
      * the internal endpoints are disabled.
      */
     INTERNAL_API_TOKEN: z.string().min(32, 'INTERNAL_API_TOKEN must be at least 32 characters').optional(),
+    /**
+     * The internal HTTPS listener for the mail-login bridge (/api/internal/*),
+     * so mail passwords never cross the network in clear. When the key and
+     * certificate are set, /api/internal/* answers on this port only.
+     */
+    INTERNAL_TLS_PORT: z.coerce.number().int().positive().default(3443),
+    INTERNAL_TLS_CERT_FILE: z.string().optional(),
+    INTERNAL_TLS_KEY_FILE: z.string().optional(),
 
     /** How domain ownership is proven. "skip" activates domains immediately (development only). */
     DOMAIN_VERIFICATION: z.enum(['dns', 'skip']).default('dns'),
@@ -111,6 +119,14 @@ const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || (env.VALKEY_URL ?? '').length > 0, {
     path: ['VALKEY_URL'],
     message: 'is required in production (Rspamd reads DKIM keys from Valkey)',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || !env.CYRUS_JMAP_URL || env.CYRUS_JMAP_URL.startsWith('https:'), {
+    path: ['CYRUS_JMAP_URL'],
+    message: 'must use https in production (mail tokens cross the network)',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || !env.INTERNAL_API_TOKEN || (env.INTERNAL_TLS_CERT_FILE && env.INTERNAL_TLS_KEY_FILE), {
+    path: ['INTERNAL_TLS_KEY_FILE'],
+    message: 'INTERNAL_TLS_CERT_FILE and INTERNAL_TLS_KEY_FILE are required in production (mail passwords cross the network)',
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.DOMAIN_VERIFICATION === 'dns', {
     // Skipping verification would let any tenant activate someone else's domain.

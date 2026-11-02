@@ -45,7 +45,9 @@ admin panel):
 2. Both ask **saslauthd**, which runs in the Cyrus container. Postfix reaches it
    through the shared `saslauthd-run` volume.
 3. saslauthd uses PAM; `pam_exec` runs `postarix-mail-auth`, which posts the
-   credentials to `http://api:3000/api/internal/mail-auth` with the shared
+   credentials over HTTPS to the API's internal listener
+   (`https://<MAIL_HOSTNAME>:3443/api/internal/mail-auth`, connected to
+   `api:3443`, certificate checked) with the mail-login secret derived from
    `INTERNAL_API_TOKEN`.
 4. The API accepts app passwords with the right scope, and the account password
    while the user has no second factor.

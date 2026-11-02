@@ -20,6 +20,7 @@ spec:
         # The images run as "node"; Kubernetes needs its numeric id to check it is not root.
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: api
           image: {{ include "postarix.image" (list . "api") }}
@@ -28,6 +29,8 @@ spec:
           ports:
             - name: http
               containerPort: 3000
+            - name: internal-tls
+              containerPort: 3443
           env:
             {{- include "postarix.secretEnv" (list . "POSTGRES_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "VALKEY_PASSWORD") | nindent 12 }}
@@ -69,8 +72,13 @@ spec:
               value: {{ .Values.mailHostname | quote }}
             - name: CYRUS_TLS_CA_FILE
               value: /certs/fullchain.pem
+            # Internal HTTPS listener for the mail-login bridge.
+            - name: INTERNAL_TLS_CERT_FILE
+              value: /certs/fullchain.pem
+            - name: INTERNAL_TLS_KEY_FILE
+              value: /certs/privkey.pem
             - name: CYRUS_JMAP_URL
-              value: "http://{{ include "postarix.name" (list . "mail-internal") }}:8008"
+              value: "https://{{ include "postarix.name" (list . "mail-internal") }}:8008"
             - name: SUBMISSION_HOST
               value: {{ include "postarix.name" (list . "mail-internal") }}
             - name: SUBMISSION_PORT
@@ -93,8 +101,11 @@ spec:
         - name: certs
           secret:
             secretName: {{ .Values.tls.secretName }}
+            # Readable by the API's user only (fsGroup below).
+            defaultMode: 0440
             items:
               - { key: tls.crt, path: fullchain.pem }
+              - { key: tls.key, path: privkey.pem }
 ---
 apiVersion: v1
 kind: Service
@@ -107,3 +118,7 @@ spec:
     - name: http
       port: 3000
       targetPort: http
+    # The mail-login bridge (from the mail pod only; see the network policy).
+    - name: internal-tls
+      port: 3443
+      targetPort: internal-tls
