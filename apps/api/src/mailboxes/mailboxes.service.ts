@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -146,6 +147,7 @@ export class MailboxesService {
   async setPassword(ctx: TenantContext, id: string, password: string): Promise<void> {
     const mailbox = await this.require(ctx, id);
     if (!mailbox.userId) throw new NotFoundException('This mailbox has no account');
+    await this.assertNotInstanceAdmin(ctx, mailbox.userId);
     await this.accounts.setPassword(mailbox.userId, password);
     await this.audit.record(ctx, 'mailbox.password_reset', {
       type: 'mailbox',
@@ -166,6 +168,7 @@ export class MailboxesService {
   /** Deletes the engine mailbox (and all its mail), the row and the user account. */
   async remove(ctx: TenantContext, id: string): Promise<void> {
     const mailbox = await this.require(ctx, id);
+    if (mailbox.userId) await this.assertNotInstanceAdmin(ctx, mailbox.userId);
     try {
       await this.engine.deleteMailbox(mailbox.address);
     } catch (error) {
@@ -180,6 +183,19 @@ export class MailboxesService {
     if (mailbox.userId) await this.accounts.delete(mailbox.userId);
     await this.repository.delete(ctx, id);
     await this.audit.record(ctx, 'mailbox.deleted', { type: 'mailbox', id: mailbox.id, label: mailbox.address });
+  }
+
+  /**
+   * An organization manages its mailboxes' accounts, but an account that also
+   * administers the instance is out of its reach: resetting its password or
+   * deleting it would hand over (or remove) the whole instance.
+   */
+  private async assertNotInstanceAdmin(ctx: TenantContext, userId: string): Promise<void> {
+    if (ctx.viaSuperAdmin) return;
+    const account = await this.accounts.find(userId);
+    if (account?.instanceAdmin) {
+      throw new ForbiddenException('This account administers the instance; only an instance administrator can change it');
+    }
   }
 
   /** Runs one rollback step; a failure is logged so the remaining steps still run. */
