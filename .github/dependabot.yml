@@ -15,13 +15,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
-  # Base images of our own images.
+  # Base images of our own images. Third-party images (PostgreSQL, Valkey) use
+  # major-version tags (postgres:18-alpine…), so pulls already bring patches.
   - package-ecosystem: docker
     directories: ["/docker/*", "/apps/*"]
-    schedule:
-      interval: weekly
-  # Third-party images run by Compose (PostgreSQL, Valkey…).
-  - package-ecosystem: docker-compose
-    directory: /docker/compose
     schedule:
       interval: weekly
