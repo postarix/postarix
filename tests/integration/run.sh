@@ -11,8 +11,6 @@ ENV_FILE="${ENV_FILE:-docker/compose/test.env}"
 COMPOSE_FILES=(-f docker/compose/postarix.yml -f docker/compose/test.yml)
 if [ -n "${MURDER:-}" ]; then
   COMPOSE_FILES+=(-f docker/compose/murder.yml)
-  # The backup scripts handle a single Cyrus.
-  SKIP_BACKUP_TEST=1
 fi
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE")
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@postarix.test}"
@@ -44,12 +42,27 @@ pnpm --filter @postarix/integration-tests test:integration
 # Backup and restore round trip: the stack the tests filled is backed up,
 # destroyed and restored, and must come back with the same accounts and mail.
 if [ -z "${SKIP_BACKUP_TEST:-}" ]; then
-  export COMPOSE_FILE=docker/compose/postarix.yml:docker/compose/test.yml ENV_FILE
+  COMPOSE_FILE=docker/compose/postarix.yml:docker/compose/test.yml
+  stores=(cyrus)
+  if [ -n "${MURDER:-}" ]; then
+    COMPOSE_FILE="$COMPOSE_FILE:docker/compose/murder.yml"
+    stores=(cyrus-backend-1 cyrus-backend-2)
+  fi
+  export COMPOSE_FILE ENV_FILE
   counts() {
     "${COMPOSE[@]}" exec -T postgres psql -U postarix -d postarix -tAc 'select count(*) from mailboxes'
-    "${COMPOSE[@]}" exec -T -u cyrus cyrus sh -c \
-      'find /var/spool/cyrus -name "[0-9]*." | wc -l; /usr/lib/cyrus/bin/ctl_mboxlist -d | grep -c "\"name\""'
+    for store in "${stores[@]}"; do
+      "${COMPOSE[@]}" exec -T -u cyrus "$store" sh -c \
+        'find /var/spool/cyrus -name "[0-9]*." | wc -l; /usr/lib/cyrus/bin/ctl_mboxlist -d | grep -c "\"name\""'
+    done
   }
+  # Encrypted when age is available (it is in CI).
+  if command -v age >/dev/null; then
+    key_dir=$(mktemp -d)
+    age-keygen -o "$key_dir/key" 2>/dev/null
+    age-keygen -y "$key_dir/key" >"$key_dir/recipients"
+    export BACKUP_AGE_RECIPIENTS="$key_dir/recipients" BACKUP_AGE_IDENTITY="$key_dir/key"
+  fi
   before=$(counts)
   backup_dir=$(mktemp -d)
   deploy/scripts/backup.sh "$backup_dir/backup"
@@ -57,7 +70,10 @@ if [ -z "${SKIP_BACKUP_TEST:-}" ]; then
   "${COMPOSE[@]}" up -d --no-build --wait postgres valkey
   YES=1 deploy/scripts/restore.sh "$backup_dir/backup"
   after=$(counts)
-  rm -rf "$backup_dir"
+  if [ -n "${BACKUP_AGE_RECIPIENTS:-}" ]; then
+    [ -s "$backup_dir/backup/database.dump.age" ] && [ ! -e "$backup_dir/backup/database.dump" ] || { echo "the backup was not encrypted" >&2; exit 1; }
+  fi
+  rm -rf "$backup_dir" "${key_dir:-}"
   echo "before restore: $(echo $before)  after: $(echo $after)  (mailboxes in the database, messages, Cyrus mailboxes)"
   [ "$before" = "$after" ] || { echo "the restored installation differs from the backed-up one" >&2; exit 1; }
 fi
