@@ -8,11 +8,24 @@ FROM ${BASE_IMAGE}
 
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
+    # A non-empty file tells the package not to register with CrowdSec's
+    # central API at build time: an image must not carry one shared identity.
+    mkdir -p /etc/crowdsec; \
+    echo '# central API disabled (see docs/CROWDSEC.md)' > /etc/crowdsec/online_api_credentials.yaml; \
     apt-get update; \
     apt-get install -y --no-install-recommends crowdsec ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*; \
+    # Local decisions only: no central API client.
+    sed -i '/^\s*online_client:/,/online_api_credentials.yaml/d' /etc/crowdsec/config.yaml; \
     # The package's sample acquisition (nginx, apache, journald…) does not apply.
-    rm -f /etc/crowdsec/acquis.yaml
+    rm -f /etc/crowdsec/acquis.yaml; \
+    # Enable the Postfix detection from the package's offline copy of the hub
+    # (what "cscli collections install crowdsecurity/postfix" does, without
+    # the network).
+    hub=/usr/share/crowdsec/hub; \
+    ln -sf "$hub/parsers/s01-parse/crowdsecurity/postfix-logs.yaml" /etc/crowdsec/parsers/s01-parse/postfix-logs.yaml; \
+    ln -sf "$hub/scenarios/crowdsecurity/postfix-spam.yaml" /etc/crowdsec/scenarios/postfix-spam.yaml; \
+    ln -sf "$hub/collections/crowdsecurity/postfix.yaml" /etc/crowdsec/collections/postfix.yaml
 
 COPY rootfs/ /
 

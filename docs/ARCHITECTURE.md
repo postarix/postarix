@@ -372,7 +372,7 @@ out the account password after repeated failures (app passwords keep working).
 
 ### Phase 5 — Enterprise and scale
 - [x] SSO with OpenID Connect. Later: SAML, passkeys enforceable by policy.
-- CrowdSec with a host firewall bouncer.
+- [x] CrowdSec (optional `crowdsec` profile) reading the Postfix and Cyrus logs, with the firewall bouncer on the host (see `docs/CROWDSEC.md`).
 - Replication and Cyrus Murder; Helm chart.
 - Migration from Google Workspace and Microsoft 365.
 - Legal hold and archiving.

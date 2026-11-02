@@ -1,6 +1,6 @@
 #!/bin/sh
-# Prepares CrowdSec (offline hub shipped with the package, the firewall
-# bouncer's key) and runs it in the foreground.
+# Prepares CrowdSec (its local API, the firewall bouncer's key) and runs it
+# in the foreground. Detection content is set up in the image.
 set -eu
 
 log() { echo "crowdsec-entrypoint: $*"; }
@@ -11,16 +11,7 @@ sed -i 's|^\(\s*listen_uri:\).*|\1 0.0.0.0:8080|' /etc/crowdsec/config.yaml
 
 # Configuration comes from the image; the decisions database is a volume. The
 # agent's own credentials are re-issued at every start so both always match.
-cscli machines add postarix-agent --auto --force -f /etc/crowdsec/local_api_credentials.yaml >/dev/null
-
-# Detection content from the package's local copy of the hub: syslog parsing,
-# private-address whitelists and the Postfix collection.
-cscli hub update >/dev/null 2>&1 || true
-for item in "parsers crowdsecurity/syslog-logs" "parsers crowdsecurity/whitelists" "parsers crowdsecurity/dateparse-enrich" \
-            "collections crowdsecurity/postfix"; do
-  set -- $item
-  cscli "$1" install "$2" >/dev/null 2>&1 || log "could not install $1 $2 (already installed?)"
-done
+cscli machines add postarix-agent --auto --force --url http://127.0.0.1:8080 -f /etc/crowdsec/local_api_credentials.yaml >/dev/null
 
 # The host's firewall bouncer authenticates with this key.
 if [ -n "${CROWDSEC_BOUNCER_KEY:-}" ]; then
