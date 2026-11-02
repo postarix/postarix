@@ -14,9 +14,19 @@ if [ -z "$resolver_ip" ]; then
 else
   printf 'dns {\n  nameserver = ["%s:53"];\n}\n' "$resolver_ip" > /etc/rspamd/local.d/options.inc
 fi
-# Test messages (GTUBE) for every action, not only reject: lets admins and the
-# integration tests check spam handling end to end.
-echo 'gtube_patterns = "all";' >> /etc/rspamd/local.d/options.inc
+# Test environments only: POSTARIX_TEST_SPAM in a message body adds 8 points,
+# enough to be marked as spam through the normal rules.
+if [ "${RSPAMD_TEST_RULES:-false}" = "true" ]; then
+  cat > /etc/rspamd/local.d/regexp.conf <<'RULES'
+POSTARIX_TEST_SPAM {
+  re = "/POSTARIX-TEST-SPAM-MARKER/{sa_body}";
+  score = 8.0;
+  description = "Test marker (test environments only)";
+}
+RULES
+else
+  rm -f /etc/rspamd/local.d/regexp.conf
+fi
 
 : "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"
 umask 027

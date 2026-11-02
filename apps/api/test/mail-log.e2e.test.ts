@@ -39,7 +39,7 @@ describe('Filtering history per organization', () => {
       // Only B.
       { unix_time: t + 30, 'message-id': 'm4', sender_smtp: 'x@outside.example', rcpt_smtp: [b.address], subject: 'For B', action: 'add header', score: 8 },
       // Someone outside claiming A's domain, to an outside recipient: not A's mail.
-      { unix_time: t + 40, 'message-id': 'm5', sender_smtp: `ceo@${a.domainName}`, rcpt_smtp: ['victim@outside.example'], subject: 'Spoof', action: 'reject', score: 30 },
+      { unix_time: t + 40, 'message-id': 'm5', sender_smtp: `ceo@${a.domainName}`, rcpt_smtp: ['victim@outside.example'], subject: 'Spoof', action: 'reject', score: 30, user: 'unknown' },
     ];
   });
 

@@ -51,6 +51,8 @@ rspamd_config:register_symbol({
   name = 'POSTARIX_FILE_AS_JUNK',
   type = 'postfilter',
   priority = 5,
+  -- Also when an earlier rule decided the action outright (e.g. GTUBE).
+  flags = 'ignore_passthrough',
   callback = function(task)
     if task:get_user() then
       return
