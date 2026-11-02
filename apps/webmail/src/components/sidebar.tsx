@@ -48,7 +48,7 @@ export function Sidebar({
                     className={cn(
                       'group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                      active ? 'bg-sidebar-accent font-medium text-white' : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
+                      active ? 'bg-sidebar-accent font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07),0_1px_2px_rgb(0_0_0/0.35)]' : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
                     )}
                   >
                     <Icon className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted group-hover:text-sidebar-foreground')} aria-hidden />
@@ -57,7 +57,7 @@ export function Sidebar({
                       <span
                         className={cn(
                           'min-w-5 rounded-md px-1.5 text-center text-[0.7rem] leading-5 font-semibold tabular-nums',
-                          mailbox.role === 'inbox' ? 'bg-stamp text-stamp-foreground' : 'text-sidebar-muted',
+                          mailbox.role === 'inbox' ? 'depth-stamp bg-stamp text-stamp-foreground' : 'text-sidebar-muted',
                         )}
                         aria-label={`${mailbox.unreadEmails} unread`}
                       >

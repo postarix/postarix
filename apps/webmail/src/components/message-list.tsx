@@ -36,7 +36,7 @@ export function MessageList({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <h1 className="flex-1 truncate text-lg font-semibold">{mailbox?.name ?? 'Mail'}</h1>
-        <div role="group" aria-label="Show" className="inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
+        <div role="group" aria-label="Show" className="depth-sunken inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
           {[
             { label: 'All', value: false },
             { label: 'Unread', value: true },
@@ -48,7 +48,7 @@ export function MessageList({
               onClick={() => setUnreadOnly(option.value)}
               className={cn(
                 'rounded-md px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                unreadOnly === option.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
+                unreadOnly === option.value ? 'depth-soft bg-card text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {option.label}
@@ -65,7 +65,7 @@ export function MessageList({
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${mailbox?.name ?? 'mail'}`}
             aria-label="Search mail"
-            className="h-9 bg-background pl-9 shadow-none"
+            className="h-9 bg-background pl-9"
           />
         </form>
         <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">
@@ -116,7 +116,7 @@ export function MessageList({
                     className={cn(
                       'block rounded-lg border p-3 text-left transition-colors',
                       'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                      selected ? 'border-primary/15 bg-accent shadow-xs' : 'border-border/70 bg-card hover:bg-muted/60',
+                      selected ? 'border-ink/25 bg-accent shadow-[0_1px_2px_rgb(20_27_49/0.06),0_4px_12px_-6px_rgb(43_76_155/0.25)]' : 'border-border/70 bg-card shadow-[0_1px_2px_rgb(20_27_49/0.04)] hover:bg-muted/60',
                     )}
                   >
                     <div className="flex items-center gap-2">
