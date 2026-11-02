@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { type JmapRequest, MemoryMailEngine } from '@postarix/mail-engine';
+import { type JmapRequest, type MemoryMailEngine } from '@postarix/mail-engine';
 import request from 'supertest';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
