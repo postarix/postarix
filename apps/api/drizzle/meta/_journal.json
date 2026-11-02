@@ -85,6 +85,13 @@
       "when": 1793631519002,
       "tag": "0011_abnormal_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793633586312,
+      "tag": "0012_keen_joseph",
+      "breakpoints": true
     }
   ]
 }

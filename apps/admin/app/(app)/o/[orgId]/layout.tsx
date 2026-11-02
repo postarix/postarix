@@ -36,7 +36,7 @@ export default function OrganizationLayout({ children }: { children: ReactNode }
           { href: `${base}/mailboxes`, label: 'Mailboxes' },
           { href: `${base}/aliases`, label: 'Aliases' },
           { href: `${base}/members`, label: 'Members' },
-          { href: `${base}/sso`, label: 'Single sign-on' },
+          { href: `${base}/sso`, label: 'Sign-in' },
           { href: `${base}/mail-log`, label: 'Mail log' },
           { href: `${base}/activity`, label: 'Activity' },
         ]

@@ -155,3 +155,19 @@ export const mailLabels = pgTable(
   },
   (table) => [uniqueIndex('mail_labels_user_keyword_unique').on(table.userId, table.keyword)],
 );
+
+/**
+ * Security rules an organization sets for its people. One row per
+ * organization; no row means the defaults (nothing required).
+ */
+export const organizationSecurity = pgTable('organization_security', {
+  organizationId: text()
+    .primaryKey()
+    .references(() => organization.id, { onDelete: 'cascade' }),
+  /** Every member and mailbox owner must sign in with a second factor (an authenticator app or a passkey). */
+  requireSecondFactor: boolean().notNull().default(false),
+  updatedAt: timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { type AuthSession, CurrentSession } from '../auth/session.js';
+import { AllowWithoutSecondFactor, type AuthSession, CurrentSession } from '../auth/session.js';
 import { SuperAdminGuard } from '../auth/super-admin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { OrgAccessGuard } from '../tenancy/org-access.guard.js';
@@ -28,7 +28,9 @@ import {
 export class MyOrganizationsController {
   constructor(@Inject(OrganizationsService) private readonly organizations: OrganizationsService) {}
 
+  // The admin panel's layout needs it, also while a second factor is being set up.
   @Get()
+  @AllowWithoutSecondFactor()
   async list(@CurrentSession() session: AuthSession): Promise<{ data: OrganizationSummaryDto[] }> {
     return { data: await this.organizations.listForUser(session.user.id) };
   }
