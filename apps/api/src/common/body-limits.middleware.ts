@@ -1,6 +1,9 @@
 import express, { type ErrorRequestHandler, type RequestHandler } from 'express';
 
 export const BODY_LIMIT = '1mb';
+/** Calendar (.ics) and contacts (.vcf) files imported by people, on their import routes only. */
+export const IMPORT_LIMIT = '10mb';
+const IMPORT_ROUTES = new Set(['/api/calendar/import', '/api/contacts/import']);
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -44,6 +47,10 @@ export function bodyLimits(): Array<RequestHandler | ErrorRequestHandler> {
     express.urlencoded({ limit: BODY_LIMIT, extended: false }),
     // Small XML documents only (Outlook's Autodiscover request).
     express.text({ type: ['text/xml', 'application/xml'], limit: '16kb' }),
+    express.text({
+      type: (req) => IMPORT_ROUTES.has((req as express.Request).path) && /^text\/(calendar|vcard|x-vcard)\b/i.test(String(req.headers['content-type'] ?? '')),
+      limit: IMPORT_LIMIT,
+    }),
     handleParseErrors,
     rejectUnparsed,
   ];

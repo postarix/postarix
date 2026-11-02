@@ -58,6 +58,22 @@ export class ServerJmap {
     return response[1] as T;
   }
 
+  /** Uploads data as a blob of the person's account; returns its id. */
+  async upload(data: Uint8Array, type: string): Promise<string> {
+    const accountId = await this.primaryAccount();
+    const res = await this.engine.jmap(this.address, {
+      method: 'POST',
+      path: `upload/${encodeURIComponent(accountId)}/`,
+      query: '',
+      contentType: type,
+      body: data,
+    });
+    if (!res.ok) throw new ServiceUnavailableException('The mail server is unavailable');
+    const { blobId } = (await res.json()) as { blobId?: string };
+    if (!blobId) throw new ServiceUnavailableException('The mail server is unavailable');
+    return blobId;
+  }
+
   /** Downloads a blob, refusing anything larger than `limit` bytes. */
   async download(blobId: string, limit: number): Promise<Buffer> {
     const accountId = await this.primaryAccount();
