@@ -5,13 +5,13 @@ import { useEffect, useSyncExternalStore } from 'react';
  *   /login                       sign-in
  *   /                            the inbox
  *   /m/<mailboxId>[/<emailId>]   a folder, optionally with an open message
- *   /calendar[?date=YYYY-MM-DD]  the calendar, showing that date's month
+ *   /calendar[?date=YYYY-MM-DD][&view=month|week|day]  the calendar around that date
  *   /contacts[/<contactId>]      contacts
  */
 export type Route =
   | { name: 'login' }
   | { name: 'mailbox'; mailboxId: string | null; emailId: string | null; search: string }
-  | { name: 'calendar'; date: string | null }
+  | { name: 'calendar'; date: string | null; view: 'month' | 'week' | 'day' }
   | { name: 'contacts'; contactId: string | null; search: string };
 
 const listeners = new Set<() => void>();
@@ -37,7 +37,12 @@ export function parseRoute(location: string): Route {
   if (url.pathname === '/login') return { name: 'login' };
   if (url.pathname === '/calendar' || url.pathname === '/calendar/') {
     const date = url.searchParams.get('date');
-    return { name: 'calendar', date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null };
+    const view = url.searchParams.get('view');
+    return {
+      name: 'calendar',
+      date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+      view: view === 'week' || view === 'day' ? view : 'month',
+    };
   }
   const contact = /^\/contacts(?:\/([^/]+))?\/?$/.exec(url.pathname);
   if (contact) {

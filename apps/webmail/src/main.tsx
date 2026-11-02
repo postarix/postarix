@@ -77,7 +77,7 @@ function App() {
     );
   }
   const user = { email: session.user.email, name: session.user.name };
-  if (route.name === 'calendar') return <CalendarPage date={route.date} {...user} />;
+  if (route.name === 'calendar') return <CalendarPage date={route.date} view={route.view} {...user} />;
   if (route.name === 'contacts') return <ContactsPage contactId={route.contactId} search={route.search} {...user} />;
   return <MailPage mailboxId={route.mailboxId} emailId={route.emailId} search={route.search} {...user} />;
 }

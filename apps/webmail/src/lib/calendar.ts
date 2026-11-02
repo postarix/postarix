@@ -123,6 +123,73 @@ export function monthGrid(year: number, month: number): Date[] {
   return days[35]!.getMonth() !== month ? days.slice(0, 35) : days;
 }
 
+/** The seven days (Monday first) of the week containing `date`. */
+export function weekDays(date: Date): Date[] {
+  const offset = (date.getDay() + 6) % 7;
+  return Array.from({ length: 7 }, (_, i) => new Date(date.getFullYear(), date.getMonth(), date.getDate() - offset + i));
+}
+
+export type CalendarView = 'month' | 'week' | 'day';
+
+/** The date `step` months, weeks or days away from `date`, for the view's arrows. */
+export function shiftDate(date: Date, view: CalendarView, step: number): Date {
+  if (view === 'month') return new Date(date.getFullYear(), date.getMonth() + step, 1);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + step * (view === 'week' ? 7 : 1));
+}
+
+export interface PlacedEvent<T> {
+  item: T;
+  /** Minutes from the start of the day, clipped to the day. */
+  startMinute: number;
+  endMinute: number;
+  /** Side by side placement of overlapping events: column index and column count. */
+  column: number;
+  columns: number;
+}
+
+/**
+ * Places the timed events of one local day on a time grid. Events that overlap
+ * share the width in columns; each group of overlapping events gets as many
+ * columns as it needs.
+ */
+export function layoutDay<T>(items: { item: T; span: EventSpan }[], day: Date, minHeightMinutes = 20): PlacedEvent<T>[] {
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+  const minutes = (dayEnd - dayStart) / 60_000;
+  const placed = items
+    .filter(({ span }) => !span.allDay && overlapsDay(span, day))
+    .map(({ item, span }) => {
+      const startMinute = Math.max(0, Math.round((span.start.getTime() - dayStart) / 60_000));
+      const end = Math.min(minutes, Math.round((span.end.getTime() - dayStart) / 60_000));
+      return { item, startMinute, endMinute: Math.max(end, Math.min(minutes, startMinute + minHeightMinutes)), column: 0, columns: 1 };
+    })
+    .sort((a, b) => a.startMinute - b.startMinute || b.endMinute - a.endMinute);
+
+  let group: typeof placed = [];
+  let groupEnd = -1;
+  const columnEnds: number[] = [];
+  const close = () => {
+    for (const p of group) p.columns = columnEnds.length;
+    group = [];
+    columnEnds.length = 0;
+  };
+  for (const p of placed) {
+    if (p.startMinute >= groupEnd) close();
+    let column = columnEnds.findIndex((end) => end <= p.startMinute);
+    if (column === -1) {
+      column = columnEnds.length;
+      columnEnds.push(p.endMinute);
+    } else {
+      columnEnds[column] = p.endMinute;
+    }
+    p.column = column;
+    group.push(p);
+    groupEnd = Math.max(groupEnd, p.endMinute);
+  }
+  close();
+  return placed;
+}
+
 export const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** Whether the event overlaps the local day `day`. */

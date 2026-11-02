@@ -35,6 +35,27 @@ test('plans an event in the calendar', async ({ page }) => {
   await expect(page.getByRole('grid').getByRole('button', { name: new RegExp(title) })).toHaveCount(0);
 });
 
+test('shows events by week and by day, and adds one from a time slot', async ({ page }) => {
+  const title = unique('Standup');
+  await signIn(page);
+  await page.goto('/calendar?view=week');
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Week' }).waitFor();
+  // Today's 10 o'clock slot.
+  const today = new Intl.DateTimeFormat('en-US', { dateStyle: 'full' }).format(new Date());
+  await page.getByRole('group', { name: today }).getByRole('button', { name: /^New event, .*10/ }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Title').fill(title);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('group', { name: today }).getByRole('button', { name: new RegExp(title) })).toBeVisible();
+
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Day' }).click();
+  await expect(page).toHaveURL(/view=day/);
+  await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible();
+  await page.getByRole('button', { name: 'Next day' }).click();
+  await expect(page.getByRole('button', { name: new RegExp(title) })).toHaveCount(0);
+});
+
 test('keeps contacts and suggests them when writing', async ({ page }) => {
   const last = unique('Gomez').replace(/-/g, '');
   await signIn(page);
