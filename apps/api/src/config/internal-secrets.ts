@@ -8,7 +8,7 @@ import { createHmac } from 'node:crypto';
  * leaves the API. Installations that only set INTERNAL_API_TOKEN derive them
  * from it (deploy/scripts/derive-secrets.sh writes the same values).
  */
-export type InternalSecretPurpose = 'mail-auth' | 'submission' | 'cyrus-smtp';
+export type InternalSecretPurpose = 'mail-auth' | 'submission' | 'cyrus-smtp' | 'reports';
 
 /** HMAC-SHA256(INTERNAL_API_TOKEN, "postarix:<purpose>"), hex. */
 export function internalSecret(token: string, purpose: InternalSecretPurpose): string {
@@ -17,10 +17,20 @@ export function internalSecret(token: string, purpose: InternalSecretPurpose): s
 
 /** The secret for a purpose: set explicitly, or derived from INTERNAL_API_TOKEN. */
 export function secretFor(
-  env: { INTERNAL_API_TOKEN?: string | undefined; POSTARIX_SECRET_MAIL_AUTH?: string | undefined; POSTARIX_SECRET_SUBMISSION?: string | undefined },
-  purpose: 'mail-auth' | 'submission',
+  env: {
+    INTERNAL_API_TOKEN?: string | undefined;
+    POSTARIX_SECRET_MAIL_AUTH?: string | undefined;
+    POSTARIX_SECRET_SUBMISSION?: string | undefined;
+    POSTARIX_SECRET_REPORTS?: string | undefined;
+  },
+  purpose: 'mail-auth' | 'submission' | 'reports',
 ): string | null {
-  const explicit = purpose === 'mail-auth' ? env.POSTARIX_SECRET_MAIL_AUTH : env.POSTARIX_SECRET_SUBMISSION;
+  const explicit =
+    purpose === 'mail-auth'
+      ? env.POSTARIX_SECRET_MAIL_AUTH
+      : purpose === 'submission'
+        ? env.POSTARIX_SECRET_SUBMISSION
+        : env.POSTARIX_SECRET_REPORTS;
   if (explicit) return explicit;
   return env.INTERNAL_API_TOKEN ? internalSecret(env.INTERNAL_API_TOKEN, purpose) : null;
 }

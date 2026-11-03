@@ -47,6 +47,15 @@ spec:
             {{- include "postarix.secretEnv" (list . "INTERNAL_API_TOKEN") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MAIL_AUTH") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_SUBMISSION") | nindent 12 }}
+            # Logs (and the mail queue) shown to instance administrators; optional for existing secrets.
+            - name: POSTARIX_SECRET_REPORTS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: POSTARIX_SECRET_REPORTS
+                  optional: true
+            - name: POSTARIX_VERSION
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
             - name: NODE_ENV

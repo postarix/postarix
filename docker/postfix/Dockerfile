@@ -10,7 +10,7 @@ RUN set -eux; \
     echo "postfix postfix/main_mailer_type select No configuration" | debconf-set-selections; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      postfix postfix-pgsql libsasl2-modules sasl2-bin ca-certificates openssl netcat-openbsd gettext-base; \
+      postfix postfix-pgsql libsasl2-modules sasl2-bin ca-certificates openssl netcat-openbsd gettext-base curl; \
     rm -rf /var/lib/apt/lists/*; \
     # Installed without debconf configuration: start from an empty main.cf,
     # the entrypoint sets every parameter explicitly.

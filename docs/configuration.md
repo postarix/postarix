@@ -31,7 +31,7 @@ decrypts the DKIM keys stored in the database**.
 | `AUTH_SECRET` | sessions, and encryption of DKIM keys and SSO secrets |
 | `CYRUS_ADMIN_PASSWORD` | the API's administration of the mail store |
 | `INTERNAL_API_TOKEN` | the source the per-purpose secrets below are derived from |
-| `POSTARIX_SECRET_MAIL_AUTH`, `…_SUBMISSION`, `…_CYRUS_SMTP`, `…_MURDER_MUPDATE`, `…_MURDER_PROXY`, `…_MURDER_XFER` | one secret per internal purpose, so each container gets only its own. `deploy/scripts/derive-secrets.sh` adds missing ones. |
+| `POSTARIX_SECRET_MAIL_AUTH`, `…_SUBMISSION`, `…_CYRUS_SMTP`, `…_MURDER_MUPDATE`, `…_MURDER_PROXY`, `…_MURDER_XFER`, `…_REPORTS` | one secret per internal purpose, so each container gets only its own. `deploy/scripts/derive-secrets.sh` adds missing ones. Without `…_REPORTS`, the admin panel shows no mail logs or queue. |
 | `RSPAMD_CONTROLLER_PASSWORD` | the API's read-only access to Rspamd (filtering history, metrics) |
 | `RSPAMD_CONTROLLER_ENABLE_PASSWORD` | optional: write access to Rspamd's web interface; unset, it is read-only |
 | `VALKEY_PASSWORD` | Valkey (DKIM keys for Rspamd, spam statistics) |

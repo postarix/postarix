@@ -159,6 +159,9 @@ services:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
       POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_SECRET_SUBMISSION: ${POSTARIX_SECRET_SUBMISSION:?run deploy/scripts/derive-secrets.sh}
+      # The mail containers' logs and the mail queue, shown to instance administrators.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_VERSION: ${POSTARIX_VERSION:-dev}
       DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
@@ -213,6 +216,7 @@ services:
       # Only the internal secrets Cyrus uses (never INTERNAL_API_TOKEN itself).
       POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH}
       POSTARIX_SECRET_CYRUS_SMTP: ${POSTARIX_SECRET_CYRUS_SMTP:?run deploy/scripts/derive-secrets.sh}
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
       POSTARIX_API_INTERNAL: api:3443
       # The admin IMAP service (for the API) binds to this address only too.
       ADMIN_LISTEN_ADDRESS: ${CYRUS_IP:-172.30.53.10}
@@ -263,6 +267,8 @@ services:
       # and Cyrus' (10588).
       POSTARIX_SECRET_SUBMISSION: ${POSTARIX_SECRET_SUBMISSION}
       POSTARIX_SECRET_CYRUS_SMTP: ${POSTARIX_SECRET_CYRUS_SMTP}
+      # Its log and the mail queue go to the API (see postarix-reporter).
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
     ports:
       - "${SMTP_PORT:-25}:25"
       - "${SUBMISSIONS_PORT:-465}:465"

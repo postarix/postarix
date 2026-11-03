@@ -25,33 +25,44 @@ import { type MailLoginAttempt, MailAuthService, mailLoginSchema } from './mail-
 export const INTERNAL_TOKEN_HEADER = 'x-postarix-internal-token';
 
 /**
- * Protects /api/internal/*: requires the mail-login secret (see
+ * Protects /api/internal/*: requires the secret of the endpoint's purpose (see
  * internal-secrets.ts). When none is configured the endpoints do not exist (404).
  */
+export function checkInternalRequest(env: Env, request: Request, purpose: 'mail-auth' | 'reports'): void {
+  const expected = secretFor(env, purpose);
+  if (!expected) throw new NotFoundException();
+  // With the internal HTTPS listener on, nothing internal answers in clear.
+  if (internalTlsEnabled(env) && !viaInternalTls(request, env)) throw new NotFoundException();
+  // Mail containers call us directly inside the Docker network. A request
+  // that went through a reverse proxy means the proxy exposes internal
+  // routes by mistake: refuse it as if the route did not exist.
+  if (request.headers['x-forwarded-for'] !== undefined || request.headers.forwarded !== undefined) {
+    throw new NotFoundException();
+  }
+  const provided = request.headers[INTERNAL_TOKEN_HEADER];
+  if (typeof provided !== 'string') throw new UnauthorizedException();
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new UnauthorizedException();
+}
+
 @Injectable()
 export class InternalTokenGuard implements CanActivate {
   constructor(@Inject(ENV) private readonly env: Env) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const expected = secretFor(this.env, 'mail-auth');
-    if (!expected) throw new NotFoundException();
+    checkInternalRequest(this.env, context.switchToHttp().getRequest<Request>(), 'mail-auth');
+    return true;
+  }
+}
 
-    const request = context.switchToHttp().getRequest<Request>();
-    // With the internal HTTPS listener on, nothing internal answers in clear.
-    if (internalTlsEnabled(this.env) && !viaInternalTls(request, this.env)) throw new NotFoundException();
-    // The login bridge calls us directly inside the Docker network. A request
-    // that went through a reverse proxy means the proxy exposes internal
-    // routes by mistake: refuse it as if the route did not exist.
-    if (request.headers['x-forwarded-for'] !== undefined || request.headers.forwarded !== undefined) {
-      throw new NotFoundException();
-    }
+/** Like InternalTokenGuard, with the reports secret (logs and the mail queue from the mail containers). */
+@Injectable()
+export class ReportsTokenGuard implements CanActivate {
+  constructor(@Inject(ENV) private readonly env: Env) {}
 
-    const provided = request.headers[INTERNAL_TOKEN_HEADER];
-    if (typeof provided !== 'string') throw new UnauthorizedException();
-
-    const a = Buffer.from(provided);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new UnauthorizedException();
+  canActivate(context: ExecutionContext): boolean {
+    checkInternalRequest(this.env, context.switchToHttp().getRequest<Request>(), 'reports');
     return true;
   }
 }

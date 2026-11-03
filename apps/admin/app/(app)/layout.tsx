@@ -11,7 +11,7 @@ import {
 } from '@postarix/ui/components/dropdown-menu';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { cn } from '@postarix/ui/lib/utils';
-import { Building2, LogOut, Menu, UserRound } from 'lucide-react';
+import { Building2, LogOut, Menu, Server, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
@@ -93,6 +93,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="p-3">
+          {superAdmin ? (
+            <Link
+              href="/system"
+              aria-current={pathname === '/system' ? 'page' : undefined}
+              className={cn(
+                'mb-1 flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 hover:text-white',
+                pathname === '/system' && 'bg-sidebar-accent font-medium text-white',
+              )}
+            >
+              <Server className="size-4 text-sidebar-muted" aria-hidden />
+              System
+            </Link>
+          ) : null}
           <Link
             href="/account"
             aria-current={pathname === '/account' ? 'page' : undefined}
@@ -132,6 +145,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
+              {superAdmin ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/system">
+                    <Server aria-hidden />
+                    System
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem asChild>
                 <Link href="/account">
                   <UserRound aria-hidden />
