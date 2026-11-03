@@ -22,6 +22,7 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import { keys, useOrgList } from '@/lib/queries';
 import type { Alias, Domain } from '@/lib/types';
 import { t } from '@/lib/i18n';
@@ -172,6 +173,11 @@ export default function AliasesPage() {
               <TableRow key={alias.id}>
                 <TableCell className="pl-4 font-medium">
                   {alias.address}
+                  {alias.expiresAt ? (
+                    <Badge variant="outline" className="ml-2">
+                      {t('Temporary, until {date}', { date: formatDate(alias.expiresAt) })}
+                    </Badge>
+                  ) : null}
                   {alias.catchAll ? (
                     <Badge variant="secondary" className="ml-2">
                       {t('Catch-all')}

@@ -57,6 +57,8 @@ export interface AliasDto {
   enabled: boolean;
   discard: boolean;
   catchAll: boolean;
+  /** Temporary addresses (made by their owner in the webmail) stop working then. */
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +73,7 @@ export function toAliasDto(row: AliasRow): AliasDto {
     enabled: row.enabled,
     discard: row.discard,
     catchAll: row.localPart === '',
+    expiresAt: row.expiresAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

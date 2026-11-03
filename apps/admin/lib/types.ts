@@ -94,6 +94,8 @@ export interface Alias {
   discard: boolean;
   /** "@domain": every address of the domain that is not a mailbox or another alias. */
   catchAll: boolean;
+  /** Temporary addresses people make for themselves stop working then. */
+  expiresAt: string | null;
 }
 
 export interface Member {

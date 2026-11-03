@@ -204,6 +204,13 @@
       "when": 1793707475295,
       "tag": "0028_careful_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793707869521,
+      "tag": "0029_pink_cassandra_nova",
+      "breakpoints": true
     }
   ]
 }

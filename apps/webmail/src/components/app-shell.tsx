@@ -9,7 +9,7 @@ import {
 } from '@postarix/ui/components/dropdown-menu';
 import { Postmark } from '@postarix/ui/components/postmark';
 import { cn } from '@postarix/ui/lib/utils';
-import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, Languages, MailCheck, Menu, Settings, ShieldAlert, ShieldX, UsersRound, X } from 'lucide-react';
+import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, Languages, MailCheck, Menu, Settings, ShieldAlert, ShieldX, Timer, UsersRound, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { useRoute } from '@/lib/router';
@@ -18,6 +18,7 @@ import { FiltersDialog } from './filters-dialog';
 import { MailImportDialog } from './mail-import-dialog';
 import { MailSettingsDialog } from './mail-settings-dialog';
 import { QuarantineDialog } from './quarantine-dialog';
+import { TemporaryAddressesDialog } from './temporary-addresses-dialog';
 import { SpamDialog } from './spam-dialog';
 import { useBranding } from '@/lib/branding';
 import { language, languages, setLanguage, t } from '@/lib/i18n';
@@ -42,6 +43,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [spamOpen, setSpamOpen] = useState(false);
   const [quarantineOpen, setQuarantineOpen] = useState(false);
+  const [temporaryOpen, setTemporaryOpen] = useState(false);
   const routeKey = JSON.stringify(route);
   useEffect(() => setOpen(false), [routeKey]);
   useEffect(() => {
@@ -110,6 +112,10 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
             <MailCheck aria-hidden />{t('Automatic reply and forwarding')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setSpamOpen(true)}>
             <ShieldAlert aria-hidden />{t('Spam filter')}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setTemporaryOpen(true)}>
+            <Timer aria-hidden />
+            {t('Temporary addresses')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setQuarantineOpen(true)}>
             <ShieldX aria-hidden />{t('Quarantine')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setImportOpen(true)}>
@@ -157,6 +163,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         {importOpen ? <MailImportDialog onClose={() => setImportOpen(false)} /> : null}
         {spamOpen ? <SpamDialog onClose={() => setSpamOpen(false)} /> : null}
         {quarantineOpen ? <QuarantineDialog onClose={() => setQuarantineOpen(false)} /> : null}
+        {temporaryOpen ? <TemporaryAddressesDialog onClose={() => setTemporaryOpen(false)} /> : null}
         {branding?.announcement ? (
           <div role="status" className="bg-warning/15 px-4 py-2 text-sm text-white md:mt-2 md:mr-2 md:rounded-lg">
             {branding.announcement}

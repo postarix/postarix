@@ -80,6 +80,11 @@ Besides the name, quota and password, a mailbox has:
   collects spam sent to made-up addresses.
 - **Accept mail and silently drop it** takes the mail and throws it away,
   for an old address that only gets spam, without telling the sender.
+- **Temporary addresses:** people make throwaway addresses for themselves in
+  the webmail (their menu → Temporary addresses), for a shop or a
+  newsletter: an alias of their domain that delivers to them for an hour to
+  a year, then stops working and is deleted. They appear in the aliases list
+  with their expiry, and count against the domain's alias limit.
 - Spam for an alias goes to the Junk folder of its destinations on this
   server, and is never forwarded outside.
 
