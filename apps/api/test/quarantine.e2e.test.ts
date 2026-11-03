@@ -5,7 +5,9 @@ import { MAIL_ENGINE, QUARANTINE_SOURCE, SYSTEM_MAILER } from '../src/core/token
 import type { MemorySystemMailer } from '../src/mail/system-mailer.js';
 import type { MemoryQuarantineSource } from '../src/quarantine/quarantine-source.js';
 import { QuarantineService } from '../src/quarantine/quarantine.js';
-import { mailboxInNewOrg, startApp } from './helpers.js';
+import type TestAgent from 'supertest/lib/agent.js';
+import { createSuperAdmin } from '../src/auth/create-super-admin.js';
+import { authOf, mailboxInNewOrg, PASSWORD, signIn, startApp } from './helpers.js';
 
 describe('Quarantine', () => {
   let app: INestApplication;
@@ -16,6 +18,8 @@ describe('Quarantine', () => {
   let a: Awaited<ReturnType<typeof mailboxInNewOrg>>;
   let b: Awaited<ReturnType<typeof mailboxInNewOrg>>;
   const imported: { address: string; mailboxIds: unknown }[] = [];
+  const uploads: string[] = [];
+  let root: TestAgent;
 
   const refused = (recipients: string[], subject: string) =>
     source.waiting.push({
@@ -37,6 +41,9 @@ describe('Quarantine', () => {
     service = app.get(QuarantineService);
     engine = app.get<MemoryMailEngine>(MAIL_ENGINE);
     mailer = app.get<MemorySystemMailer>(SYSTEM_MAILER);
+    const email = `quar-root-${Date.now()}@example.test`;
+    await createSuperAdmin(authOf(app), { email, password: PASSWORD, name: 'Root' });
+    root = await signIn(app, email);
     a = await mailboxInNewOrg(app, 'quar-a');
     b = await mailboxInNewOrg(app, 'quar-b');
     await a.owner.agent
@@ -45,7 +52,10 @@ describe('Quarantine', () => {
       .expect(201);
     engine.jmapHandler = async (address, req) => {
       if (req.method === 'GET' && req.path === '') return Response.json({ primaryAccounts: { 'urn:ietf:params:jmap:mail': 'acct' } });
-      if (req.path.startsWith('upload/')) return Response.json({ blobId: 'B1' });
+      if (req.path.startsWith('upload/')) {
+        uploads.push(Buffer.from(await new Response(req.body as ConstructorParameters<typeof Response>[0]).arrayBuffer()).toString());
+        return Response.json({ blobId: 'B1' });
+      }
       const body = JSON.parse(Buffer.from(await new Response(req.body as ConstructorParameters<typeof Response>[0]).arrayBuffer()).toString()) as {
         methodCalls: [string, Record<string, unknown>, string][];
       };
@@ -115,5 +125,87 @@ describe('Quarantine', () => {
   it('deletes items after the retention period', async () => {
     await service.housekeeping(new Date(Date.now() + 31 * 86_400_000));
     expect((await a.agent.get('/api/me/quarantine').expect(200)).body.data).toHaveLength(0);
+  });
+
+  it('follows the instance’s quarantine settings', async () => {
+    try {
+      await root
+        .put('/api/system/settings')
+        .send({
+          quarantine: {
+            retentionDays: 3,
+            maxBytes: 200,
+            notifyMaxScore: 20,
+            redirectTo: 'spam-desk@example.test',
+            bccTo: 'audit@example.test',
+            sender: 'quarantine@example.test',
+            subject: '{count} for {address}',
+            releaseFormat: 'attachment',
+            excludedDomains: [b.domainName],
+          },
+        })
+        .expect(200);
+      await root.put('/api/system/settings').send({ quarantine: { excludedDomains: ['not a domain!'] } }).expect(400);
+
+      refused([a.address, b.address], 'kept for a only');
+      source.waiting.push({
+        meta: { key: 'big', envelopeFrom: 'x@outside.example', fromHeader: '', subject: 'too big', score: 9, symbols: [], recipients: [a.address] },
+        raw: Buffer.alloc(500, 'x'),
+      });
+      expect(await service.collect()).toBe(1);
+      const mine = (await a.agent.get('/api/me/quarantine').expect(200)).body.data;
+      expect(mine.map((i: { subject: string }) => i.subject)).toEqual(['kept for a only']);
+      expect((await b.agent.get('/api/me/quarantine').expect(200)).body.data).toHaveLength(0);
+
+      // Score 17.5 is under the cutoff: announced, to the redirect address with a blind copy.
+      mailer.sent.length = 0;
+      expect(await service.notify(new Date(Date.now() + 86_400_000 + 60_000))).toBe(1);
+      expect(mailer.sent[0]).toMatchObject({
+        to: 'spam-desk@example.test',
+        bcc: 'audit@example.test',
+        from: 'quarantine@example.test',
+        subject: `1 message for ${a.address}`,
+      });
+      expect(mailer.sent[0]!.text).toContain('within 3 days');
+
+      // Above the cutoff: kept, never announced.
+      source.waiting.push({
+        meta: { key: 'obvious', envelopeFrom: 'x@outside.example', fromHeader: '', subject: 'obvious', score: 40, symbols: [], recipients: [a.address] },
+        raw: Buffer.from('Subject: obvious\r\n\r\nx\r\n'),
+      });
+      await service.collect();
+      mailer.sent.length = 0;
+      expect(await service.notify(new Date(Date.now() + 86_400_000 + 60_000))).toBe(0);
+      expect(mailer.sent).toHaveLength(0);
+
+      // Released attached to a note.
+      const item = (await a.agent.get('/api/me/quarantine').expect(200)).body.data.find((i: { subject: string }) => i.subject === 'kept for a only');
+      uploads.length = 0;
+      await a.agent.post(`/api/me/quarantine/${item.id}/release`).expect(204);
+      expect(uploads[0]).toContain('Subject: Released from quarantine: kept for a only');
+      expect(uploads[0]).toContain('Content-Type: message/rfc822');
+      expect(uploads[0]).toContain('Buy now');
+
+      // Retention of 3 days.
+      await service.housekeeping(new Date(Date.now() + 4 * 86_400_000));
+      expect((await a.agent.get('/api/me/quarantine').expect(200)).body.data).toHaveLength(0);
+    } finally {
+      await root
+        .put('/api/system/settings')
+        .send({
+          quarantine: {
+            retentionDays: null,
+            maxBytes: 10 * 1024 * 1024,
+            notifyMaxScore: null,
+            redirectTo: '',
+            bccTo: '',
+            sender: '',
+            subject: '',
+            releaseFormat: 'original',
+            excludedDomains: [],
+          },
+        })
+        .expect(200);
+    }
   });
 });

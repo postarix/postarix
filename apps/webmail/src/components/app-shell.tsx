@@ -7,9 +7,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@postarix/ui/components/dropdown-menu';
-import { Postmark } from '@postarix/ui/components/postmark';
 import { cn } from '@postarix/ui/lib/utils';
-import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, Languages, MailCheck, Menu, Settings, ShieldAlert, ShieldX, Timer, UsersRound, X } from 'lucide-react';
+import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, Languages, MailCheck, Menu, Settings, ShieldAlert, ShieldX, SquareArrowOutUpRight, Timer, UsersRound, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { useRoute } from '@/lib/router';
@@ -20,6 +19,7 @@ import { MailSettingsDialog } from './mail-settings-dialog';
 import { QuarantineDialog } from './quarantine-dialog';
 import { TemporaryAddressesDialog } from './temporary-addresses-dialog';
 import { SpamDialog } from './spam-dialog';
+import { BrandLogo } from '@/components/brand-logo';
 import { useBranding } from '@/lib/branding';
 import { language, languages, setLanguage, t } from '@/lib/i18n';
 
@@ -61,8 +61,8 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
   const sidebar = (
     <div className="flex h-full flex-col gap-5 px-3 pt-4 pb-3">
       <a data-nav href="/" className="flex items-center gap-2.5 rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
-        <Postmark className="size-7" />
-        <span className="text-[1.05rem] leading-none font-semibold tracking-tight text-white">{t('Postarix')}</span>
+        <BrandLogo logo={branding?.logo} className="size-7" />
+        <span className="truncate text-[1.05rem] leading-none font-semibold tracking-tight text-white">{branding?.productName || t('Postarix')}</span>
       </a>
 
       <nav aria-label={t('Apps')} className="grid grid-cols-3 gap-0.5 rounded-lg bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.4)] ring-1 ring-white/[0.05]">
@@ -124,6 +124,21 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
             <a href="/admin/account">
               <Settings aria-hidden />{t('Security and app passwords')}</a>
           </DropdownMenuItem>
+          {branding?.appLinks?.length ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t('More apps')}</DropdownMenuLabel>
+              {branding.appLinks.map((link) => (
+                <DropdownMenuItem key={link.url} asChild>
+                  <a href={link.url} target="_blank" rel="noreferrer">
+                    <SquareArrowOutUpRight aria-hidden />
+                    {link.name}
+                  </a>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {languages
             .filter((l) => l.code !== language)
             .map((l) => (
@@ -155,8 +170,8 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
           <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label={t('Open menu')} aria-expanded={open} onClick={() => setOpen(true)}>
             {open ? <X aria-hidden /> : <Menu aria-hidden />}
           </Button>
-          <Postmark className="size-6" />
-          <span className="font-semibold tracking-tight">{t('Postarix')}</span>
+          <BrandLogo logo={branding?.logo} className="size-6" />
+          <span className="truncate font-semibold tracking-tight">{branding?.productName || t('Postarix')}</span>
         </header>
         {settingsOpen ? <MailSettingsDialog onClose={() => setSettingsOpen(false)} /> : null}
         {filtersOpen ? <FiltersDialog onClose={() => setFiltersOpen(false)} /> : null}
@@ -165,7 +180,13 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         {quarantineOpen ? <QuarantineDialog onClose={() => setQuarantineOpen(false)} /> : null}
         {temporaryOpen ? <TemporaryAddressesDialog onClose={() => setTemporaryOpen(false)} /> : null}
         {branding?.announcement ? (
-          <div role="status" className="bg-warning/15 px-4 py-2 text-sm text-white md:mt-2 md:mr-2 md:rounded-lg">
+          <div
+            role="status"
+            className={cn(
+              'px-4 py-2 text-sm whitespace-pre-line text-white md:mt-2 md:mr-2 md:rounded-lg',
+              branding.announcementLevel === 'info' ? 'bg-ink/40' : branding.announcementLevel === 'urgent' ? 'bg-destructive/80' : 'bg-warning/15',
+            )}
+          >
             {branding.announcement}
           </div>
         ) : null}

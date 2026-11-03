@@ -23,6 +23,11 @@ function size(bytes: number): string {
   return `${Number.isInteger(value) ? value : value.toFixed(1)} ${units[unit]}`;
 }
 
+/** The text with its {placeholders} replaced (unknown ones kept). */
+export function fill(template: string, values: Record<string, string>): string {
+  return template.trim() ? template.replace(/\{(\w+)\}/g, (all, key: string) => values[key] ?? all) : '';
+}
+
 /**
  * Tells people when their mailbox is nearly full (the instance's
  * quota.warnAtPercent, 90% by default), once, and again a week later if it
@@ -80,16 +85,25 @@ export class QuotaWarningsService implements OnApplicationBootstrap, OnApplicati
           continue;
         }
         if (row.warnedAt && now.getTime() - row.warnedAt.getTime() < REMIND_AFTER_MS) continue;
+        const values: Record<string, string> = {
+          address: row.address,
+          percent: String(Math.floor(percent)),
+          used: size(usage.usedBytes),
+          quota: size(quotaBytes),
+        };
         await this.mailer.send({
           to: row.address,
-          subject: `Your mailbox is ${Math.floor(percent)}% full`,
-          text: [
-            `${row.address} uses ${size(usage.usedBytes)} of its ${size(quotaBytes)}.`,
-            '',
-            percent >= 100
-              ? 'It is full: new mail is refused until you free some space.'
-              : 'When it is full, new mail is refused. Delete old mail (and empty the Trash) or ask your administrator for more space.',
-          ].join('\n'),
+          from: quota.sender || undefined,
+          subject: fill(quota.subject, values) || `Your mailbox is ${values.percent}% full`,
+          text:
+            fill(quota.template, values) ||
+            [
+              `${row.address} uses ${values.used} of its ${values.quota}.`,
+              '',
+              percent >= 100
+                ? 'It is full: new mail is refused until you free some space.'
+                : 'When it is full, new mail is refused. Delete old mail (and empty the Trash) or ask your administrator for more space.',
+            ].join('\n'),
         });
         await this.db.update(mailboxes).set({ quotaWarnedAt: now }).where(eq(mailboxes.id, row.id));
         warned++;

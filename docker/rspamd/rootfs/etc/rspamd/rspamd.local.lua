@@ -1,4 +1,6 @@
 local lua_redis = require 'lua_redis'
+-- A threshold no message reaches (an action turned off).
+local NEVER = 1000000
 local redis_params = lua_redis.parse_redis_server('postarix')
 
 -- Mail Cyrus sends by itself (Sieve redirect and vacation replies) comes in on
@@ -471,7 +473,13 @@ rspamd_config:register_symbol({
       if greylist_at and junk_at and greylist_at >= junk_at then
         actions['greylist'] = junk_at - 0.01
       end
-      task:set_settings({ actions = actions })
+      local settings = { actions = actions }
+      -- A forwarding host (see below) keeps its exemptions.
+      if task:cache_get('postarix_forwarding') then
+        actions['reject'], actions['soft reject'], actions['greylist'] = NEVER, NEVER, NEVER
+        settings.groups_disabled = { 'rbl' }
+      end
+      task:set_settings(settings)
       task:insert_result('POSTARIX_SPAM_SCORES', 1.0, value)
     end, 'HMGET', { SPAM_SCORES_HASH, address, '@' .. domain })
   end,
@@ -620,3 +628,132 @@ rspamd_config:register_symbol({
   end,
 })
 rspamd_config:set_metric_symbol({ name = 'POSTARIX_QUARANTINE', score = 0.0, description = 'Refused mail kept in quarantine' })
+
+-- Postarix: forwarding hosts (System → Forwarding hosts), published by the API
+-- in Valkey: POSTARIX_FORWARDING_HOSTS, "network" -> "1" (spam filter on) or
+-- "0" (off). Mail from them is never greylisted and never refused as spam
+-- (at most filed as junk); with the filter off it is not scanned at all.
+local rspamd_ip = require 'rspamd_ip'
+local FORWARDING_HASH = 'POSTARIX_FORWARDING_HOSTS'
+
+local function in_network(ip, network)
+  local base, bits = network:match('^([^/]+)/(%d+)$')
+  base = base or network
+  local net = rspamd_ip.from_string(base)
+  if not net or not net:is_valid() or net:get_version() ~= ip:get_version() then
+    return false
+  end
+  bits = tonumber(bits) or (ip:get_version() == 4 and 32 or 128)
+  return ip:apply_mask(bits):to_string() == net:apply_mask(bits):to_string()
+end
+
+rspamd_config:register_symbol({
+  name = 'POSTARIX_FORWARDING_HOST',
+  type = 'prefilter',
+  priority = 10,
+  callback = function(task)
+    if task:get_user() or is_cyrus(task) or not redis_params then
+      return
+    end
+    local ip = task:get_from_ip()
+    if not ip or not ip:is_valid() then
+      return
+    end
+    lua_redis.redis_make_request(task, redis_params, FORWARDING_HASH, false, function(err, data)
+      if err or type(data) ~= 'table' then
+        return
+      end
+      for i = 1, #data, 2 do
+        local network, filter = data[i], data[i + 1]
+        if type(network) == 'string' and in_network(ip, network) then
+          task:insert_result('POSTARIX_FORWARDING_HOST', 1.0, network)
+          if filter == '0' then
+            task:set_pre_result('no action', 'Forwarding host', 'postarix')
+          else
+            task:cache_set('postarix_forwarding', true)
+            task:set_settings({
+              actions = { reject = NEVER, ['soft reject'] = NEVER, greylist = NEVER },
+              groups_disabled = { 'rbl' },
+            })
+          end
+          return
+        end
+      end
+    end, 'HGETALL', { FORWARDING_HASH })
+  end,
+})
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_FORWARDING_HOST', score = 0.0, description = 'From a forwarding host' })
+
+-- Postarix: server-wide content rules (System → Content filters), published by
+-- the API in Valkey: POSTARIX_FILTER_RULES, id -> "action|target|header|regex"
+-- (action reject or junk; target subject, from, to or header).
+local rspamd_regexp = require 'rspamd_regexp'
+local FILTER_HASH = 'POSTARIX_FILTER_RULES'
+local compiled = {}
+
+local function regexp_of(pattern)
+  local re = compiled[pattern]
+  if re == nil then
+    re = rspamd_regexp.create_cached('/' .. pattern:gsub('/', '\\/') .. '/i') or false
+    compiled[pattern] = re
+  end
+  return re or nil
+end
+
+local function values_of(task, target, header)
+  local out = {}
+  if target == 'subject' then
+    table.insert(out, task:get_subject() or '')
+  elseif target == 'from' then
+    for _, a in ipairs(task:get_from('smtp') or {}) do table.insert(out, a.addr or '') end
+    for _, a in ipairs(task:get_from('mime') or {}) do
+      table.insert(out, a.addr or '')
+      table.insert(out, a.name or '')
+    end
+  elseif target == 'to' then
+    for _, a in ipairs(task:get_recipients('smtp') or {}) do table.insert(out, a.addr or '') end
+    for _, a in ipairs(task:get_recipients('mime') or {}) do table.insert(out, a.addr or '') end
+  elseif target == 'header' and header and header ~= '' then
+    for _, h in ipairs(task:get_header_full(header) or {}) do table.insert(out, h.decoded or h.value or '') end
+  end
+  return out
+end
+
+local filter_id = rspamd_config:register_symbol({
+  name = 'POSTARIX_FILTER_RULE',
+  type = 'prefilter',
+  priority = 9,
+  callback = function(task)
+    if task:get_user() or is_cyrus(task) or not redis_params then
+      return
+    end
+    lua_redis.redis_make_request(task, redis_params, FILTER_HASH, false, function(err, data)
+      if err or type(data) ~= 'table' then
+        return
+      end
+      for _, rule in ipairs(data) do
+        if type(rule) == 'string' then
+          local action, target, header, pattern = rule:match('^(%a+)|(%a+)|([^|]*)|(.+)$')
+          local re = pattern and regexp_of(pattern)
+          if re then
+            for _, value in ipairs(values_of(task, target, header)) do
+              if value ~= '' and re:match(value) then
+                if action == 'reject' then
+                  task:insert_result('POSTARIX_FILTER_RULE', 1.0, pattern)
+                  task:set_pre_result('reject', 'Refused by the server\'s content rules', 'postarix')
+                else
+                  task:insert_result('POSTARIX_FILTER_JUNK', 1.0, pattern)
+                  task:set_pre_result('add header', 'Junk by the server\'s content rules', 'postarix')
+                end
+                return
+              end
+            end
+          end
+        end
+      end
+    end, 'HVALS', { FILTER_HASH })
+  end,
+})
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_FILTER_RULE', score = 0.0, description = 'Refused by a content rule' })
+rspamd_config:register_symbol({ name = 'POSTARIX_FILTER_JUNK', type = 'virtual', parent = filter_id })
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_FILTER_JUNK', score = 0.0, description = 'Junk by a content rule' })

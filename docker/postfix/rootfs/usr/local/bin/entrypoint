@@ -112,6 +112,7 @@ postconf -e \
   "smtp_sasl_tls_security_options = noanonymous" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
   "smtpd_relay_restrictions = permit_sasl_authenticated, reject_unauth_destination" \
+  "smtpd_client_restrictions = check_client_access $(pg client_access)" \
   "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, check_recipient_access $(pg tls_required_in), permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
   "sender_dependent_default_transport_maps = $(pg tls_required_out)" \
   "plaintext_reject_code = 550" \
@@ -163,7 +164,7 @@ for service in submission smtps; do
     "$service/inet/syslog_name=postfix/$service" \
     "$service/inet/smtpd_sasl_auth_enable=yes" \
     "$service/inet/smtpd_tls_auth_only=yes" \
-    "$service/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject" \
+    "$service/inet/smtpd_client_restrictions=check_client_access,$(pg client_access),permit_sasl_authenticated,reject" \
     "$service/inet/smtpd_sender_restrictions=\$postarix_submission_sender_restrictions" \
     "$service/inet/smtpd_relay_restrictions=permit_sasl_authenticated,reject" \
     "$service/inet/smtpd_recipient_restrictions=permit_sasl_authenticated,reject" \

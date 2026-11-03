@@ -115,4 +115,28 @@ describe('Instance settings', () => {
     await warnings.check(new Date(Date.now() + 8 * 86_400_000));
     expect(mailer.sent.filter((m) => m.to === address)).toHaveLength(2);
   });
+
+  it('uses the configured quota notice', async () => {
+    const engine = app.get<MemoryMailEngine>(MAIL_ENGINE);
+    const mailer = app.get<MemorySystemMailer>(SYSTEM_MAILER);
+    const created = await org.owner.agent
+      .post(`/api/orgs/${org.orgId}/mailboxes`)
+      .send({ domainId: org.domainId, localPart: 'nearly', password: PASSWORD, quotaBytes: 100 * 1024 * 1024 })
+      .expect(201);
+    const address = created.body.address as string;
+    engine.mailboxes.get(address)!.usedBytes = 92 * 1024 * 1024;
+    await root
+      .put('/api/system/settings')
+      .send({ quota: { sender: 'helpdesk@example.test', subject: '{address} at {percent}%', template: 'Used {used} of {quota}. {unknown}' } })
+      .expect(200);
+    try {
+      mailer.sent.length = 0;
+      await app.get(QuotaWarningsService).check();
+      expect(mailer.sent.find((m) => m.to === address)).toEqual(
+        expect.objectContaining({ from: 'helpdesk@example.test', subject: `${address} at 92%`, text: 'Used 92 MB of 100 MB. {unknown}' }),
+      );
+    } finally {
+      await root.put('/api/system/settings').send({ quota: { sender: '', subject: '', template: '' } }).expect(200);
+    }
+  });
 });

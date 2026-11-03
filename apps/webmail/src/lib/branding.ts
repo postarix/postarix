@@ -5,6 +5,12 @@ export interface Branding {
   loginMessage: string;
   announcement: string;
   supportUrl: string;
+  announcementLevel?: 'info' | 'important' | 'urgent';
+  footer?: string;
+  /** A data: URL replacing the stamp; empty: the stamp. */
+  logo?: string;
+  appLinks?: { name: string; url: string }[];
+  hidePasswordSignIn?: boolean;
 }
 
 let cached: Promise<Branding | null> | null = null;
