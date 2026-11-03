@@ -63,6 +63,7 @@ export class AliasesService {
         address,
         destinations: input.destinations,
         enabled: input.enabled,
+        discard: input.discard,
       }, assertMayAddAlias);
       await this.audit.record(
         ctx,
@@ -81,9 +82,13 @@ export class AliasesService {
     const current = await this.require(ctx, id);
     if (input.destinations) assertNoSelfReference(current.address, input.destinations);
 
-    const changes: Partial<Pick<AliasRow, 'destinations' | 'enabled'>> = {};
+    const changes: Partial<Pick<AliasRow, 'destinations' | 'enabled' | 'discard'>> = {};
     if (input.destinations !== undefined) changes.destinations = input.destinations;
     if (input.enabled !== undefined) changes.enabled = input.enabled;
+    if (input.discard !== undefined) changes.discard = input.discard;
+    if ((changes.discard ?? current.discard) === false && (changes.destinations ?? current.destinations).length === 0) {
+      throw new BadRequestException('Add at least one destination');
+    }
 
     const row = await this.repository.update(ctx, id, changes);
     if (!row) throw new NotFoundException('Alias not found');

@@ -7,7 +7,6 @@ const MAX_DESTINATIONS = 50;
 
 const destinationsSchema = z
   .array(z.string().max(320))
-  .min(1)
   .max(MAX_DESTINATIONS)
   .transform((values, ctx) => {
     const normalized: string[] = [];
@@ -22,18 +21,27 @@ const destinationsSchema = z
     return normalized;
   });
 
-export const createAliasSchema = z.strictObject({
-  domainId: z.uuid(),
-  localPart: localPartSchema,
-  destinations: destinationsSchema,
-  enabled: z.boolean().default(true),
-});
+export const createAliasSchema = z
+  .strictObject({
+    domainId: z.uuid(),
+    /** Empty: a catch-all, for every address of the domain that is not a mailbox or another alias. */
+    localPart: z.literal('').or(localPartSchema),
+    destinations: destinationsSchema.default([]),
+    enabled: z.boolean().default(true),
+    /** Accept and drop the mail. */
+    discard: z.boolean().default(false),
+  })
+  .refine((value) => value.discard || value.destinations.length > 0, {
+    message: 'Add at least one destination',
+    path: ['destinations'],
+  });
 export type CreateAliasInput = z.infer<typeof createAliasSchema>;
 
 export const updateAliasSchema = z
   .strictObject({
     destinations: destinationsSchema.optional(),
     enabled: z.boolean().optional(),
+    discard: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateAliasInput = z.infer<typeof updateAliasSchema>;
@@ -47,6 +55,8 @@ export interface AliasDto {
   localPart: string;
   destinations: string[];
   enabled: boolean;
+  discard: boolean;
+  catchAll: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +69,8 @@ export function toAliasDto(row: AliasRow): AliasDto {
     localPart: row.localPart,
     destinations: row.destinations,
     enabled: row.enabled,
+    discard: row.discard,
+    catchAll: row.localPart === '',
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

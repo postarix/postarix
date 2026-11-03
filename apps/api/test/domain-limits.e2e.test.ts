@@ -153,9 +153,14 @@ describe('Domain settings and limits', () => {
   });
 
   it('disables and enables a verified domain', async () => {
+    const person = await signIn(app, `first@${domainA.name}`, 'a long mailbox password');
+    await person.get('/api/me/app-passwords').expect(200);
     const off = await carol.agent.patch(`${domains(orgA)}/${domainA.id}`).send({ enabled: false }).expect(200);
     expect(off.body.status).toBe('disabled');
     await alice.agent.post(mailboxes(orgA)).send(mailbox('fifth')).expect(422);
+    // Its mailboxes are signed out, and cannot sign in again meanwhile.
+    await person.get('/api/me/app-passwords').expect(401);
+    await expect(signIn(app, `first@${domainA.name}`, 'a long mailbox password')).rejects.toThrow();
     const on = await carol.agent.patch(`${domains(orgA)}/${domainA.id}`).send({ enabled: true }).expect(200);
     expect(on.body.status).toBe('active');
 

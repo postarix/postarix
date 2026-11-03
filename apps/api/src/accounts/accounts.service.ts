@@ -77,6 +77,11 @@ export class AccountsService {
     });
   }
 
+  /** Signs the user out everywhere. */
+  async signOutEverywhere(userId: string): Promise<void> {
+    await this.db.delete(session).where(eq(session.userId, userId));
+  }
+
   /** Checks the account (web) password. */
   async verifyAccountPassword(userId: string, password: string): Promise<boolean> {
     const [row] = await this.db

@@ -6,7 +6,7 @@ import { AccountsService } from '../accounts/accounts.service.js';
 import { AppPasswordsService } from '../app-passwords/app-passwords.service.js';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
-import { type AppPasswordScope, domains, mailboxes } from '../db/schema/index.js';
+import { type AppPasswordScope, domains, mailboxes, type MailProtocol } from '../db/schema/index.js';
 import { DATABASE, ENV, COUNTER_STORE } from '../core/tokens.js';
 import { looksLikeJmapToken, verifyJmapToken } from '../jmap/jmap-token.js';
 import { FailureLimiter } from './failure-limiter.js';
@@ -18,6 +18,19 @@ const SERVICE_SCOPES: Record<string, AppPasswordScope> = {
   pop: 'imap',
   pop3: 'imap',
   sieve: 'imap',
+  smtp: 'smtp',
+  submission: 'smtp',
+  http: 'dav',
+  caldav: 'dav',
+  carddav: 'dav',
+};
+
+/** Maps the SASL service name to the protocol a mailbox may be allowed or refused. */
+const SERVICE_PROTOCOLS: Record<string, MailProtocol> = {
+  imap: 'imap',
+  pop: 'pop3',
+  pop3: 'pop3',
+  sieve: 'sieve',
   smtp: 'smtp',
   submission: 'smtp',
   http: 'dav',
@@ -64,11 +77,14 @@ export class MailAuthService {
    */
   async authenticate(attempt: MailLoginAttempt): Promise<boolean> {
     const username = attempt.username.trim().toLowerCase();
-    const scope = SERVICE_SCOPES[attempt.service.trim().toLowerCase()];
-    if (!scope || username.length === 0 || attempt.password.length === 0) return false;
+    const service = attempt.service.trim().toLowerCase();
+    const scope = SERVICE_SCOPES[service];
+    const protocol = SERVICE_PROTOCOLS[service];
+    if (!scope || !protocol || username.length === 0 || attempt.password.length === 0) return false;
 
-    const account = await this.findAccount(username);
-    if (!account) return false;
+    const found = await this.findAccount(username);
+    if (!found) return false;
+    const { account, allowedProtocols } = found;
 
     // Cyrus' internal JMAP service (the webmail) only accepts the API's own
     // short-lived tokens, minted for a signed-in web session; and those tokens
@@ -78,6 +94,8 @@ export class MailAuthService {
       return scope === 'dav' && looksLikeJmapToken(attempt.password) && verifyJmapToken(this.env.AUTH_SECRET, username, attempt.password);
     }
     if (looksLikeJmapToken(attempt.password)) return false;
+    // Protocols the organization turned off for this mailbox, whatever the password.
+    if (!allowedProtocols.includes(protocol)) return false;
 
     if (await this.appPasswords.verify(account.id, attempt.password, scope)) return true;
     if (account.twoFactorEnabled) return false;
@@ -102,7 +120,7 @@ export class MailAuthService {
     // Instance-wide lookup by address is the point of this endpoint: mail
     // logins identify the mailbox by its full address.
     const [mailbox] = await this.db
-      .select({ userId: mailboxes.userId })
+      .select({ userId: mailboxes.userId, allowedProtocols: mailboxes.allowedProtocols })
       .from(mailboxes)
       .innerJoin(domains, eq(domains.id, mailboxes.domainId))
       .where(
@@ -117,6 +135,6 @@ export class MailAuthService {
 
     const account = await this.accounts.find(mailbox.userId);
     if (!account || account.banned) return null;
-    return account;
+    return { account, allowedProtocols: mailbox.allowedProtocols };
   }
 }

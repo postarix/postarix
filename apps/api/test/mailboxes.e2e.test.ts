@@ -204,6 +204,31 @@ describe('Mailboxes and aliases API', () => {
 
       await alice.agent.get(`${url(orgA, 'mailboxes')}/${someId}`).expect(200);
     });
+
+    it("sets send-as addresses on the organization's own domains only", async () => {
+      const list = await alice.agent.get(url(orgA, 'mailboxes')).expect(200);
+      const id = list.body.data[0].id as string;
+      const sendAs = `${url(orgA, 'mailboxes')}/${id}/send-as`;
+      const res = await alice.agent
+        .put(sendAs)
+        .send({ senders: [`News@${domainA.name}`, `@${domainA.name}`, `news@${domainA.name}`] })
+        .expect(200);
+      expect(res.body.senders).toEqual([`@${domainA.name}`, `news@${domainA.name}`]);
+      expect((await alice.agent.get(sendAs).expect(200)).body.senders).toHaveLength(2);
+
+      const foreign = await alice.agent.put(sendAs).send({ senders: [`ceo@${domainB.name}`] }).expect(422);
+      expect(foreign.body.code).toBe('SEND_AS_FOREIGN_DOMAIN');
+      await alice.agent.put(sendAs).send({ senders: ['someone@external.example'] }).expect(422);
+      await alice.agent.put(sendAs).send({ senders: ['not an address'] }).expect(400);
+
+      // Isolation: another organization can neither read nor change it.
+      await bob.agent.get(`${url(orgB, 'mailboxes')}/${id}/send-as`).expect(404);
+      await bob.agent.put(`${url(orgB, 'mailboxes')}/${id}/send-as`).send({ senders: [] }).expect(404);
+      await bob.agent.get(`${url(orgA, 'mailboxes')}/${id}/send-as`).expect(404);
+      await carol.agent.put(sendAs).send({ senders: [] }).expect(403);
+      expect((await alice.agent.get(sendAs).expect(200)).body.senders).toHaveLength(2);
+      await alice.agent.put(sendAs).send({ senders: [] }).expect(200);
+    });
   });
 
   describe('aliases', () => {
@@ -243,6 +268,32 @@ describe('Mailboxes and aliases API', () => {
         .post(url(orgA, 'aliases'))
         .send({ ...base, domainId: domainB.id, localPart: 'steal' })
         .expect(422);
+    });
+
+    it('creates one catch-all per domain, and discarding aliases', async () => {
+      const catchAll = await alice.agent
+        .post(url(orgA, 'aliases'))
+        .send({ domainId: domainA.id, localPart: '', destinations: [`info@${domainA.name}`] })
+        .expect(201);
+      expect(catchAll.body).toMatchObject({ address: `@${domainA.name}`, catchAll: true, discard: false });
+      await alice.agent
+        .post(url(orgA, 'aliases'))
+        .send({ domainId: domainA.id, localPart: '', destinations: [`info@${domainA.name}`] })
+        .expect(409);
+      await bob.agent
+        .post(url(orgB, 'aliases'))
+        .send({ domainId: domainA.id, localPart: '', destinations: ['x@external.example'] })
+        .expect(422);
+
+      const dropped = await alice.agent
+        .post(url(orgA, 'aliases'))
+        .send({ domainId: domainA.id, localPart: 'old', discard: true })
+        .expect(201);
+      expect(dropped.body).toMatchObject({ discard: true, destinations: [] });
+      // Without discarding, it needs a destination again.
+      await alice.agent.patch(`${url(orgA, 'aliases')}/${dropped.body.id}`).send({ discard: false }).expect(400);
+      await alice.agent.delete(`${url(orgA, 'aliases')}/${dropped.body.id}`).expect(204);
+      await alice.agent.delete(`${url(orgA, 'aliases')}/${catchAll.body.id}`).expect(204);
     });
 
     it('refuses a mailbox on an address used by an alias', async () => {

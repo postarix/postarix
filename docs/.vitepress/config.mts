@@ -87,6 +87,7 @@ export default defineConfig({
       {
         text: 'Features',
         items: [
+          { text: 'Domains, mailboxes and aliases', link: '/administration' },
           { text: 'Calendar, invitations and rooms', link: '/calendar' },
           { text: 'Archiving and legal hold', link: '/archiving' },
           { text: 'Moving from another provider', link: '/migration' },

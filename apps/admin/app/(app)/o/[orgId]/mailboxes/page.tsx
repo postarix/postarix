@@ -10,6 +10,7 @@ import { Progress } from '@postarix/ui/components/progress';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
+import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, Inbox, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
@@ -136,10 +137,22 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
   );
 }
 
+const protocolOptions: { value: Mailbox['allowedProtocols'][number]; label: string }[] = [
+  { value: 'imap', label: 'IMAP' },
+  { value: 'pop3', label: 'POP3' },
+  { value: 'smtp', label: 'SMTP (sending)' },
+  { value: 'sieve', label: 'Sieve filters' },
+  { value: 'dav', label: 'Calendars and contacts' },
+];
+
 function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox: Mailbox; onClose: () => void }) {
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const sendAs = useQuery({
+    queryKey: [...keys.orgPart(orgId, 'mailboxes'), mailbox.id, 'send-as'],
+    queryFn: () => api.get<{ senders: string[] }>(`/orgs/${orgId}/mailboxes/${mailbox.id}/send-as`).then((r) => r.senders),
+  });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,8 +163,18 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
       await api.patch(`/orgs/${orgId}/mailboxes/${mailbox.id}`, {
         displayName: String(data.get('displayName')),
         quotaBytes: quotaFromGiB(String(data.get('quota'))),
-        status: data.get('enabled') ? 'active' : 'disabled',
+        status: String(data.get('status')),
+        allowedProtocols: protocolOptions.map((p) => p.value).filter((p) => data.get(`protocol-${p}`) !== null),
+        tlsRequiredIn: data.get('tlsRequiredIn') !== null,
+        tlsRequiredOut: data.get('tlsRequiredOut') !== null,
       });
+      if (sendAs.data) {
+        const senders = String(data.get('sendAs'))
+          .split(/[\s,;]+/)
+          .map((v) => v.trim())
+          .filter(Boolean);
+        await api.put(`/orgs/${orgId}/mailboxes/${mailbox.id}/send-as`, { senders });
+      }
       refresh();
       onClose();
     } catch (e) {
@@ -172,10 +195,62 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
           <FormField label="Quota (GB)" hint="Leave empty for unlimited.">
             {(props) => <Input {...props} name="quota" inputMode="decimal" defaultValue={quotaToGiB(mailbox.quotaBytes)} />}
           </FormField>
+          <FormField
+            label="Can also send as"
+            hint="One per line: an address, or @domain for every address of a domain. Only this organization's domains. Aliases that deliver to the mailbox are allowed already."
+          >
+            {(props) =>
+              sendAs.isLoading ? (
+                <Skeleton className="h-20 w-full" />
+              ) : (
+                <Textarea
+                  {...props}
+                  name="sendAs"
+                  rows={3}
+                  className="font-mono"
+                  defaultValue={sendAs.data?.join('\n') ?? ''}
+                  disabled={!sendAs.data}
+                />
+              )
+            }
+          </FormField>
+          <FormField label="Status">
+            {(props) => (
+              <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
+                <NativeSelectOption value="active">Active</NativeSelectOption>
+                <NativeSelectOption value="no_login">Receives mail, nobody can sign in</NativeSelectOption>
+                <NativeSelectOption value="disabled">Disabled: no sign-in, no mail</NativeSelectOption>
+              </NativeSelect>
+            )}
+          </FormField>
+          <Field>
+            <FieldLabel>Mail apps may use</FieldLabel>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {protocolOptions.map((option) => (
+                <Field key={option.value} orientation="horizontal" className="w-auto">
+                  <Checkbox
+                    id={`protocol-${option.value}`}
+                    name={`protocol-${option.value}`}
+                    defaultChecked={mailbox.allowedProtocols.includes(option.value)}
+                  />
+                  <FieldLabel htmlFor={`protocol-${option.value}`} className="font-normal">
+                    {option.label}
+                  </FieldLabel>
+                </Field>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">The webmail always works.</p>
+          </Field>
           <Field orientation="horizontal">
-            <Checkbox id="mailbox-enabled" name="enabled" defaultChecked={mailbox.status === 'active'} />
-            <FieldLabel htmlFor="mailbox-enabled" className="font-normal">
-              Enabled (a disabled mailbox cannot sign in and does not receive mail)
+            <Checkbox id="mailbox-tls-in" name="tlsRequiredIn" defaultChecked={mailbox.tlsRequiredIn} />
+            <FieldLabel htmlFor="mailbox-tls-in" className="font-normal">
+              Refuse incoming mail from servers that do not use TLS
+            </FieldLabel>
+          </Field>
+          <Field orientation="horizontal">
+            <Checkbox id="mailbox-tls-out" name="tlsRequiredOut" defaultChecked={mailbox.tlsRequiredOut} />
+            <FieldLabel htmlFor="mailbox-tls-out" className="font-normal">
+              Send outgoing mail only over TLS (otherwise it is returned)
             </FieldLabel>
           </Field>
           <DialogFooter>
@@ -407,7 +482,13 @@ export default function MailboxesPage() {
                   <Usage orgId={orgId} mailbox={mailbox} />
                 </TableCell>
                 <TableCell>
-                  {mailbox.status === 'active' ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Disabled</Badge>}
+                  {mailbox.status === 'active' ? (
+                    <Badge variant="success">Active</Badge>
+                  ) : mailbox.status === 'no_login' ? (
+                    <Badge variant="warning">No sign-in</Badge>
+                  ) : (
+                    <Badge variant="secondary">Disabled</Badge>
+                  )}
                 </TableCell>
                 <TableCell className="pr-4">
                   <div className="flex justify-end gap-1">

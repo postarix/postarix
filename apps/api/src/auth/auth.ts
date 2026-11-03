@@ -1,6 +1,7 @@
 import { passkey } from '@better-auth/passkey';
 import { sso } from '@better-auth/sso';
 import { betterAuth } from 'better-auth';
+import { eq } from 'drizzle-orm';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
@@ -161,6 +162,27 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
       },
     },
     telemetry: { enabled: false },
+    databaseHooks: {
+      session: {
+        create: {
+          // Whatever the sign-in method: a mailbox that may not sign in (or is
+          // on a disabled domain) gets no web session. Instance administrators
+          // keep theirs, so nobody locks the instance out by mistake.
+          before: async (newSession) => {
+            const [row] = await db
+              .select({ status: schema.mailboxes.status, domainStatus: schema.domains.status, role: schema.user.role })
+              .from(schema.mailboxes)
+              .innerJoin(schema.domains, eq(schema.domains.id, schema.mailboxes.domainId))
+              .innerJoin(schema.user, eq(schema.user.id, schema.mailboxes.userId))
+              .where(eq(schema.mailboxes.userId, newSession.userId))
+              .limit(1);
+            if (row && (row.status !== 'active' || row.domainStatus !== 'active') && !hasInstanceAdminRole(row.role)) {
+              throw new APIError('FORBIDDEN', { message: 'This mailbox cannot sign in', code: 'MAILBOX_SIGN_IN_DISABLED' });
+            }
+          },
+        },
+      },
+    },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path.startsWith('/organization/') && !OPEN_ORGANIZATION_ENDPOINTS.has(ctx.path)) {
