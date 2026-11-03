@@ -23,6 +23,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SystemModule } from './system/system.module.js';
 import { RoutingModule } from './routing/routing.js';
 import { SpamModule } from './spam/spam.js';
+import { QuarantineModule } from './quarantine/quarantine.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { SpamModule } from './spam/spam.js';
     SystemModule,
     RoutingModule,
     SpamModule,
+    QuarantineModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

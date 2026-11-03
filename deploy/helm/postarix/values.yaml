@@ -48,6 +48,8 @@ api:
   # IMAP servers on a private network that people may import mail from
   # (public servers need no entry). See docs/MIGRATION.md.
   mailImportAllowedHosts: []
+  # Days refused spam stays in quarantine.
+  quarantineRetentionDays: 30
   # Sender of the server's own notices (default: no-reply@<mailHostname>).
   systemMailFrom: ""
   # "json" for one JSON object per log line (Loki, Elasticsearch…).
@@ -119,6 +121,8 @@ mail:
 
 rspamd:
   greylist: true
+  # Refused spam up to this size (bytes) is kept in quarantine; 0 turns it off.
+  quarantineMaxBytes: 10485760
   storage:
     size: 2Gi
     storageClass: ""

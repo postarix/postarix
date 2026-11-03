@@ -98,6 +98,17 @@ filter). Instance administrators keep a list for every mailbox on the server
 in **System → Spam filter**. A message sent to several people at once is
 judged by the first recipient's settings.
 
+### Quarantine
+
+Spam that is refused (not viruses, not blocked senders) is kept for its
+recipients for 30 days (`QUARANTINE_RETENTION_DAYS`), up to 10 MB per
+message (`QUARANTINE_MAX_BYTES`). The sender is still told it was refused.
+People see theirs in the webmail (their menu → Quarantine) and release a
+message to their inbox, or delete it; they get a digest of new items daily
+by default (never, hourly, daily or weekly: in the webmail or the mailbox's
+settings). Organization admins see their mailboxes' items in the
+**Quarantine** tab, and can release, download or delete them.
+
 ## System (instance administrators)
 
 **System**, in the sidebar, shows the server itself:

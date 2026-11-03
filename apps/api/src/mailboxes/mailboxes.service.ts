@@ -172,6 +172,7 @@ export class MailboxesService {
     if (input.tlsRequiredOut !== undefined) changes.tlsRequiredOut = input.tlsRequiredOut;
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
     if (input.relayHostId !== undefined) changes.relayHostId = input.relayHostId;
+    if (input.quarantineNotify !== undefined) changes.quarantineNotify = input.quarantineNotify;
     if (input.spamScores !== undefined) {
       changes.spamJunkScore = input.spamScores.junkScore;
       changes.spamRejectScore = input.spamScores.rejectScore;

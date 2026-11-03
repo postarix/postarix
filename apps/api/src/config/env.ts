@@ -151,6 +151,8 @@ const envSchema = z
      * Rspamd. Without it keys are kept in memory and nothing is signed.
      */
     VALKEY_URL: z.string().optional(),
+    /** Days refused spam is kept in quarantine for its recipients. */
+    QUARANTINE_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   })
   .refine((env) => env.NODE_ENV === 'production' || !env.AUTH_URL.startsWith('https:'), {
     // An unset NODE_ENV means "development", which relaxes library fallbacks.

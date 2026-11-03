@@ -33,6 +33,8 @@ spec:
               value: {{ include "postarix.name" (list . "unbound") }}
             - name: RSPAMD_GREYLIST
               value: {{ .Values.rspamd.greylist | quote }}
+            - name: QUARANTINE_MAX_BYTES
+              value: {{ .Values.rspamd.quarantineMaxBytes | int64 | toString | quote }}
             {{- if .Values.clamav.enabled }}
             - name: CLAMAV_SERVERS
               value: "{{ include "postarix.name" (list . "clamav") }}:3310"

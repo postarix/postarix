@@ -31,4 +31,5 @@ export const auth = createAuth({} as Database, {
   DNS_SERVERS: [],
   MAIL_HOSTNAME: 'localhost',
   MTA_STS_MODE: 'testing',
+  QUARANTINE_RETENTION_DAYS: 30,
 });

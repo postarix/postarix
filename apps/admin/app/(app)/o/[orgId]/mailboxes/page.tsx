@@ -174,6 +174,7 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
         tlsRequiredIn: data.get('tlsRequiredIn') !== null,
         tlsRequiredOut: data.get('tlsRequiredOut') !== null,
         rateLimit: rateLimitFrom(data),
+        quarantineNotify: String(data.get('quarantineNotify')),
         ...(relayHosts.data ? { relayHostId: String(data.get('relayHostId') ?? '') || null } : {}),
       });
       if (sendAs.data) {
@@ -241,6 +242,16 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
               )}
             </FormField>
           ) : null}
+          <FormField label="Quarantine notices" hint="How often its people are told about refused spam they can release.">
+            {(props) => (
+              <NativeSelect {...props} name="quarantineNotify" defaultValue={mailbox.quarantineNotify} className="w-full">
+                <NativeSelectOption value="never">Never</NativeSelectOption>
+                <NativeSelectOption value="hourly">Hourly</NativeSelectOption>
+                <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+              </NativeSelect>
+            )}
+          </FormField>
           <FormField label="Status">
             {(props) => (
               <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">

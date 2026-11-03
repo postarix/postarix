@@ -10,7 +10,8 @@ import type { MailEngine } from '@postarix/mail-engine';
 import { createDnsResolver } from './dns.js';
 import { createMailEngine } from './mail-engine.js';
 import { type DkimPublisher, MemoryDkimPublisher, ValkeyDkimPublisher } from '../dkim/dkim-publisher.js';
-import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, HASH_STORE, RATE_LIMIT_STORE, SYSTEM_MAILER, SYSTEM_STORE } from './tokens.js';
+import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, HASH_STORE, QUARANTINE_SOURCE, RATE_LIMIT_STORE, SYSTEM_MAILER, SYSTEM_STORE } from './tokens.js';
+import { MemoryQuarantineSource, type QuarantineSource, ValkeyQuarantineSource } from '../quarantine/quarantine-source.js';
 import { type HashStore, MemoryHashStore, ValkeyHashStore } from '../spam/spam-store.js';
 import { MemorySystemStore, type SystemStore, ValkeySystemStore } from '../system/system-store.js';
 import { MemoryRateLimitStore, type RateLimitStore, ValkeyRateLimitStore } from '../rate-limits/rate-limits.js';
@@ -83,6 +84,12 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       inject: [ENV],
       useFactory: (env: Env): HashStore => (env.VALKEY_URL ? new ValkeyHashStore(env.VALKEY_URL) : new MemoryHashStore()),
     },
+    {
+      provide: QUARANTINE_SOURCE,
+      inject: [ENV],
+      useFactory: (env: Env): QuarantineSource =>
+        env.VALKEY_URL ? new ValkeyQuarantineSource(env.VALKEY_URL) : new MemoryQuarantineSource(),
+    },
   ],
   exports: [
     SecondFactorPolicy,
@@ -98,6 +105,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
     RATE_LIMIT_STORE,
     SYSTEM_STORE,
     HASH_STORE,
+    QUARANTINE_SOURCE,
   ],
 })
 export class CoreModule implements OnApplicationShutdown {
@@ -109,6 +117,7 @@ export class CoreModule implements OnApplicationShutdown {
     @Inject(RATE_LIMIT_STORE) private readonly rateLimits: RateLimitStore,
     @Inject(SYSTEM_STORE) private readonly systemStore: SystemStore,
     @Inject(HASH_STORE) private readonly hashStore: HashStore,
+    @Inject(QUARANTINE_SOURCE) private readonly quarantineSource: QuarantineSource,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -117,6 +126,7 @@ export class CoreModule implements OnApplicationShutdown {
     await this.rateLimits.close();
     await this.systemStore.close();
     await this.hashStore.close();
+    await this.quarantineSource.close();
     await this.counters.close();
     await this.pool.end();
   }

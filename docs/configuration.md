@@ -58,6 +58,8 @@ Postfix and Cyrus need a certificate for `MAIL_HOSTNAME`, kept current by the
 |---|---|---|
 | `MESSAGE_SIZE_LIMIT` | `52428800` (50 MB) | Largest message accepted or sent, in bytes. |
 | `RSPAMD_GREYLIST` | `true` | Greylisting of unknown senders (delays their first message a few minutes). |
+| `QUARANTINE_MAX_BYTES` | `10485760` (10 MB) | Refused spam up to this size is kept in quarantine for its recipients; `0` turns quarantine off. |
+| `QUARANTINE_RETENTION_DAYS` | `30` | Days quarantined mail is kept. |
 | `CLAMAV_SERVERS` | empty | `clamav:3310` with `--profile clamav` to scan for viruses ([Antivirus](./antivirus)). |
 | `MAIL_IMPORT_ALLOWED_HOSTS` | empty | IMAP servers on a private network people may import mail from ([Migration](./migration)). |
 | `SSO_TRUSTED_ISSUERS` | empty | Identity providers on a private network organizations may use for single sign-on. |

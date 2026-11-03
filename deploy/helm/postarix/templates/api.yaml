@@ -80,6 +80,8 @@ spec:
               value: {{ join "," .Values.api.ssoTrustedIssuers | quote }}
             - name: MAIL_IMPORT_ALLOWED_HOSTS
               value: {{ join "," .Values.api.mailImportAllowedHosts | quote }}
+            - name: QUARANTINE_RETENTION_DAYS
+              value: {{ .Values.api.quarantineRetentionDays | int64 | toString | quote }}
             {{- with .Values.api.systemMailFrom }}
             - name: SYSTEM_MAIL_FROM
               value: {{ . | quote }}
