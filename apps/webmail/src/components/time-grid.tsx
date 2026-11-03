@@ -84,7 +84,7 @@ export function TimeGrid({
       </div>
 
       {/* Hours */}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="relative grid" style={{ ...columns, height: HOUR_HEIGHT * 24 }}>
           <div className="relative">
             {Array.from({ length: 23 }, (_, i) => (

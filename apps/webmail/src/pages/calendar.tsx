@@ -258,7 +258,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
         </div>
 
         {/* Agenda (small screens, month and week) */}
-        <div className={cn('min-h-0 flex-1 overflow-y-auto p-4 md:hidden', view === 'day' && 'hidden')}>
+        <div className={cn('relative min-h-0 flex-1 overflow-y-auto p-4 md:hidden', view === 'day' && 'hidden')}>
           {agendaDays.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">{t('Nothing planned this')}{' '}{unit}.</p>
           ) : (
