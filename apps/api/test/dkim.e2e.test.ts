@@ -1,4 +1,4 @@
-import { createPublicKey } from 'node:crypto';
+import { createPublicKey, generateKeyPairSync } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -151,6 +151,76 @@ describe('DKIM key encryption', () => {
     expect(decryptPrivateKey(stored, secret)).toBe('-----BEGIN PRIVATE KEY-----\nabc\n');
     expect(() => decryptPrivateKey(stored, 'b'.repeat(40))).toThrow();
     expect(encryptPrivateKey('same', secret)).not.toBe(encryptPrivateKey('same', secret));
+  });
+});
+
+describe('DKIM key management', () => {
+  let app: INestApplication;
+  let publisher: MemoryDkimPublisher;
+  let alice: TestUser;
+  let bob: TestUser;
+  let orgA: string;
+  let orgB: string;
+  let domain: { id: string; name: string };
+
+  beforeAll(async () => {
+    app = await startApp();
+    publisher = app.get<MemoryDkimPublisher>(DKIM_PUBLISHER);
+    alice = await signUp(app, 'dkm-alice');
+    bob = await signUp(app, 'dkm-bob');
+    orgA = await createOrg(alice, 'DkimMgmtA');
+    orgB = await createOrg(bob, 'DkimMgmtB');
+    const name = `dkm-${Date.now()}.example`;
+    const res = await alice.agent.post(`/api/orgs/${orgA}/domains`).send({ name }).expect(201);
+    domain = { id: res.body.id, name };
+    await alice.agent.post(`/api/orgs/${orgA}/domains/${domain.id}/verify`).expect(200);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  const dkimUrl = () => `/api/orgs/${orgA}/domains/${domain.id}/dkim`;
+
+  it('shows the active key and its DNS record', async () => {
+    const res = await alice.agent.get(dkimUrl()).expect(200);
+    expect(res.body.key).toMatchObject({ bits: 2048, record: { name: expect.stringMatching(/^px\d{6}\._domainkey\./) } });
+    expect(res.body.key.record.value).toMatch(/^v=DKIM1; k=rsa; p=/);
+  });
+
+  it('generates a new key of the chosen size and selector, and signs with it at once', async () => {
+    const res = await alice.agent.put(dkimUrl()).send({ selector: 'Mail2026', keyBits: 1024 }).expect(200);
+    expect(res.body).toMatchObject({ selector: 'mail2026', bits: 1024, record: { name: `mail2026._domainkey.${domain.name}` } });
+    expect(publisher.selectors.get(domain.name)).toBe('mail2026');
+    const dns = await alice.agent.get(`/api/orgs/${orgA}/domains/${domain.id}/dns-records`).expect(200);
+    expect(dns.body.data.find((r: { purpose: string }) => r.purpose === 'dkim').name).toBe(`mail2026._domainkey.${domain.name}`);
+  });
+
+  it('imports an existing private key', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const res = await alice.agent.put(dkimUrl()).send({ selector: 'legacy', privateKey: pem }).expect(200);
+    expect(res.body.record.value).toBe(`v=DKIM1; k=rsa; p=${publicKeyOf(pem)}`);
+    expect(publicKeyOf(publisher.keys.get(`legacy.${domain.name}`)!)).toBe(publicKeyOf(pem));
+
+    const ec = generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    expect((await alice.agent.put(dkimUrl()).send({ privateKey: ec }).expect(422)).body.code).toBe('DKIM_KEY_INVALID');
+    await alice.agent.put(dkimUrl()).send({ privateKey: 'not a key' }).expect(422);
+    await alice.agent.put(dkimUrl()).send({ keyBits: 512 }).expect(400);
+    await alice.agent.put(dkimUrl()).send({ selector: 'bad selector' }).expect(400);
+  });
+
+  it('reuses a retired selector, and defaults to a new one', async () => {
+    await alice.agent.put(dkimUrl()).send({ selector: 'mail2026' }).expect(200);
+    const res = await alice.agent.put(dkimUrl()).send({}).expect(200);
+    expect(res.body.selector).toMatch(/^px\d{12}$/);
+  });
+
+  it("cannot read or replace another organization's key", async () => {
+    await bob.agent.get(`/api/orgs/${orgB}/domains/${domain.id}/dkim`).expect(404);
+    await bob.agent.put(`/api/orgs/${orgB}/domains/${domain.id}/dkim`).send({}).expect(404);
+    await bob.agent.get(dkimUrl()).expect(404);
+    await bob.agent.put(dkimUrl()).send({}).expect(404);
   });
 });
 

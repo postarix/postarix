@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -19,6 +20,9 @@ import {
   type DnsRecordDto,
   type DomainDto,
   domainIdSchema,
+  type DkimKeyDto,
+  type ReplaceDkimInput,
+  replaceDkimSchema,
   type UpdateDomainInput,
   updateDomainSchema,
 } from './domains.dto.js';
@@ -61,6 +65,25 @@ export class DomainsController {
     @Body(new ZodValidationPipe(updateDomainSchema)) body: UpdateDomainInput,
   ): Promise<DomainDto> {
     return this.domains.update(ctx, id, body);
+  }
+
+  @Get(':id/dkim')
+  async dkim(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+  ): Promise<{ key: DkimKeyDto | null }> {
+    return { key: await this.domains.dkimKey(ctx, id) };
+  }
+
+  /** A new signing key, generated or imported. */
+  @Put(':id/dkim')
+  @RequireOrgRole('admin')
+  async replaceDkim(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+    @Body(new ZodValidationPipe(replaceDkimSchema)) body: ReplaceDkimInput,
+  ): Promise<DkimKeyDto> {
+    return this.domains.replaceDkim(ctx, id, body);
   }
 
   @Get(':id/dns-records')

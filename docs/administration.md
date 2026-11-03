@@ -23,6 +23,15 @@ Limits cannot be set below what the domain already has (lower a mailbox's
 quota, or delete mailboxes, first). The domain card shows the usage against
 the limits.
 
+### DKIM key
+
+The key button of a domain shows its DKIM signing key: the selector, the size
+and the DNS record to publish. **Replace key** generates a new one (1024 to
+4096 bits, 2048 by default) or imports the private key the domain already
+uses elsewhere (an RSA key in PEM format, e.g. from mailcow), so you can move
+without changing DNS. The new key signs mail at once: publish its record
+first, or use a new selector and publish its record before replacing.
+
 ### Alias domains
 
 When you add a domain you can make it an **alias of** another domain of the

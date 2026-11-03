@@ -7,11 +7,12 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
+import { Textarea } from '@postarix/ui/components/textarea';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Globe, Plus, RefreshCw, Settings, ShieldCheck, Trash2 } from 'lucide-react';
+import { Globe, KeyRound, Plus, RefreshCw, Settings, ShieldCheck, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { AppDialog } from '@/components/app-dialog';
@@ -235,12 +236,122 @@ function DomainSettingsDialog({
   );
 }
 
+interface DkimKey {
+  selector: string;
+  bits: number | null;
+  record: { name: string; value: string };
+  createdAt: string;
+}
+
+function DkimDialog({ orgId, domain, onClose }: { orgId: string; domain: Domain; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const key = useQuery({
+    queryKey: [...keys.orgPart(orgId, 'domains'), domain.id, 'dkim'],
+    queryFn: () => api.get<{ key: DkimKey | null }>(`/orgs/${orgId}/domains/${domain.id}/dkim`).then((r) => r.key),
+  });
+  const [mode, setMode] = useState<'generate' | 'import'>('generate');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const selector = String(data.get('selector') ?? '').trim();
+    setPending(true);
+    setError(null);
+    try {
+      await api.put(`/orgs/${orgId}/domains/${domain.id}/dkim`, {
+        ...(selector ? { selector } : {}),
+        ...(mode === 'import' ? { privateKey: String(data.get('privateKey')) } : { keyBits: Number(data.get('keyBits')) }),
+      });
+      await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <AppDialog open onClose={onClose} title={`DKIM key of ${domain.name}`} description="Outgoing mail is signed with this key.">
+      <div className="space-y-4">
+        {key.isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : key.data ? (
+          <div className="space-y-1 text-sm">
+            <p>
+              Selector <code className="font-mono">{key.data.selector}</code>
+              {key.data.bits ? `, ${key.data.bits}-bit RSA` : ''}, since {formatDate(key.data.createdAt)}.
+            </p>
+            <p className="text-muted-foreground">Publish this TXT record:</p>
+            <code className="block font-mono text-xs break-all">{key.data.record.name}</code>
+            <div className="flex items-start gap-2">
+              <code className="block max-h-24 overflow-auto font-mono text-xs break-all">{key.data.record.value}</code>
+              <CopyButton value={key.data.record.value} />
+            </div>
+          </div>
+        ) : (
+          <Notice>This domain has no signing key: its mail is not DKIM-signed.</Notice>
+        )}
+        <form onSubmit={submit}>
+          <FieldGroup>
+            <p className="text-sm font-medium">Replace the key</p>
+            <p className="-mt-2 text-sm text-muted-foreground">
+              The new key signs mail at once. Publish its record before mail goes out, or receivers will fail the
+              signature until it appears in DNS. A new selector lets both records exist side by side.
+            </p>
+            {error ? <Notice>{error}</Notice> : null}
+            <FormField label="Selector" hint="Empty: a new one based on today's date.">
+              {(props) => <Input {...props} name="selector" placeholder="e.g. mail2026" maxLength={63} />}
+            </FormField>
+            <FormField label="Key">
+              {(props) => (
+                <NativeSelect {...props} value={mode} onChange={(e) => setMode(e.target.value as 'generate' | 'import')} className="w-full">
+                  <NativeSelectOption value="generate">Generate a new key</NativeSelectOption>
+                  <NativeSelectOption value="import">Import a private key (PEM)</NativeSelectOption>
+                </NativeSelect>
+              )}
+            </FormField>
+            {mode === 'generate' ? (
+              <FormField label="Size" hint="2048 bits works everywhere; some DNS providers cannot store larger records.">
+                {(props) => (
+                  <NativeSelect {...props} name="keyBits" defaultValue="2048" className="w-full">
+                    <NativeSelectOption value="1024">1024 bits</NativeSelectOption>
+                    <NativeSelectOption value="2048">2048 bits</NativeSelectOption>
+                    <NativeSelectOption value="3072">3072 bits</NativeSelectOption>
+                    <NativeSelectOption value="4096">4096 bits</NativeSelectOption>
+                  </NativeSelect>
+                )}
+              </FormField>
+            ) : (
+              <FormField label="Private key" hint="The RSA key the domain already publishes, e.g. from your previous server.">
+                {(props) => (
+                  <Textarea {...props} name="privateKey" rows={6} required className="font-mono text-xs" placeholder="-----BEGIN PRIVATE KEY-----" />
+                )}
+              </FormField>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Close
+              </Button>
+              <LoadingButton type="submit" loading={pending}>
+                Replace key
+              </LoadingButton>
+            </DialogFooter>
+          </FieldGroup>
+        </form>
+      </div>
+    </AppDialog>
+  );
+}
+
 function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain; aliasOf: string | null }) {
   const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [dkim, setDkim] = useState(false);
   const [showDns, setShowDns] = useState(domain.status === 'pending');
 
   const refresh = () => {
@@ -298,6 +409,9 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
           <Button size="sm" variant="outline" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
             {showDns ? 'Hide DNS records' : 'DNS records'}
           </Button>
+          <Button size="icon-sm" variant="ghost" aria-label={`DKIM key of ${domain.name}`} onClick={() => setDkim(true)}>
+            <KeyRound aria-hidden />
+          </Button>
           <Button size="icon-sm" variant="ghost" aria-label={`${domain.name} settings`} onClick={() => setEditing(true)}>
             <Settings aria-hidden />
           </Button>
@@ -322,6 +436,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
           ) : null}
         </CardContent>
       ) : null}
+      {dkim ? <DkimDialog orgId={orgId} domain={domain} onClose={() => setDkim(false)} /> : null}
       {editing ? <DomainSettingsDialog orgId={orgId} domain={domain} open={editing} onClose={() => setEditing(false)} /> : null}
       <ConfirmDialog
         open={deleting}

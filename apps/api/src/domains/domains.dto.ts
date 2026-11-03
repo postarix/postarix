@@ -50,6 +50,33 @@ export const updateDomainSchema = z
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateDomainInput = z.infer<typeof updateDomainSchema>;
 
+/**
+ * A new DKIM key: generated (of the given size) or imported (a PEM private
+ * key the domain already publishes elsewhere). The selector is the DNS label
+ * before "._domainkey".
+ */
+export const replaceDkimSchema = z
+  .strictObject({
+    selector: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, 'Use letters, digits and hyphens')
+      .optional(),
+    keyBits: z.union([z.literal(1024), z.literal(2048), z.literal(3072), z.literal(4096)]).optional(),
+    privateKey: z.string().max(20_000).optional(),
+  })
+  .refine((value) => !(value.privateKey && value.keyBits), 'Choose a key size or import a key, not both');
+export type ReplaceDkimInput = z.infer<typeof replaceDkimSchema>;
+
+export interface DkimKeyDto {
+  selector: string;
+  bits: number | null;
+  /** The DNS TXT record to publish at <selector>._domainkey.<domain>. */
+  record: { name: string; value: string };
+  createdAt: string;
+}
+
 export const domainLimitFields = ['maxMailboxes', 'maxAliases', 'maxMailboxQuotaBytes', 'totalQuotaBytes'] as const;
 
 export interface DomainDto {
