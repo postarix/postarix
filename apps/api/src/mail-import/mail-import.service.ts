@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { ConflictException, Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap, type OnModuleDestroy, UnprocessableEntityException } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, lte, or, type SQL, sql } from 'drizzle-orm';
 import type { ImapFlow } from 'imapflow';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
@@ -10,6 +10,7 @@ import type { Database } from '../db/client.js';
 import { type MailImportStatus, mailboxes, mailImports } from '../db/schema/mail.js';
 import { ServerJmap } from '../mail/jmap-client.js';
 import { decryptClientSecret, encryptClientSecret } from '../sso/sso-crypto.js';
+import type { TenantContext } from '../tenancy/tenant-context.js';
 import { connectSource, type ImapSource, SourceError } from './imap-source.js';
 
 export const startImportSchema = z.strictObject({
@@ -35,6 +36,21 @@ export interface MailImportView {
   error: string | null;
   createdAt: Date;
   finishedAt: Date | null;
+}
+
+/** An administrator's sync job: an import into one of the organization's mailboxes, maybe recurring. */
+export const createSyncJobSchema = startImportSchema.extend({
+  mailboxId: z.uuid(),
+  /** Run again this many minutes after each run (null: once). */
+  intervalMinutes: z.number().int().min(5).max(43200).nullable().optional(),
+});
+export type CreateSyncJob = z.infer<typeof createSyncJobSchema>;
+
+export interface SyncJobView extends MailImportView {
+  mailboxId: string;
+  mailboxAddress: string;
+  intervalMinutes: number | null;
+  nextRunAt: Date | null;
 }
 
 type Row = typeof mailImports.$inferSelect;
@@ -134,7 +150,18 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
       .where(and(eq(mailImports.userId, userId), inArray(mailImports.status, ['queued', 'running'])))
       .limit(1);
     if (active.length) throw new ConflictException('An import is already running; wait for it to finish or cancel it');
+    const row = await this.queue({ userId }, eq(mailImports.userId, userId), address, input, null);
+    return this.view(row);
+  }
 
+  /** Checks the source account, then stores the job (with what earlier jobs for the same account already copied). */
+  private async queue(
+    owner: { userId: string } | { organizationId: string; mailboxId: string },
+    sameOwner: SQL | undefined,
+    address: string,
+    input: StartImport,
+    intervalMinutes: number | null,
+  ): Promise<Row> {
     const port = input.port ?? (input.security === 'tls' ? 993 : 143);
     const source = this.source({ host: input.host, port, security: input.security, username: input.username }, input.password);
     let client: ImapFlow;
@@ -151,14 +178,14 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
     const [previous] = await this.db
       .select({ progress: mailImports.progress })
       .from(mailImports)
-      .where(and(eq(mailImports.userId, userId), eq(mailImports.host, input.host), eq(mailImports.username, input.username)))
+      .where(and(sameOwner, eq(mailImports.mailboxAddress, address), eq(mailImports.host, input.host), eq(mailImports.username, input.username)))
       .orderBy(desc(mailImports.createdAt))
       .limit(1);
 
     const [row] = await this.db
       .insert(mailImports)
       .values({
-        userId,
+        ...owner,
         mailboxAddress: address,
         host: input.host,
         port,
@@ -166,11 +193,101 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
         username: input.username,
         password: encryptClientSecret(input.password, this.env.AUTH_SECRET),
         progress: previous?.progress ?? {},
+        intervalMinutes,
       })
       .returning();
     // Start now rather than at the next poll (tests run imports themselves).
     if (this.env.NODE_ENV !== 'test') void this.runOnce();
-    return this.view(row!);
+    return row!;
+  }
+
+  // --- Administrators' sync jobs ----------------------------------------------
+
+  private syncView(row: Row): SyncJobView {
+    return { ...this.view(row), mailboxId: row.mailboxId!, mailboxAddress: row.mailboxAddress, intervalMinutes: row.intervalMinutes, nextRunAt: row.nextRunAt };
+  }
+
+  private inOrg(ctx: TenantContext, id: string): SQL {
+    return and(eq(mailImports.organizationId, ctx.organizationId), eq(mailImports.id, id))!;
+  }
+
+  async listSyncJobs(ctx: TenantContext, mailboxId?: string): Promise<SyncJobView[]> {
+    const rows = await this.db
+      .select()
+      .from(mailImports)
+      .where(and(eq(mailImports.organizationId, ctx.organizationId), mailboxId ? eq(mailImports.mailboxId, mailboxId) : undefined))
+      .orderBy(desc(mailImports.createdAt))
+      .limit(200);
+    return rows.map((row) => this.syncView(row));
+  }
+
+  async createSyncJob(ctx: TenantContext, input: CreateSyncJob): Promise<SyncJobView> {
+    const [mailbox] = await this.db
+      .select({ address: mailboxes.address, status: mailboxes.status })
+      .from(mailboxes)
+      .where(and(eq(mailboxes.organizationId, ctx.organizationId), eq(mailboxes.id, input.mailboxId)))
+      .limit(1);
+    if (!mailbox) throw new NotFoundException('Mailbox not found');
+    if (mailbox.status === 'disabled') throw new UnprocessableEntityException('The mailbox is disabled');
+    const active = await this.db
+      .select({ id: mailImports.id })
+      .from(mailImports)
+      .where(
+        and(
+          eq(mailImports.mailboxId, input.mailboxId),
+          eq(mailImports.host, input.host),
+          eq(mailImports.username, input.username),
+          or(inArray(mailImports.status, ['queued', 'running']), isNotNull(mailImports.nextRunAt)),
+        ),
+      )
+      .limit(1);
+    if (active.length) throw new ConflictException('This mailbox already has a sync job for that account');
+    const row = await this.queue(
+      { organizationId: ctx.organizationId, mailboxId: input.mailboxId },
+      eq(mailImports.mailboxId, input.mailboxId),
+      mailbox.address,
+      input,
+      input.intervalMinutes ?? null,
+    );
+    return this.syncView(row);
+  }
+
+  /** Stops a job: a running copy stops, and a recurring job does not run again. */
+  async cancelSyncJob(ctx: TenantContext, id: string): Promise<SyncJobView> {
+    const [row] = await this.db
+      .update(mailImports)
+      .set({
+        status: sql`CASE WHEN ${mailImports.status} IN ('queued', 'running') THEN 'cancelled' ELSE ${mailImports.status} END`,
+        password: null,
+        nextRunAt: null,
+        finishedAt: sql`coalesce(${mailImports.finishedAt}, now())`,
+      })
+      .where(this.inOrg(ctx, id))
+      .returning();
+    if (!row) throw new NotFoundException('Sync job not found');
+    return this.syncView(row);
+  }
+
+  /** Runs a recurring job now instead of waiting for its next run. */
+  async runSyncJobNow(ctx: TenantContext, id: string): Promise<SyncJobView> {
+    const [row] = await this.db
+      .update(mailImports)
+      .set({ status: 'queued', error: null, finishedAt: null, nextRunAt: null })
+      .where(and(this.inOrg(ctx, id), inArray(mailImports.status, ['done', 'failed']), isNotNull(mailImports.password)))
+      .returning();
+    if (!row) {
+      const [existing] = await this.db.select().from(mailImports).where(this.inOrg(ctx, id));
+      if (!existing) throw new NotFoundException('Sync job not found');
+      throw new ConflictException(existing.password ? 'The job is already queued or running' : 'The job has ended; create it again');
+    }
+    if (this.env.NODE_ENV !== 'test') void this.runOnce();
+    return this.syncView(row);
+  }
+
+  async deleteSyncJob(ctx: TenantContext, id: string): Promise<SyncJobView> {
+    const [row] = await this.db.delete(mailImports).where(this.inOrg(ctx, id)).returning();
+    if (!row) throw new NotFoundException('Sync job not found');
+    return this.syncView(row);
   }
 
   async cancel(userId: string, id: string): Promise<MailImportView> {
@@ -187,6 +304,7 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
 
   /** Claims and runs queued imports (and those whose worker died), up to the concurrency limit. */
   async runOnce(): Promise<void> {
+    await this.requeueDue();
     while (!this.stopping && this.running < CONCURRENCY) {
       const result = await this.db.execute<{ id: string }>(sql`
         UPDATE mail_imports SET status = 'running', locked_at = now()
@@ -201,6 +319,14 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
       this.running++;
       void this.run(id).finally(() => this.running--);
     }
+  }
+
+  /** Queues recurring jobs whose next run has come; exposed for tests. */
+  async requeueDue(): Promise<void> {
+    await this.db
+      .update(mailImports)
+      .set({ status: 'queued', nextRunAt: null, error: null, finishedAt: null })
+      .where(and(inArray(mailImports.status, ['done', 'failed']), isNotNull(mailImports.password), lte(mailImports.nextRunAt, new Date())));
   }
 
   /** Runs one import to its end; exposed for tests. */
@@ -226,7 +352,15 @@ export class MailImportService implements OnApplicationBootstrap, OnModuleDestro
   private async finish(id: string, status: 'done' | 'failed', error: string | null): Promise<void> {
     await this.db
       .update(mailImports)
-      .set({ status, error, password: null, finishedAt: new Date(), lockedAt: null })
+      .set({
+        status,
+        error,
+        finishedAt: new Date(),
+        lockedAt: null,
+        // A recurring job keeps its password and runs again later.
+        password: sql`CASE WHEN ${mailImports.intervalMinutes} IS NULL THEN NULL ELSE ${mailImports.password} END`,
+        nextRunAt: sql`CASE WHEN ${mailImports.intervalMinutes} IS NULL THEN NULL ELSE now() + make_interval(mins => ${mailImports.intervalMinutes}) END`,
+      })
       .where(and(eq(mailImports.id, id), eq(mailImports.status, 'running')));
   }
 

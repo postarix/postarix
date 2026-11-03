@@ -72,6 +72,17 @@ Besides the name, quota and password, a mailbox has:
   own domains. A mailbox can always send as itself and as the aliases that
   deliver to it.
 
+### Sync jobs
+
+The **sync jobs** button of a mailbox copies mail from another IMAP server
+into it, like imapsync: enter the server, the user name and the password of
+the old account, and whether to run once or repeat (every 15 minutes, hour,
+6 hours or day). Folders keep their names, special folders map to ours, flags
+are kept, and every run copies only what is new. A repeating job keeps the
+password encrypted until it is stopped or deleted; a one-time job erases it
+when it ends. **Run now** starts a repeating job at once. Old servers on a
+private network must be allowed first (see [Migration](MIGRATION.md)).
+
 ## Aliases
 
 - An alias forwards to one or more addresses, inside or outside the server.

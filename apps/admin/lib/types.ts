@@ -151,3 +151,20 @@ export interface MailLogEntry {
   reasons: { name: string; score: number }[];
   ip: string | null;
 }
+
+/** Copying mail from another IMAP server into a mailbox, once or on a schedule. */
+export interface SyncJob {
+  id: string;
+  mailboxId: string;
+  mailboxAddress: string;
+  host: string;
+  username: string;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  imported: number;
+  skipped: number;
+  error: string | null;
+  intervalMinutes: number | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
