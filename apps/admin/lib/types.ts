@@ -36,6 +36,8 @@ export interface Domain {
   usage: { mailboxes: number; aliases: number; quotaBytes: number; unlimitedMailboxes: number };
   /** For each of its mailboxes, unless the mailbox has its own. */
   rateLimit: RateLimit | null;
+  /** Smart host its mail goes through (instance administrators set it). */
+  relayHostId: string | null;
   createdAt: string;
 }
 
@@ -65,6 +67,7 @@ export interface Mailbox {
   tlsRequiredOut: boolean;
   /** Null: its domain's limit, if any. */
   rateLimit: RateLimit | null;
+  relayHostId: string | null;
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
   createdAt: string;

@@ -12,7 +12,7 @@ import { AccountsService } from '../accounts/accounts.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { engineErrorToHttp } from '../common/engine-errors.js';
-import { isUniqueViolation } from '../common/pg-errors.js';
+import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js';
 import { MAIL_ENGINE } from '../core/tokens.js';
 import type { MailboxRow } from '../db/schema/index.js';
 import { aliasDomainRefusal, assertMayAddMailbox, assertQuotaFits } from '../domains/domain-limits.js';
@@ -152,6 +152,9 @@ export class MailboxesService {
 
   async update(ctx: TenantContext, id: string, input: UpdateMailboxInput): Promise<MailboxDto> {
     const current = await this.require(ctx, id);
+    if (input.relayHostId !== undefined && !ctx.instanceAdmin) {
+      throw new ForbiddenException('Only an instance administrator can choose the smart host of a mailbox');
+    }
     const losesSignIn = input.status !== undefined && input.status !== 'active';
     if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: losesSignIn });
     if (input.status === 'disabled' && current.status !== 'disabled') await this.archiving.assertMayRemove(ctx, id);
@@ -166,13 +169,15 @@ export class MailboxesService {
     if (input.tlsRequiredIn !== undefined) changes.tlsRequiredIn = input.tlsRequiredIn;
     if (input.tlsRequiredOut !== undefined) changes.tlsRequiredOut = input.tlsRequiredOut;
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
+    if (input.relayHostId !== undefined) changes.relayHostId = input.relayHostId;
 
     // A new quota must fit the domain's limits; the mail server gets it while
     // the domain is locked, so two changes cannot both take the last space.
-    const row = await this.repository.update(
-      ctx,
-      id,
-      changes,
+    const row = await this.repository
+      .update(
+        ctx,
+        id,
+        changes,
       quotaChanges
         ? async (domain, usage) => {
             const quota = input.quotaBytes ?? null;
@@ -184,7 +189,13 @@ export class MailboxesService {
             }
           }
         : undefined,
-    );
+      )
+      .catch((error: unknown) => {
+        if (isForeignKeyViolation(error)) {
+          throw new UnprocessableEntityException({ message: 'Unknown smart host', code: 'UNKNOWN_RELAY_HOST' });
+        }
+        throw error;
+      });
     if (!row) throw new NotFoundException('Mailbox not found');
     if (input.displayName !== undefined && row.userId) {
       await this.accounts.rename(row.userId, input.displayName || row.address);

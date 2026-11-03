@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { type AnyPgColumn, bigint, check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organization } from './auth.js';
+import { relayHosts } from './routing.js';
 
 export const domainStatuses = ['pending', 'active', 'disabled'] as const;
 export type DomainStatus = (typeof domainStatuses)[number];
@@ -53,6 +54,8 @@ export const domains = pgTable(
     /** Messages each of its mailboxes may send per period, unless the mailbox has its own limit. */
     rateLimit: integer(),
     ratePeriod: text({ enum: ratePeriodNames }),
+    /** Send its mail through this smart host (set by instance administrators). */
+    relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()

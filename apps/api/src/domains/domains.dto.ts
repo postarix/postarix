@@ -46,6 +46,8 @@ export const updateDomainSchema = z
     totalQuotaBytes: quotaSchema.optional(),
     /** Messages each mailbox may send per period, unless it has its own limit. */
     rateLimit: rateLimitSchema.optional(),
+    /** Smart host for the domain's mail (instance administrators only). */
+    relayHostId: z.uuid().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateDomainInput = z.infer<typeof updateDomainSchema>;
@@ -77,7 +79,7 @@ export interface DkimKeyDto {
   createdAt: string;
 }
 
-export const domainLimitFields = ['maxMailboxes', 'maxAliases', 'maxMailboxQuotaBytes', 'totalQuotaBytes'] as const;
+export const domainLimitFields = ['maxMailboxes', 'maxAliases', 'maxMailboxQuotaBytes', 'totalQuotaBytes', 'relayHostId'] as const;
 
 export interface DomainDto {
   id: string;
@@ -98,6 +100,7 @@ export interface DomainDto {
   };
   usage: DomainUsage;
   rateLimit: RateLimit | null;
+  relayHostId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,6 +123,7 @@ export function toDomainDto(row: DomainRow, usage: DomainUsage): DomainDto {
     },
     usage,
     rateLimit: toRateLimit(row),
+    relayHostId: row.relayHostId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

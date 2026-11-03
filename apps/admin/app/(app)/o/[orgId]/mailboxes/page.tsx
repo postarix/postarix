@@ -30,8 +30,10 @@ import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
-import { keys, useOrgList } from '@/lib/queries';
+import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
+import { useSession } from '@/lib/auth-client';
+import { useRelayHosts } from '../../../system/routing';
 import type { Domain, Mailbox } from '@/lib/types';
 
 function useRefresh(orgId: string) {
@@ -150,6 +152,8 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const { data: session } = useSession();
+  const relayHosts = useRelayHosts(isSuperAdmin(session?.user.role));
   const sendAs = useQuery({
     queryKey: [...keys.orgPart(orgId, 'mailboxes'), mailbox.id, 'send-as'],
     queryFn: () => api.get<{ senders: string[] }>(`/orgs/${orgId}/mailboxes/${mailbox.id}/send-as`).then((r) => r.senders),
@@ -169,6 +173,7 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
         tlsRequiredIn: data.get('tlsRequiredIn') !== null,
         tlsRequiredOut: data.get('tlsRequiredOut') !== null,
         rateLimit: rateLimitFrom(data),
+        ...(relayHosts.data ? { relayHostId: String(data.get('relayHostId') ?? '') || null } : {}),
       });
       if (sendAs.data) {
         const senders = String(data.get('sendAs'))
@@ -221,6 +226,20 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
             hint="Messages it may send, from mail apps and the webmail. Empty: its domain's limit, if any."
             value={mailbox.rateLimit}
           />
+          {relayHosts.data ? (
+            <FormField label="Send through" hint="Instance administrators: a smart host for this mailbox's mail. Empty: its domain's choice.">
+              {(props) => (
+                <NativeSelect {...props} name="relayHostId" defaultValue={mailbox.relayHostId ?? ''} className="w-full">
+                  <NativeSelectOption value="">As its domain</NativeSelectOption>
+                  {relayHosts.data.map((r) => (
+                    <NativeSelectOption key={r.id} value={r.id}>
+                      {r.host}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+            </FormField>
+          ) : null}
           <FormField label="Status">
             {(props) => (
               <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
