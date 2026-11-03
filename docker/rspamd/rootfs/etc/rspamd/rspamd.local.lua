@@ -644,7 +644,12 @@ local function in_network(ip, network)
     return false
   end
   bits = tonumber(bits) or (ip:get_version() == 4 and 32 or 128)
-  return ip:apply_mask(bits):to_string() == net:apply_mask(bits):to_string()
+  -- apply_mask(0) gives nil: a /0 holds every address of its version.
+  if bits == 0 then
+    return true
+  end
+  local a, b = ip:apply_mask(bits), net:apply_mask(bits)
+  return a ~= nil and b ~= nil and a:to_string() == b:to_string()
 end
 
 rspamd_config:register_symbol({
