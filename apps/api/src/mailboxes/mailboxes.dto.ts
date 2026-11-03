@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizeAddress, normalizeLocalPart } from '../common/addresses.js';
 import { normalizeDomainName } from '../domains/domain-name.js';
+import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
 import { type MailboxRow, mailboxKinds, mailboxStatuses, mailProtocols } from '../db/schema/index.js';
 
 const MIN_QUOTA = 1024 * 1024; // 1 MiB
@@ -51,6 +52,8 @@ export const updateMailboxSchema = z
       .optional(),
     tlsRequiredIn: z.boolean().optional(),
     tlsRequiredOut: z.boolean().optional(),
+    /** Messages it may send per period; null: its domain's limit. */
+    rateLimit: rateLimitSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
@@ -95,6 +98,7 @@ export interface MailboxDto {
   allowedProtocols: MailboxRow['allowedProtocols'];
   tlsRequiredIn: boolean;
   tlsRequiredOut: boolean;
+  rateLimit: RateLimit | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -112,6 +116,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
     allowedProtocols: row.allowedProtocols,
     tlsRequiredIn: row.tlsRequiredIn,
     tlsRequiredOut: row.tlsRequiredOut,
+    rateLimit: toRateLimit(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

@@ -17,7 +17,18 @@ export interface NewMailbox {
 }
 
 export type MailboxChanges = Partial<
-  Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind' | 'allowedProtocols' | 'tlsRequiredIn' | 'tlsRequiredOut'>
+  Pick<
+    MailboxRow,
+    | 'displayName'
+    | 'quotaBytes'
+    | 'status'
+    | 'kind'
+    | 'allowedProtocols'
+    | 'tlsRequiredIn'
+    | 'tlsRequiredOut'
+    | 'rateLimit'
+    | 'ratePeriod'
+  >
 >;
 
 /** Runs with the mailbox's domain locked; throws to refuse the change. */

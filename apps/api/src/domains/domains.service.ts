@@ -16,6 +16,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import type { DomainRow } from '../db/schema/index.js';
+import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
 import { assertLimitsHold, type DomainUsage } from './domain-limits.js';
 import {
   type CreateDomainInput,
@@ -42,6 +43,7 @@ export class DomainsService {
     @Inject(ENV) private readonly env: Env,
     @Inject(DkimService) private readonly dkim: DkimService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
   ) {}
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
@@ -76,6 +78,7 @@ export class DomainsService {
       const value = input[field];
       if (value !== undefined) changes[field] = value;
     }
+    if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
     const row = await this.repository.update(ctx, id, changes, (domain, usage, largestQuota) => {
       if (input.enabled !== undefined) {
         if (domain.status === 'pending') {
@@ -101,14 +104,27 @@ export class DomainsService {
     });
     if (!row) throw new NotFoundException('Domain not found');
     if (changes.status === 'disabled') await this.repository.signOutMailboxes(ctx, id);
+    if (input.rateLimit !== undefined || changes.status !== undefined) {
+      await this.rateLimits.publish(`@${row.name}`, row.status === 'active' ? toRateLimit(row) : null);
+    }
     await this.audit.record(ctx, 'domain.updated', { type: 'domain', id: row.id, label: row.name }, { ...changes });
     return this.toDto(ctx, row);
   }
 
   async create(ctx: TenantContext, input: CreateDomainInput): Promise<DomainDto> {
+    if (input.aliasOf) {
+      const target = await this.repository.findById(ctx, input.aliasOf);
+      if (!target) throw new UnprocessableEntityException({ message: 'Unknown domain', code: 'UNKNOWN_DOMAIN' });
+      if (target.aliasOfDomainId) {
+        throw new UnprocessableEntityException({
+          message: `${target.name} is itself an alias domain; choose the domain it repeats`,
+          code: 'ALIAS_OF_ALIAS_DOMAIN',
+        });
+      }
+    }
     let row;
     try {
-      row = await this.repository.create(ctx, input.name);
+      row = await this.repository.create(ctx, input.name, input.aliasOf ?? null);
     } catch (error) {
       if (isUniqueViolation(error)) {
         // Only reachable for a duplicate inside the caller's own organization.
@@ -249,7 +265,7 @@ export class DomainsService {
       deleted = await this.repository.delete(ctx, id);
     } catch (error) {
       if (isForeignKeyViolation(error)) {
-        throw new ConflictException('Delete the domain\'s mailboxes and aliases first');
+        throw new ConflictException('Delete the domain\'s mailboxes, aliases and alias domains first');
       }
       throw error;
     }

@@ -27,6 +27,7 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
+import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { keys, useOrgList } from '@/lib/queries';
@@ -167,6 +168,7 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
         allowedProtocols: protocolOptions.map((p) => p.value).filter((p) => data.get(`protocol-${p}`) !== null),
         tlsRequiredIn: data.get('tlsRequiredIn') !== null,
         tlsRequiredOut: data.get('tlsRequiredOut') !== null,
+        rateLimit: rateLimitFrom(data),
       });
       if (sendAs.data) {
         const senders = String(data.get('sendAs'))
@@ -214,6 +216,11 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
               )
             }
           </FormField>
+          <RateLimitField
+            label="Sending limit"
+            hint="Messages it may send, from mail apps and the webmail. Empty: its domain's limit, if any."
+            value={mailbox.rateLimit}
+          />
           <FormField label="Status">
             {(props) => (
               <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
@@ -416,7 +423,7 @@ export default function MailboxesPage() {
   const mailboxes = useOrgList<Mailbox>(orgId, 'mailboxes');
   const domains = useOrgList<Domain>(orgId, 'domains');
   const refresh = useRefresh(orgId);
-  const activeDomains = domains.data?.filter((d) => d.status === 'active') ?? [];
+  const activeDomains = domains.data?.filter((d) => d.status === 'active' && !d.aliasOfDomainId) ?? [];
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Mailbox | null>(null);
   const [resetting, setResetting] = useState<Mailbox | null>(null);

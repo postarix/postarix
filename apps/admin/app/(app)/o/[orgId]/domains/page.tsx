@@ -7,6 +7,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
+import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,6 +22,7 @@ import { FormField } from '@/components/form-field';
 import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
+import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { formatBytes, formatDate } from '@/lib/format';
@@ -140,6 +142,7 @@ function DomainSettingsDialog({
       const body: Record<string, unknown> = {
         description: text('description'),
         defaultMailboxQuotaBytes: quotaFromGiB(text('defaultQuota')),
+        rateLimit: rateLimitFrom(data),
       };
       if (domain.status !== 'pending') body.enabled = data.get('enabled') === 'on';
       if (instanceAdmin) {
@@ -171,6 +174,11 @@ function DomainSettingsDialog({
               <Input {...props} name="defaultQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.defaultMailboxQuotaBytes)} />
             )}
           </FormField>
+          <RateLimitField
+            label="Sending limit per mailbox"
+            hint="Messages each mailbox may send, unless it has its own limit. Empty: no limit."
+            value={domain.rateLimit}
+          />
           {domain.status !== 'pending' ? (
             <div className="flex items-start gap-2">
               <Checkbox id={`enabled-${domain.id}`} name="enabled" defaultChecked={domain.status === 'active'} />
@@ -227,7 +235,7 @@ function DomainSettingsDialog({
   );
 }
 
-function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
+function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain; aliasOf: string | null }) {
   const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +260,7 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
           ) : (
             <Badge variant="secondary">Disabled</Badge>
           )}
+          {aliasOf ? <Badge variant="outline">Alias of {aliasOf}</Badge> : null}
         </CardTitle>
         <CardDescription>
           {domain.description ? <span className="block">{domain.description}</span> : null}
@@ -328,7 +337,17 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
   );
 }
 
-function AddDomainDialog({ orgId, open, onClose }: { orgId: string; open: boolean; onClose: () => void }) {
+function AddDomainDialog({
+  orgId,
+  domains,
+  open,
+  onClose,
+}: {
+  orgId: string;
+  domains: Domain[];
+  open: boolean;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -339,7 +358,9 @@ function AddDomainDialog({ orgId, open, onClose }: { orgId: string; open: boolea
     setPending(true);
     setError(null);
     try {
-      await api.post(`/orgs/${orgId}/domains`, { name: String(new FormData(form).get('name')) });
+      const data = new FormData(form);
+      const aliasOf = String(data.get('aliasOf') ?? '');
+      await api.post(`/orgs/${orgId}/domains`, { name: String(data.get('name')), ...(aliasOf ? { aliasOf } : {}) });
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
       await queryClient.invalidateQueries({ queryKey: keys.org(orgId) });
       onClose();
@@ -358,6 +379,23 @@ function AddDomainDialog({ orgId, open, onClose }: { orgId: string; open: boolea
           <FormField label="Domain name">
             {(props) => <Input {...props} name="name" placeholder="example.com" required autoFocus />}
           </FormField>
+          {domains.length > 0 ? (
+            <FormField
+              label="Alias of"
+              hint="An alias domain has every address of the chosen domain: mail to ann@alias.example reaches ann@example.com."
+            >
+              {(props) => (
+                <NativeSelect {...props} name="aliasOf" defaultValue="" className="w-full">
+                  <NativeSelectOption value="">None: a domain of its own</NativeSelectOption>
+                  {domains.map((d) => (
+                    <NativeSelectOption key={d.id} value={d.id}>
+                      {d.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+            </FormField>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
@@ -396,13 +434,23 @@ export default function DomainsPage() {
       ) : domains.data?.length ? (
         <div className="space-y-4">
           {domains.data.map((domain) => (
-            <DomainCard key={domain.id} orgId={orgId} domain={domain} />
+            <DomainCard
+              key={domain.id}
+              orgId={orgId}
+              domain={domain}
+              aliasOf={domains.data?.find((d) => d.id === domain.aliasOfDomainId)?.name ?? null}
+            />
           ))}
         </div>
       ) : (
         <EmptyState icon={Globe} title="No domains yet" description="Add a domain to start creating mailboxes." />
       )}
-      <AddDomainDialog orgId={orgId} open={adding} onClose={() => setAdding(false)} />
+      <AddDomainDialog
+        orgId={orgId}
+        domains={domains.data?.filter((d) => !d.aliasOfDomainId) ?? []}
+        open={adding}
+        onClose={() => setAdding(false)}
+      />
     </>
   );
 }

@@ -2,7 +2,8 @@ import type { INestApplication } from '@nestjs/common';
 import { type MemoryMailEngine } from '@postarix/mail-engine';
 import type TestAgent from 'supertest/lib/agent.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MAIL_ENGINE } from '../src/core/tokens.js';
+import { MAIL_ENGINE, RATE_LIMIT_STORE } from '../src/core/tokens.js';
+import type { MemoryRateLimitStore } from '../src/rate-limits/rate-limits.js';
 import { createOrg, mailboxInNewOrg, PASSWORD, signIn, signUp, startApp, type TestUser } from './helpers.js';
 
 interface FakeDraft {
@@ -24,6 +25,9 @@ describe('Webmail sending rules', () => {
   let ann: TestAgent;
   let annAddress: string;
   let domainName: string;
+  let orgId: string;
+  let domainId: string;
+  let annId: string;
   let draft: FakeDraft;
   let seenAddresses: string[];
   const saved = { host: process.env.SUBMISSION_HOST, port: process.env.SUBMISSION_PORT };
@@ -34,15 +38,17 @@ describe('Webmail sending rules', () => {
     app = await startApp();
     engine = app.get<MemoryMailEngine>(MAIL_ENGINE);
     admin = await signUp(app, 'send-admin');
-    const orgId = await createOrg(admin, 'Send');
+    orgId = await createOrg(admin, 'Send');
     const domain = await admin.agent.post(`/api/orgs/${orgId}/domains`).send({ name: `send-${Date.now()}.example` });
     domainName = domain.body.name;
+    domainId = domain.body.id;
     await admin.agent.post(`/api/orgs/${orgId}/domains/${domain.body.id}/verify`).expect(200);
     const mailbox = await admin.agent
       .post(`/api/orgs/${orgId}/mailboxes`)
       .send({ domainId: domain.body.id, localPart: 'ann', password: PASSWORD })
       .expect(201);
     annAddress = mailbox.body.address;
+    annId = mailbox.body.id;
     await admin.agent
       .post(`/api/orgs/${orgId}/aliases`)
       .send({ domainId: domain.body.id, localPart: 'sales', destinations: [annAddress] })
@@ -117,6 +123,33 @@ describe('Webmail sending rules', () => {
     await send().expect(422);
     draft.to = Array.from({ length: 101 }, (_, i) => ({ email: `r${i}@outside.example` }));
     await send().expect(422);
+  });
+
+  it("applies the mailbox's rate limit, else its domain's", async () => {
+    const store = app.get<MemoryRateLimitStore>(RATE_LIMIT_STORE);
+    await admin.agent.patch(`/api/orgs/${orgId}/domains/${domainId}`).send({ rateLimit: { messages: 3, per: 'day' } }).expect(200);
+    expect(store.limits.get(`@${domainName}`)).toBe('3:86400');
+    const mailbox = await admin.agent
+      .patch(`/api/orgs/${orgId}/mailboxes/${annId}`)
+      .send({ rateLimit: { messages: 2, per: 'hour' } })
+      .expect(200);
+    expect(mailbox.body.rateLimit).toEqual({ messages: 2, per: 'hour' });
+    expect(store.limits.get(annAddress)).toBe('2:3600');
+
+    // Earlier sends this hour may have counted already: send until refused.
+    let refused = 0;
+    for (let i = 0; i < 3; i++) {
+      const res = await send();
+      if (res.status === 429) refused++;
+      else expect(res.status).toBe(503);
+    }
+    expect(refused).toBeGreaterThan(0);
+    await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${annId}`).send({ rateLimit: { messages: 0, per: 'hour' } }).expect(400);
+    await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${annId}`).send({ rateLimit: null }).expect(200);
+    expect(store.limits.has(annAddress)).toBe(false);
+    await admin.agent.patch(`/api/orgs/${orgId}/domains/${domainId}`).send({ rateLimit: null }).expect(200);
+    expect(store.limits.has(`@${domainName}`)).toBe(false);
+    await send().expect(503);
   });
 
   it('lists the addresses the user may send as, own address first', async () => {

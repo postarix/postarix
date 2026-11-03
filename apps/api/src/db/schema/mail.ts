@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -12,7 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { organization, session, user } from './auth.js';
-import { domains } from './domains.js';
+import { domains, type RatePeriod, ratePeriods } from './domains.js';
 
 /** active; no_login: receives mail but nobody can sign in; disabled: neither. */
 export const mailboxStatuses = ['active', 'no_login', 'disabled'] as const;
@@ -56,6 +57,9 @@ export const mailboxes = pgTable(
     tlsRequiredIn: boolean().notNull().default(false),
     /** Its outgoing mail is only handed to servers over TLS (otherwise it waits, then bounces). */
     tlsRequiredOut: boolean().notNull().default(false),
+    /** Messages it may send per period; null: its domain's limit, if any. */
+    rateLimit: integer(),
+    ratePeriod: text({ enum: Object.keys(ratePeriods) as [RatePeriod, ...RatePeriod[]] }),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
     mailServer: text(),
     /** When its calendars and address books were made private (see MailboxCollectionsService). */
@@ -71,6 +75,10 @@ export const mailboxes = pgTable(
     index('mailboxes_domain_id_idx').on(table.domainId),
     index('mailboxes_user_id_idx').on(table.userId),
     check('mailboxes_quota_positive', sql`${table.quotaBytes} IS NULL OR ${table.quotaBytes} > 0`),
+    check(
+      'mailboxes_rate_limit_valid',
+      sql`(${table.rateLimit} IS NULL) = (${table.ratePeriod} IS NULL) AND (${table.rateLimit} IS NULL OR ${table.rateLimit} > 0)`,
+    ),
   ],
 );
 

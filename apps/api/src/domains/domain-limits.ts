@@ -57,6 +57,14 @@ function limitReached(message: string, code: string): ConflictException {
   return new ConflictException({ message, code });
 }
 
+/** Mailboxes and aliases live on the target domain; an alias domain repeats them. */
+export function aliasDomainRefusal(): UnprocessableEntityException {
+  return new UnprocessableEntityException({
+    message: 'This is an alias domain: add mailboxes and aliases to the domain it repeats',
+    code: 'ALIAS_DOMAIN',
+  });
+}
+
 export function assertMayAddMailbox(domain: DomainRow, usage: DomainUsage): void {
   if (domain.maxMailboxes !== null && usage.mailboxes >= domain.maxMailboxes) {
     throw limitReached(

@@ -10,7 +10,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { isUniqueViolation } from '../common/pg-errors.js';
 import type { AliasRow } from '../db/schema/index.js';
-import { assertMayAddAlias } from '../domains/domain-limits.js';
+import { aliasDomainRefusal, assertMayAddAlias } from '../domains/domain-limits.js';
 import { DomainsRepository } from '../domains/domains.repository.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import {
@@ -50,6 +50,7 @@ export class AliasesService {
       });
     }
 
+    if (domain.aliasOfDomainId) throw aliasDomainRefusal();
     const address = `${input.localPart}@${domain.name}`;
     assertNoSelfReference(address, input.destinations);
     if (await this.addresses.isTaken(address)) {

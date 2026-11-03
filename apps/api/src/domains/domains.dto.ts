@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { type DomainRow } from '../db/schema/index.js';
+import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
 import type { DomainUsage } from './domain-limits.js';
 import { normalizeDomainName } from './domain-name.js';
 
@@ -15,6 +16,8 @@ export const createDomainSchema = z.strictObject({
       }
       return normalized;
     }),
+  /** Makes it an alias domain of this domain of the organization. */
+  aliasOf: z.uuid().optional(),
 });
 
 export type CreateDomainInput = z.infer<typeof createDomainSchema>;
@@ -41,6 +44,8 @@ export const updateDomainSchema = z
     maxAliases: countSchema.optional(),
     maxMailboxQuotaBytes: quotaSchema.optional(),
     totalQuotaBytes: quotaSchema.optional(),
+    /** Messages each mailbox may send per period, unless it has its own limit. */
+    rateLimit: rateLimitSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateDomainInput = z.infer<typeof updateDomainSchema>;
@@ -54,6 +59,8 @@ export interface DomainDto {
   /** Value to publish as a DNS TXT record to prove ownership. */
   verificationRecord: string;
   verifiedAt: string | null;
+  /** Set for an alias domain: the domain whose addresses it repeats. */
+  aliasOfDomainId: string | null;
   description: string;
   defaultMailboxQuotaBytes: number | null;
   limits: {
@@ -63,6 +70,7 @@ export interface DomainDto {
     totalQuotaBytes: number | null;
   };
   usage: DomainUsage;
+  rateLimit: RateLimit | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +82,7 @@ export function toDomainDto(row: DomainRow, usage: DomainUsage): DomainDto {
     status: row.status,
     verificationRecord: `postarix-verification=${row.verificationToken}`,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,
+    aliasOfDomainId: row.aliasOfDomainId,
     description: row.description,
     defaultMailboxQuotaBytes: row.defaultMailboxQuotaBytes,
     limits: {
@@ -83,6 +92,7 @@ export function toDomainDto(row: DomainRow, usage: DomainUsage): DomainDto {
       totalQuotaBytes: row.totalQuotaBytes,
     },
     usage,
+    rateLimit: toRateLimit(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

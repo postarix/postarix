@@ -340,3 +340,69 @@ local function may_sign(task)
 end
 rspamd_config:add_condition('DKIM_SIGNED', may_sign)
 rspamd_config:add_condition('ARC_SIGNED', may_sign)
+
+-- Postarix: sending rate limits set by organizations (per mailbox, else per
+-- domain for each of its mailboxes), published by the API in this hash as
+-- "<messages>:<seconds>". Each message a mailbox sends from a mail app counts
+-- once, in Valkey counters shared with the API (which applies the same limits
+-- to the webmail, so its own submissions are skipped here). Over the limit,
+-- the message is refused with a temporary error: the app tries again later.
+local RATE_LIMITS_HASH = 'POSTARIX_RATELIMITS'
+
+local function rate_limited(task, reason)
+  task:insert_result('POSTARIX_RATELIMIT', 1.0, reason)
+  task:set_pre_result('soft reject', 'Sending limit reached (' .. reason .. '); try again later', 'postarix')
+end
+
+rspamd_config:register_symbol({
+  name = 'POSTARIX_RATELIMIT',
+  type = 'prefilter',
+  priority = 9,
+  callback = function(task)
+    local user = task:get_user()
+    if not user or not redis_params or is_cyrus(task) then
+      return
+    end
+    user = string.lower(user)
+    if user:match('^postarix%-api') then
+      return
+    end
+    local domain = user:match('@([^@]+)$')
+    if not domain then
+      return
+    end
+    lua_redis.redis_make_request(task, redis_params, RATE_LIMITS_HASH, false, function(err, data)
+      if err or type(data) ~= 'table' then
+        return
+      end
+      local rule = nil
+      if type(data[1]) == 'string' then
+        rule = data[1]
+      elseif type(data[2]) == 'string' then
+        rule = data[2]
+      end
+      if not rule then
+        return
+      end
+      local messages, seconds = rule:match('^(%d+):(%d+)$')
+      messages, seconds = tonumber(messages), tonumber(seconds)
+      if not messages or not seconds or seconds < 1 then
+        return
+      end
+      local key = string.format('postarix:ratelimit:%s:%d:%d', user, seconds, math.floor(os.time() / seconds))
+      lua_redis.redis_make_request(task, redis_params, key, true, function(err2, count)
+        if err2 or not tonumber(count) then
+          return
+        end
+        if tonumber(count) == 1 then
+          lua_redis.redis_make_request(task, redis_params, key, true, function() end, 'EXPIRE', { key, tostring(seconds) })
+        end
+        if tonumber(count) > messages then
+          rate_limited(task, messages .. ' messages per ' .. seconds .. 's')
+        end
+      end, 'INCR', { key })
+    end, 'HMGET', { RATE_LIMITS_HASH, user, '@' .. domain })
+  end,
+})
+
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_RATELIMIT', score = 0.0, description = 'Over the sending rate limit' })

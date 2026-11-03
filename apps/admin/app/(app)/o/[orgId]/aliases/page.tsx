@@ -86,7 +86,7 @@ function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domain
               <Field orientation="horizontal">
                 <Checkbox id="alias-catch-all" checked={catchAll} onCheckedChange={(v) => setCatchAll(v === true)} />
                 <FieldLabel htmlFor="alias-catch-all" className="font-normal">
-                  Catch-all: every address of the domain that is not a mailbox or another alias
+                  Catch-all: mail for the whole domain that no mailbox or other alias takes
                 </FieldLabel>
               </Field>
             </>
@@ -129,7 +129,7 @@ export default function AliasesPage() {
   const aliases = useOrgList<Alias>(orgId, 'aliases');
   const domains = useOrgList<Domain>(orgId, 'domains');
   const refresh = useRefresh(orgId);
-  const activeDomains = domains.data?.filter((d) => d.status === 'active') ?? [];
+  const activeDomains = domains.data?.filter((d) => d.status === 'active' && !d.aliasOfDomainId) ?? [];
   const [editing, setEditing] = useState<Alias | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Alias | null>(null);
 

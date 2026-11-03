@@ -10,12 +10,20 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
+/** A sending limit: messages per period. */
+export interface RateLimit {
+  messages: number;
+  per: 'second' | 'minute' | 'hour' | 'day';
+}
+
 export interface Domain {
   id: string;
   name: string;
   status: 'pending' | 'active' | 'disabled';
   verificationRecord: string;
   verifiedAt: string | null;
+  /** An alias domain: it repeats every address of this domain. */
+  aliasOfDomainId: string | null;
   description: string;
   defaultMailboxQuotaBytes: number | null;
   /** Set by instance administrators; null: no limit. */
@@ -26,6 +34,8 @@ export interface Domain {
     totalQuotaBytes: number | null;
   };
   usage: { mailboxes: number; aliases: number; quotaBytes: number; unlimitedMailboxes: number };
+  /** For each of its mailboxes, unless the mailbox has its own. */
+  rateLimit: RateLimit | null;
   createdAt: string;
 }
 
@@ -53,6 +63,8 @@ export interface Mailbox {
   allowedProtocols: ('imap' | 'pop3' | 'smtp' | 'sieve' | 'dav')[];
   tlsRequiredIn: boolean;
   tlsRequiredOut: boolean;
+  /** Null: its domain's limit, if any. */
+  rateLimit: RateLimit | null;
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
   createdAt: string;
