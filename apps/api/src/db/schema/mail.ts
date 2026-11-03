@@ -119,6 +119,12 @@ export const aliases = pgTable(
     enabled: boolean().notNull().default(true),
     /** Accept the mail and drop it, whatever the destinations (e.g. an old address that only gets spam). */
     discard: boolean().notNull().default(false),
+    /** A temporary address someone made for themselves: it stops working (and is deleted) at this time. */
+    expiresAt: timestamp({ withTimezone: true }),
+    /** The mailbox that made it (temporary addresses), which it delivers to. */
+    ownerMailboxId: uuid().references(() => mailboxes.id, { onDelete: 'cascade' }),
+    /** What its owner made it for (temporary addresses). */
+    note: text().notNull().default(''),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
