@@ -4,6 +4,7 @@ import { Button } from '@postarix/ui/components/button';
 import { Input } from '@postarix/ui/components/input';
 import { Eye, EyeOff, Wand2 } from 'lucide-react';
 import { type InputHTMLAttributes, useState } from 'react';
+import { t } from '@/lib/i18n';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789-_';
 
@@ -53,7 +54,7 @@ export function PasswordInput({
         type="button"
         variant="outline"
         size="icon"
-        aria-label="Generate password"
+        aria-label={t('Generate password')}
         onClick={() => {
           onChange(generatePassword());
           setVisible(true);

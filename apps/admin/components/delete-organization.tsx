@@ -19,6 +19,7 @@ import type { OrganizationSummary } from '@/lib/types';
 import { FormField } from './form-field';
 import { LoadingButton } from './loading-button';
 import { Notice } from './notice';
+import { t } from '@/lib/i18n';
 
 /**
  * Shown to instance administrators only (the API enforces it too). Deleting
@@ -41,17 +42,10 @@ export function DeleteOrganization({ org }: { org: OrganizationSummary }) {
 
   return (
     <section aria-labelledby="danger-zone" className="mt-10 rounded-xl border border-destructive/40 p-5">
-      <h3 id="danger-zone" className="text-base font-semibold">
-        Delete this organization
-      </h3>
-      <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-        Erases its {counts.mailboxes} {counts.mailboxes === 1 ? 'mailbox' : 'mailboxes'} with all their mail, calendars and
-        contacts, {counts.aliases} {counts.aliases === 1 ? 'alias' : 'aliases'}, {counts.domains}{' '}
-        {counts.domains === 1 ? 'domain' : 'domains'} and their signing keys. This can’t be undone.
-      </p>
-      <Button variant="destructive" className="mt-4" onClick={() => setOpen(true)}>
-        Delete organization
-      </Button>
+      <h3 id="danger-zone" className="text-base font-semibold">{t('Delete this organization')}</h3>
+      <p className="mt-1 max-w-prose text-sm text-muted-foreground">{t('Erases its')}{' '}{counts.mailboxes} {counts.mailboxes === 1 ? 'mailbox' : 'mailboxes'}{' '}{t('with all their mail, calendars and contacts,')}{' '}{counts.aliases} {counts.aliases === 1 ? 'alias' : 'aliases'}, {counts.domains}{' '}
+        {counts.domains === 1 ? 'domain' : 'domains'}{' '}{t('and their signing keys. This can’t be undone.')}</p>
+      <Button variant="destructive" className="mt-4" onClick={() => setOpen(true)}>{t('Delete organization')}</Button>
 
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
         <DialogContent>
@@ -74,11 +68,8 @@ export function DeleteOrganization({ org }: { org: OrganizationSummary }) {
             className="grid gap-4"
           >
             <DialogHeader>
-              <DialogTitle>Delete {org.name}?</DialogTitle>
-              <DialogDescription>
-                Every mailbox and its mail is erased from the mail server, and the people who used them can no longer sign
-                in.
-              </DialogDescription>
+              <DialogTitle>{t('Delete')}{' '}{org.name}?</DialogTitle>
+              <DialogDescription>{t('Every mailbox and its mail is erased from the mail server, and the people who used them can no longer sign in.')}</DialogDescription>
             </DialogHeader>
             <FormField label={`Type “${org.name}” to confirm`}>
               {(props) => (
@@ -87,12 +78,8 @@ export function DeleteOrganization({ org }: { org: OrganizationSummary }) {
             </FormField>
             {error ? <Notice>{error}</Notice> : null}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={close}>
-                Cancel
-              </Button>
-              <LoadingButton type="submit" variant="destructive" loading={pending} disabled={typed !== org.name}>
-                Delete organization
-              </LoadingButton>
+              <Button type="button" variant="outline" onClick={close}>{t('Cancel')}</Button>
+              <LoadingButton type="submit" variant="destructive" loading={pending} disabled={typed !== org.name}>{t('Delete organization')}</LoadingButton>
             </DialogFooter>
           </form>
         </DialogContent>

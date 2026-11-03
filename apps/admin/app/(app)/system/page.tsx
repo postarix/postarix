@@ -26,6 +26,7 @@ import { isSuperAdmin } from '@/lib/queries';
 import { RoutingTab } from './routing';
 import { SettingsTab } from './settings';
 import { SpamLists } from '@/components/spam-lists';
+import { t } from '@/lib/i18n';
 
 interface ServiceStatus {
   name: string;
@@ -55,9 +56,9 @@ const serviceNames: Record<string, string> = {
 };
 
 const stateBadge: Record<ServiceStatus['state'], { label: string; variant: 'success' | 'destructive' | 'secondary' }> = {
-  ok: { label: 'Running', variant: 'success' },
-  down: { label: 'Not responding', variant: 'destructive' },
-  unknown: { label: 'Unknown', variant: 'secondary' },
+  ok: { label: t('Running'), variant: 'success' },
+  down: { label: t('Not responding'), variant: 'destructive' },
+  unknown: { label: t('Unknown'), variant: 'secondary' },
 };
 
 function StatusTab() {
@@ -72,11 +73,11 @@ function StatusTab() {
     <ListTable>
       <TableHeader>
         <TableRow>
-          <TableHead className="pl-4">Service</TableHead>
-          <TableHead>State</TableHead>
-          <TableHead>Version</TableHead>
-          <TableHead>Disk</TableHead>
-          <TableHead className="pr-4">Details</TableHead>
+          <TableHead className="pl-4">{t('Service')}</TableHead>
+          <TableHead>{t('State')}</TableHead>
+          <TableHead>{t('Version')}</TableHead>
+          <TableHead>{t('Disk')}</TableHead>
+          <TableHead className="pr-4">{t('Details')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -119,24 +120,20 @@ function LogsTab() {
           setApplied(filter.trim());
         }}
       >
-        <NativeSelect aria-label="Service" value={service} onChange={(e) => setService(e.target.value as 'postfix' | 'cyrus')}>
-          <NativeSelectOption value="postfix">Postfix (SMTP)</NativeSelectOption>
-          <NativeSelectOption value="cyrus">Cyrus (IMAP, POP3, calendars)</NativeSelectOption>
+        <NativeSelect aria-label={t('Service')} value={service} onChange={(e) => setService(e.target.value as 'postfix' | 'cyrus')}>
+          <NativeSelectOption value="postfix">{t('Postfix (SMTP)')}</NativeSelectOption>
+          <NativeSelectOption value="cyrus">{t('Cyrus (IMAP, POP3, calendars)')}</NativeSelectOption>
         </NativeSelect>
         <Input
-          aria-label="Show only lines containing"
-          placeholder="Address, queue ID, IP…"
+          aria-label={t('Show only lines containing')}
+          placeholder={t('Address, queue ID, IP…')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="w-72"
         />
-        <Button type="submit" variant="outline">
-          Filter
-        </Button>
+        <Button type="submit" variant="outline">{t('Filter')}</Button>
         <LoadingButton type="button" variant="ghost" loading={logs.isFetching} onClick={() => void logs.refetch()}>
-          <RefreshCw aria-hidden />
-          Refresh
-        </LoadingButton>
+          <RefreshCw aria-hidden />{t('Refresh')}</LoadingButton>
       </form>
       {logs.error ? (
         <Notice>{errorMessage(logs.error)}</Notice>
@@ -196,29 +193,15 @@ function QueueTab() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'deliver', ids })}>
-          Deliver now
-        </Button>
-        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'hold', ids })}>
-          Hold
-        </Button>
-        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'release', ids })}>
-          Release
-        </Button>
-        <Button variant="outline" disabled={ids.length === 0} onClick={() => setConfirming('delete')}>
-          Delete
-        </Button>
+        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'deliver', ids })}>{t('Deliver now')}</Button>
+        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'hold', ids })}>{t('Hold')}</Button>
+        <Button variant="outline" disabled={ids.length === 0} onClick={() => void act({ action: 'release', ids })}>{t('Release')}</Button>
+        <Button variant="outline" disabled={ids.length === 0} onClick={() => setConfirming('delete')}>{t('Delete')}</Button>
         <span className="mx-1 h-6 w-px bg-border" aria-hidden />
-        <Button variant="outline" onClick={() => void act({ action: 'flush' })}>
-          Retry all
-        </Button>
-        <Button variant="outline" disabled={items.length === 0} onClick={() => setConfirming('delete-all')}>
-          Delete all
-        </Button>
+        <Button variant="outline" onClick={() => void act({ action: 'flush' })}>{t('Retry all')}</Button>
+        <Button variant="outline" disabled={items.length === 0} onClick={() => setConfirming('delete-all')}>{t('Delete all')}</Button>
         <LoadingButton variant="ghost" loading={queue.isFetching} onClick={() => void queue.refetch()}>
-          <RefreshCw aria-hidden />
-          Refresh
-        </LoadingButton>
+          <RefreshCw aria-hidden />{t('Refresh')}</LoadingButton>
       </div>
       {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       {error ? <Notice>{error}</Notice> : null}
@@ -232,17 +215,17 @@ function QueueTab() {
             <TableRow>
               <TableHead className="w-10 pl-4">
                 <Checkbox
-                  aria-label="Select all"
+                  aria-label={t('Select all')}
                   checked={selected.size === items.length}
                   onCheckedChange={(v) => setSelected(v === true ? new Set(items.map((i) => i.id)) : new Set())}
                 />
               </TableHead>
-              <TableHead>Queue ID</TableHead>
-              <TableHead>Queue</TableHead>
-              <TableHead>Arrived</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead>Sender</TableHead>
-              <TableHead className="pr-4">Recipients and reason</TableHead>
+              <TableHead>{t('Queue ID')}</TableHead>
+              <TableHead>{t('Queue')}</TableHead>
+              <TableHead>{t('Arrived')}</TableHead>
+              <TableHead>{t('Size')}</TableHead>
+              <TableHead>{t('Sender')}</TableHead>
+              <TableHead className="pr-4">{t('Recipients and reason')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -275,7 +258,7 @@ function QueueTab() {
       ) : (
         <EmptyState
           icon={Inbox}
-          title="The mail queue is empty"
+          title={t('The mail queue is empty')}
           description={queue.data?.at ? `As of ${formatDate(queue.data.at)}.` : 'Postfix has not reported its queue yet.'}
         />
       )}
@@ -283,7 +266,7 @@ function QueueTab() {
         open={confirming !== null}
         onClose={() => setConfirming(null)}
         title={confirming === 'delete-all' ? 'Delete every queued message?' : `Delete ${ids.length} queued messages?`}
-        description="They are not delivered, and their senders are not told."
+        description={t('They are not delivered, and their senders are not told.')}
         onConfirm={async () => {
           if (confirming === 'delete-all') await act({ action: 'delete-all' });
           else await act({ action: 'delete', ids });
@@ -304,15 +287,15 @@ export default function SystemPage() {
 
   return (
     <>
-      <PageHeader title="System" description="The state of the services, recent mail logs and the mail queue of this server." />
+      <PageHeader title={t('System')} description={t('The state of the services, recent mail logs and the mail queue of this server.')} />
       <Tabs defaultValue="status">
         <TabsList>
-          <TabsTrigger value="status">Services</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="queue">Mail queue</TabsTrigger>
-          <TabsTrigger value="routing">Outgoing routing</TabsTrigger>
-          <TabsTrigger value="spam">Spam filter</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="status">{t('Services')}</TabsTrigger>
+          <TabsTrigger value="logs">{t('Logs')}</TabsTrigger>
+          <TabsTrigger value="queue">{t('Mail queue')}</TabsTrigger>
+          <TabsTrigger value="routing">{t('Outgoing routing')}</TabsTrigger>
+          <TabsTrigger value="spam">{t('Spam filter')}</TabsTrigger>
+          <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
         </TabsList>
         <TabsContent value="status" className="pt-4">
           <StatusTab />
@@ -330,7 +313,7 @@ export default function SystemPage() {
           <SettingsTab />
         </TabsContent>
         <TabsContent value="spam" className="max-w-2xl space-y-3 pt-4">
-          <h3 className="font-medium">Senders for every mailbox on this server</h3>
+          <h3 className="font-medium">{t('Senders for every mailbox on this server')}</h3>
           <SpamLists
             queryKey={['system', 'spam-lists']}
             listUrl="/system/spam-lists"

@@ -4,6 +4,7 @@ import { CalendarDays, MapPin, Repeat } from 'lucide-react';
 import { errorMessage } from '@/lib/api';
 import { STATUS_LABELS } from '@/lib/calendar';
 import { type Invitation, useAnswerInvitation, useApplyInvitation, useInvitation } from '@/lib/invitations';
+import { t } from '@/lib/i18n';
 
 function when(invitation: Invitation): string {
   if (!invitation.start) return '';
@@ -23,9 +24,9 @@ const HEADINGS: Record<Invitation['method'], string> = {
 };
 
 const ANSWERS = [
-  { response: 'accepted', label: 'Going' },
-  { response: 'tentative', label: 'Maybe' },
-  { response: 'declined', label: 'Not going' },
+  { response: 'accepted', label: t('Going') },
+  { response: 'tentative', label: t('Maybe') },
+  { response: 'declined', label: t('Not going') },
 ] as const;
 
 /** What a calendar message is about, with the answer or calendar update it allows. */
@@ -55,11 +56,13 @@ export function InvitationCard({ emailId }: { emailId: string }) {
           {data.repeats ? (
             <p className="flex items-center gap-1 text-sm text-muted-foreground">
               <Repeat className="size-3.5" aria-hidden />
-              Repeats
+              {t('Repeats')}
             </p>
           ) : null}
           {data.organizer && data.method === 'REQUEST' ? (
-            <p className="text-sm text-muted-foreground">Organized by {data.organizer.name ?? data.organizer.email}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('Organized by')} {data.organizer.name ?? data.organizer.email}
+            </p>
           ) : null}
           {replier ? (
             <p className="text-sm">
@@ -69,10 +72,10 @@ export function InvitationCard({ emailId }: { emailId: string }) {
         </div>
       </div>
 
-      {data.outdated ? <p className="mt-3 text-sm text-muted-foreground">Your calendar has a newer version of this event.</p> : null}
+      {data.outdated ? <p className="mt-3 text-sm text-muted-foreground">{t('Your calendar has a newer version of this event.')}</p> : null}
 
       {data.method === 'REQUEST' && data.actionable && !data.outdated ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Your answer">
+        <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={t('Your answer')}>
           {ANSWERS.map(({ response, label }) => (
             <Button
               key={response}
@@ -87,7 +90,9 @@ export function InvitationCard({ emailId }: { emailId: string }) {
             </Button>
           ))}
           {data.myStatus && data.myStatus !== 'needs-action' ? (
-            <span className="text-sm text-muted-foreground">You answered: {STATUS_LABELS[data.myStatus] ?? data.myStatus}</span>
+            <span className="text-sm text-muted-foreground">
+              {t('You answered:')} {STATUS_LABELS[data.myStatus] ?? data.myStatus}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -104,7 +109,7 @@ export function InvitationCard({ emailId }: { emailId: string }) {
               {data.method === 'CANCEL' ? 'Remove from calendar' : 'Update calendar'}
             </Button>
           ) : (
-            <p className="text-sm text-muted-foreground">This message does not match an event in your calendar.</p>
+            <p className="text-sm text-muted-foreground">{t('This message does not match an event in your calendar.')}</p>
           )}
         </div>
       ) : null}

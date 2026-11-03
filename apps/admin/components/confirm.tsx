@@ -13,6 +13,7 @@ import { type ReactNode, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { LoadingButton } from './loading-button';
 import { Notice } from './notice';
+import { t } from '@/lib/i18n';
 
 /** shadcn AlertDialog for destructive actions; stays open and shows the error if the action fails. */
 export function ConfirmDialog({
@@ -49,7 +50,7 @@ export function ConfirmDialog({
         </AlertDialogHeader>
         {error ? <Notice>{error}</Notice> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
           <LoadingButton
             variant="destructive"
             loading={pending}

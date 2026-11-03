@@ -19,6 +19,7 @@ import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { authClient, useSession } from '@/lib/auth-client';
 import { isSuperAdmin, keys, useAllOrganizations, useMyOrganizations } from '@/lib/queries';
+import { t } from '@/lib/i18n';
 
 function slugify(value: string): string {
   return value
@@ -54,18 +55,14 @@ function CreateOrganizationDialog({ open, onClose }: { open: boolean; onClose: (
   }
 
   return (
-    <AppDialog open={open} onClose={onClose} title="New organization" description="A company, a family or a single person.">
+    <AppDialog open={open} onClose={onClose} title={t('New organization')} description={t('A company, a family or a single person.')}>
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Name">{(props) => <Input {...props} name="name" required maxLength={100} autoFocus />}</FormField>
+          <FormField label={t('Name')}>{(props) => <Input {...props} name="name" required maxLength={100} autoFocus />}</FormField>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Create
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Create')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -85,14 +82,12 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Organizations"
+        title={t('Organizations')}
         description={superAdmin ? 'Every organization on this instance.' : 'Organizations you belong to.'}
         actions={
           superAdmin ? (
             <Button onClick={() => setCreating(true)}>
-              <Plus aria-hidden />
-              New organization
-            </Button>
+              <Plus aria-hidden />{t('New organization')}</Button>
           ) : null
         }
       />
@@ -128,13 +123,13 @@ export default function DashboardPage() {
       ) : (
         <EmptyState
           icon={Building2}
-          title="No organizations yet"
+          title={t('No organizations yet')}
           description={
             superAdmin
               ? 'Create the first organization to add domains and mailboxes.'
               : 'Ask an administrator to add you to an organization.'
           }
-          action={superAdmin ? <Button onClick={() => setCreating(true)}>New organization</Button> : null}
+          action={superAdmin ? <Button onClick={() => setCreating(true)}>{t('New organization')}</Button> : null}
         />
       )}
       <CreateOrganizationDialog open={creating} onClose={() => setCreating(false)} />

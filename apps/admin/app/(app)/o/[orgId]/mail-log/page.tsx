@@ -17,13 +17,14 @@ import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { keys } from '@/lib/queries';
 import type { MailLogEntry } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 const OUTCOMES: Record<MailLogEntry['outcome'], { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' }> = {
-  delivered: { label: 'Delivered', variant: 'success' },
-  spam: { label: 'Marked as spam', variant: 'warning' },
-  greylisted: { label: 'Greylisted', variant: 'secondary' },
-  deferred: { label: 'Deferred', variant: 'secondary' },
-  rejected: { label: 'Rejected', variant: 'destructive' },
+  delivered: { label: t('Delivered'), variant: 'success' },
+  spam: { label: t('Marked as spam'), variant: 'warning' },
+  greylisted: { label: t('Greylisted'), variant: 'secondary' },
+  deferred: { label: t('Deferred'), variant: 'secondary' },
+  rejected: { label: t('Rejected'), variant: 'destructive' },
 };
 
 export default function MailLogPage() {
@@ -42,17 +43,15 @@ export default function MailLogPage() {
   return (
     <>
       <PageHeader
-        title="Mail log"
-        description="Recent mail to and from your domains, and what the spam filter did with it."
+        title={t('Mail log')}
+        description={t('Recent mail to and from your domains, and what the spam filter did with it.')}
         actions={
           <Button variant="outline" onClick={() => void log.refetch()} disabled={log.isFetching}>
-            <RefreshCw aria-hidden className={log.isFetching ? 'animate-spin' : undefined} />
-            Refresh
-          </Button>
+            <RefreshCw aria-hidden className={log.isFetching ? 'animate-spin' : undefined} />{t('Refresh')}</Button>
         }
       />
       <div className="mb-4 max-w-sm">
-        <Input type="search" placeholder="Filter by address or subject" aria-label="Filter the mail log" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <Input type="search" placeholder={t('Filter by address or subject')} aria-label={t('Filter the mail log')} value={filter} onChange={(e) => setFilter(e.target.value)} />
       </div>
       {log.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
@@ -62,11 +61,11 @@ export default function MailLogPage() {
         <ListTable>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">When</TableHead>
-              <TableHead>From → To</TableHead>
-              <TableHead>Subject</TableHead>
-              <TableHead>Result</TableHead>
-              <TableHead className="pr-4 text-right">Score</TableHead>
+              <TableHead className="pl-4">{t('When')}</TableHead>
+              <TableHead>{t('From → To')}</TableHead>
+              <TableHead>{t('Subject')}</TableHead>
+              <TableHead>{t('Result')}</TableHead>
+              <TableHead className="pr-4 text-right">{t('Score')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,15 +77,15 @@ export default function MailLogPage() {
                   <TableCell className="max-w-80 align-top">
                     <div className="flex items-center gap-1.5">
                       {entry.direction === 'in' ? (
-                        <ArrowDownLeft className="size-3.5 shrink-0 text-ink" aria-label="Incoming" />
+                        <ArrowDownLeft className="size-3.5 shrink-0 text-ink" aria-label={t('Incoming')} />
                       ) : (
-                        <ArrowUpRight className="size-3.5 shrink-0 text-success" aria-label="Outgoing" />
+                        <ArrowUpRight className="size-3.5 shrink-0 text-success" aria-label={t('Outgoing')} />
                       )}
                       <span className="truncate font-medium">{entry.from || '(no sender)'}</span>
                     </div>
                     <div className="truncate pl-5 text-xs text-muted-foreground">{entry.to.join(', ')}</div>
                   </TableCell>
-                  <TableCell className="max-w-72 truncate align-top">{entry.subject || <span className="text-muted-foreground">(no subject)</span>}</TableCell>
+                  <TableCell className="max-w-72 truncate align-top">{entry.subject || <span className="text-muted-foreground">{t('(no subject)')}</span>}</TableCell>
                   <TableCell className="align-top">
                     <Badge variant={outcome.variant}>{outcome.label}</Badge>
                     {entry.reasons.length && entry.outcome !== 'delivered' ? (

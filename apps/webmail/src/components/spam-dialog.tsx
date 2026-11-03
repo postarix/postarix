@@ -7,6 +7,7 @@ import { Spinner } from '@postarix/ui/components/spinner';
 import { Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 interface Entry {
   id: string;
@@ -80,8 +81,8 @@ export function SpamDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Spam filter</DialogTitle>
-          <DialogDescription>Every message gets a spam score: the higher, the more likely it is spam.</DialogDescription>
+          <DialogTitle>{t('Spam filter')}</DialogTitle>
+          <DialogDescription>{t('Every message gets a spam score: the higher, the more likely it is spam.')}</DialogDescription>
         </DialogHeader>
         {!settings ? (
           error ? (
@@ -94,39 +95,30 @@ export function SpamDialog({ onClose }: { onClose: () => void }) {
             <form onSubmit={saveScores} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1 text-sm">
-                  <span className="font-medium">Junk from score</span>
-                  <Input value={junk} onChange={(e) => setJunk(e.target.value)} inputMode="decimal" placeholder="Default" />
+                  <span className="font-medium">{t('Junk from score')}</span>
+                  <Input value={junk} onChange={(e) => setJunk(e.target.value)} inputMode="decimal" placeholder={t('Default')} />
                 </label>
                 <label className="space-y-1 text-sm">
-                  <span className="font-medium">Refuse from score</span>
-                  <Input value={reject} onChange={(e) => setReject(e.target.value)} inputMode="decimal" placeholder="Default" />
+                  <span className="font-medium">{t('Refuse from score')}</span>
+                  <Input value={reject} onChange={(e) => setReject(e.target.value)} inputMode="decimal" placeholder={t('Default')} />
                 </label>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Lower scores catch more spam, and more good mail by mistake. Empty: your organization's setting.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('Lower scores catch more spam, and more good mail by mistake. Empty: your organization\'s setting.')}</p>
               <div className="flex items-center justify-end gap-3">
-                {saved ? <span className="text-sm text-muted-foreground">Saved.</span> : null}
-                <Button type="submit" variant="outline">
-                  Save scores
-                </Button>
+                {saved ? <span className="text-sm text-muted-foreground">{t('Saved.')}</span> : null}
+                <Button type="submit" variant="outline">{t('Save scores')}</Button>
               </div>
             </form>
             <div className="space-y-3">
-              <p className="text-sm font-medium">Senders</p>
-              <p className="text-xs text-muted-foreground">
-                Blocked senders are refused. Allowed senders skip the spam filter, if their server proves who they are.
-                Use an address or @domain.
-              </p>
+              <p className="text-sm font-medium">{t('Senders')}</p>
+              <p className="text-xs text-muted-foreground">{t('Blocked senders are refused. Allowed senders skip the spam filter, if their server proves who they are. Use an address or @domain.')}</p>
               <form onSubmit={add} className="flex flex-wrap gap-2">
-                <NativeSelect aria-label="List" value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
-                  <NativeSelectOption value="block">Block</NativeSelectOption>
-                  <NativeSelectOption value="allow">Allow</NativeSelectOption>
+                <NativeSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
+                  <NativeSelectOption value="block">{t('Block')}</NativeSelectOption>
+                  <NativeSelectOption value="allow">{t('Allow')}</NativeSelectOption>
                 </NativeSelect>
-                <Input aria-label="Sender" value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="news@example.com" className="min-w-48 flex-1" required />
-                <Button type="submit" variant="outline">
-                  Add
-                </Button>
+                <Input aria-label={t('Sender')} value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder={t('news@example.com')} className="min-w-48 flex-1" required />
+                <Button type="submit" variant="outline">{t('Add')}</Button>
               </form>
               {settings.entries.length ? (
                 <ul className="divide-y rounded-md border">
@@ -155,14 +147,14 @@ export function SpamDialog({ onClose }: { onClose: () => void }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">No senders listed.</p>
+                <p className="text-sm text-muted-foreground">{t('No senders listed.')}</p>
               )}
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
           </div>
         )}
         <DialogFooter>
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t('Done')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

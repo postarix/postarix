@@ -19,6 +19,7 @@ import { ListTable } from '@/components/list-table';
 import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { api, errorMessage } from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 export interface RelayHost {
   id: string;
@@ -125,9 +126,7 @@ function EntryList<T extends { id: string; enabled: boolean }>({
             setEditing('new');
           }}
         >
-          <Plus aria-hidden />
-          Add
-        </Button>
+          <Plus aria-hidden />{t('Add')}</Button>
       </div>
       {list.isLoading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
@@ -142,9 +141,9 @@ function EntryList<T extends { id: string; enabled: boolean }>({
                   {c}
                 </TableHead>
               ))}
-              <TableHead>Status</TableHead>
+              <TableHead>{t('Status')}</TableHead>
               <TableHead className="pr-4 text-right">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('Actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -157,14 +156,14 @@ function EntryList<T extends { id: string; enabled: boolean }>({
                   </TableCell>
                 ))}
                 <TableCell>
-                  {entry.enabled ? <Badge variant="success">Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>}
+                  {entry.enabled ? <Badge variant="success">{t('Enabled')}</Badge> : <Badge variant="secondary">{t('Disabled')}</Badge>}
                 </TableCell>
                 <TableCell className="pr-4">
                   <div className="flex justify-end gap-1">
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label="Edit"
+                      aria-label={t('Edit')}
                       onClick={() => {
                         setError(null);
                         setEditing(entry);
@@ -172,7 +171,7 @@ function EntryList<T extends { id: string; enabled: boolean }>({
                     >
                       <Pencil aria-hidden />
                     </Button>
-                    <Button size="icon-sm" variant="ghost" aria-label="Delete" onClick={() => setDeleting(entry)}>
+                    <Button size="icon-sm" variant="ghost" aria-label={t('Delete')} onClick={() => setDeleting(entry)}>
                       <Trash2 aria-hidden />
                     </Button>
                   </div>
@@ -182,7 +181,7 @@ function EntryList<T extends { id: string; enabled: boolean }>({
           </TableBody>
         </ListTable>
       ) : (
-        <p className="text-sm text-muted-foreground">None.</p>
+        <p className="text-sm text-muted-foreground">{t('None.')}</p>
       )}
       {editing ? (
         <AppDialog open onClose={() => setEditing(null)} title={editing === 'new' ? `Add: ${title}` : `Edit: ${title}`}>
@@ -192,17 +191,11 @@ function EntryList<T extends { id: string; enabled: boolean }>({
               {form(editing === 'new' ? null : editing)}
               <Field orientation="horizontal">
                 <Checkbox id={`${path}-enabled`} name="enabled" defaultChecked={editing === 'new' ? true : editing.enabled} />
-                <FieldLabel htmlFor={`${path}-enabled`} className="font-normal">
-                  Enabled
-                </FieldLabel>
+                <FieldLabel htmlFor={`${path}-enabled`} className="font-normal">{t('Enabled')}</FieldLabel>
               </Field>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                  Cancel
-                </Button>
-                <LoadingButton type="submit" loading={pending}>
-                  Save
-                </LoadingButton>
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>{t('Cancel')}</Button>
+                <LoadingButton type="submit" loading={pending}>{t('Save')}</LoadingButton>
               </DialogFooter>
             </FieldGroup>
           </form>
@@ -211,8 +204,8 @@ function EntryList<T extends { id: string; enabled: boolean }>({
       <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
-        title="Delete this entry?"
-        description="Postfix stops using it within a few seconds."
+        title={t('Delete this entry?')}
+        description={t('Postfix stops using it within a few seconds.')}
         onConfirm={async () => {
           if (!deleting) return;
           await api.delete(`/system/${path}/${deleting.id}`);
@@ -226,10 +219,10 @@ function EntryList<T extends { id: string; enabled: boolean }>({
 function Credentials({ entry }: { entry: { username: string; hasPassword: boolean } | null }) {
   return (
     <>
-      <FormField label="Username" hint="Empty: no login.">
+      <FormField label={t('Username')} hint={t('Empty: no login.')}>
         {(props) => <Input {...props} name="username" defaultValue={entry?.username ?? ''} autoComplete="off" />}
       </FormField>
-      <FormField label="Password" hint={entry?.hasPassword ? 'Empty: keep the current password.' : undefined}>
+      <FormField label={t('Password')} hint={entry?.hasPassword ? 'Empty: keep the current password.' : undefined}>
         {(props) => <Input {...props} name="password" type="password" autoComplete="new-password" />}
       </FormField>
     </>
@@ -241,14 +234,14 @@ export function RoutingTab() {
     <div className="space-y-10">
       <EntryList<RelayHost>
         path="relay-hosts"
-        title="Smart hosts"
-        description="Services (SendGrid, Amazon SES, your provider…) that a domain's or a mailbox's mail can be sent through. Choose one in the domain or mailbox settings."
+        title={t('Smart hosts')}
+        description={t('Services (SendGrid, Amazon SES, your provider…) that a domain\'s or a mailbox\'s mail can be sent through. Choose one in the domain or mailbox settings.')}
         columns={['Host', 'Login']}
         row={(r) => [r.host, r.username || '—']}
         form={(r) => (
           <>
-            <FormField label="Host" hint="[smtp.example.com]:587 (brackets: no MX lookup).">
-              {(props) => <Input {...props} name="host" defaultValue={r?.host ?? ''} required placeholder="[smtp.example.com]:587" />}
+            <FormField label={t('Host')} hint={t('[smtp.example.com]:587 (brackets: no MX lookup).')}>
+              {(props) => <Input {...props} name="host" defaultValue={r?.host ?? ''} required placeholder={t('[smtp.example.com]:587')} />}
             </FormField>
             <Credentials entry={r} />
           </>
@@ -256,18 +249,18 @@ export function RoutingTab() {
       />
       <EntryList<TransportRoute>
         path="transports"
-        title="Routes"
-        description="Hand mail for a destination (a domain, .domain for its subdomains, or an address) to a given server instead of its MX."
+        title={t('Routes')}
+        description={t('Hand mail for a destination (a domain, .domain for its subdomains, or an address) to a given server instead of its MX.')}
         columns={['Destination', 'Next hop', 'Login']}
         row={(r) => [r.destination, r.nexthop, r.username || '—']}
         form={(r) => (
           <>
-            <FormField label="Destination">
+            <FormField label={t('Destination')}>
               {(props) => (
                 <Input {...props} name="destination" defaultValue={r?.destination ?? ''} required disabled={r !== null} placeholder="partner.example" />
               )}
             </FormField>
-            <FormField label="Next hop" hint="[mx.partner.example]:25">
+            <FormField label={t('Next hop')} hint={t('[mx.partner.example]:25')}>
               {(props) => <Input {...props} name="nexthop" defaultValue={r?.nexthop ?? ''} required />}
             </FormField>
             <Credentials entry={r} />
@@ -276,16 +269,16 @@ export function RoutingTab() {
       />
       <EntryList<TlsPolicy>
         path="tls-policies"
-        title="TLS policies"
-        description="How strictly outgoing mail to a destination must be encrypted (by default: DANE where published, otherwise TLS when offered)."
+        title={t('TLS policies')}
+        description={t('How strictly outgoing mail to a destination must be encrypted (by default: DANE where published, otherwise TLS when offered).')}
         columns={['Destination', 'Policy', 'Parameters']}
         row={(r) => [r.destination, r.policy, r.parameters || '—']}
         form={(r) => (
           <>
-            <FormField label="Destination" hint="A domain, .domain for its subdomains, or [host]:port.">
+            <FormField label={t('Destination')} hint={t('A domain, .domain for its subdomains, or [host]:port.')}>
               {(props) => <Input {...props} name="destination" defaultValue={r?.destination ?? ''} required disabled={r !== null} />}
             </FormField>
-            <FormField label="Policy">
+            <FormField label={t('Policy')}>
               {(props) => (
                 <NativeSelect {...props} name="policy" defaultValue={r?.policy ?? 'encrypt'} className="w-full">
                   {tlsLevels.map((level) => (
@@ -296,7 +289,7 @@ export function RoutingTab() {
                 </NativeSelect>
               )}
             </FormField>
-            <FormField label="Parameters" hint="Optional, e.g. protocols=>=TLSv1.2 match=.example.com">
+            <FormField label={t('Parameters')} hint={t('Optional, e.g. protocols=>=TLSv1.2 match=.example.com')}>
               {(props) => <Input {...props} name="parameters" defaultValue={r?.parameters ?? ''} />}
             </FormField>
           </>

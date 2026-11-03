@@ -27,6 +27,7 @@ import { api, errorMessage } from '@/lib/api';
 import { authClient, useSession } from '@/lib/auth-client';
 import { formatDate } from '@/lib/format';
 import type { AppPassword } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 type Status = { tone: 'success' | 'destructive'; text: string } | null;
 
@@ -50,20 +51,18 @@ function ProfileCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profile</CardTitle>
+        <CardTitle>{t('Profile')}</CardTitle>
         <CardDescription>{session.user.email}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit}>
           <FieldGroup>
             {status ? <Notice tone={status.tone}>{status.text}</Notice> : null}
-            <FormField label="Name">
+            <FormField label={t('Name')}>
               {(props) => <Input {...props} name="name" defaultValue={session.user.name} required maxLength={128} />}
             </FormField>
             <div>
-              <LoadingButton type="submit" loading={pending}>
-                Save
-              </LoadingButton>
+              <LoadingButton type="submit" loading={pending}>{t('Save')}</LoadingButton>
             </div>
           </FieldGroup>
         </form>
@@ -93,14 +92,14 @@ function PasswordCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Password</CardTitle>
-        <CardDescription>Also used by mail apps while two-factor authentication is off.</CardDescription>
+        <CardTitle>{t('Password')}</CardTitle>
+        <CardDescription>{t('Also used by mail apps while two-factor authentication is off.')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit}>
           <FieldGroup>
             {status ? <Notice tone={status.tone}>{status.text}</Notice> : null}
-            <FormField label="Current password">
+            <FormField label={t('Current password')}>
               {(props) => (
                 <Input
                   {...props}
@@ -112,13 +111,11 @@ function PasswordCard() {
                 />
               )}
             </FormField>
-            <FormField label="New password" hint="At least 12 characters.">
+            <FormField label={t('New password')} hint={t('At least 12 characters.')}>
               {(props) => <PasswordInput {...props} value={next} onChange={setNext} required />}
             </FormField>
             <div>
-              <LoadingButton type="submit" loading={pending}>
-                Change password
-              </LoadingButton>
+              <LoadingButton type="submit" loading={pending}>{t('Change password')}</LoadingButton>
             </div>
           </FieldGroup>
         </form>
@@ -133,7 +130,7 @@ function QrCode({ value }: { value: string }) {
     void QRCode.toDataURL(value, { margin: 1, width: 192 }).then(setSrc);
   }, [value]);
   return src ? (
-    <img src={src} alt="QR code for your authenticator app" width={192} height={192} className="rounded-md bg-white p-1" />
+    <img src={src} alt={t('QR code for your authenticator app')} width={192} height={192} className="rounded-md bg-white p-1" />
   ) : (
     <Skeleton className="size-48" />
   );
@@ -195,23 +192,15 @@ function TwoFactorCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Two-factor authentication
-          {enabled ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>}
+        <CardTitle className="flex items-center gap-2">{t('Two-factor authentication')}{enabled ? <Badge variant="success">{t('On')}</Badge> : <Badge variant="secondary">{t('Off')}</Badge>}
         </CardTitle>
-        <CardDescription>
-          With it on, mail apps need app passwords: your password alone can no longer read your mail.
-        </CardDescription>
+        <CardDescription>{t('With it on, mail apps need app passwords: your password alone can no longer read your mail.')}</CardDescription>
         <CardAction>
           {enabled ? (
-            <Button variant="outline" onClick={() => setStep('disable')}>
-              Turn off
-            </Button>
+            <Button variant="outline" onClick={() => setStep('disable')}>{t('Turn off')}</Button>
           ) : (
             <Button onClick={() => setStep('password')}>
-              <ShieldCheck aria-hidden />
-              Turn on
-            </Button>
+              <ShieldCheck aria-hidden />{t('Turn on')}</Button>
           )}
         </CardAction>
       </CardHeader>
@@ -224,7 +213,7 @@ function TwoFactorCard() {
         <form onSubmit={step === 'disable' ? disable : start}>
           <FieldGroup>
             {error ? <Notice>{error}</Notice> : null}
-            <FormField label="Password">
+            <FormField label={t('Password')}>
               {(props) => (
                 <Input
                   {...props}
@@ -238,9 +227,7 @@ function TwoFactorCard() {
               )}
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={close}>
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={close}>{t('Cancel')}</Button>
               <LoadingButton type="submit" variant={step === 'disable' ? 'destructive' : 'default'} loading={pending}>
                 {step === 'disable' ? 'Turn off' : 'Continue'}
               </LoadingButton>
@@ -249,7 +236,7 @@ function TwoFactorCard() {
         </form>
       </AppDialog>
 
-      <AppDialog open={step === 'scan'} onClose={close} title="Set up your authenticator app" description="Scan the code, then enter the 6 digits it shows.">
+      <AppDialog open={step === 'scan'} onClose={close} title={t('Set up your authenticator app')} description={t('Scan the code, then enter the 6 digits it shows.')}>
         {setup ? (
           <form onSubmit={confirm}>
             <FieldGroup>
@@ -259,29 +246,25 @@ function TwoFactorCard() {
                 <code className="text-center text-xs break-all text-muted-foreground">{secret}</code>
               </div>
               <div>
-                <p className="text-sm font-medium">Backup codes</p>
-                <p className="mb-2 text-sm text-muted-foreground">Each works once if you lose your device. Store them somewhere safe.</p>
+                <p className="text-sm font-medium">{t('Backup codes')}</p>
+                <p className="mb-2 text-sm text-muted-foreground">{t('Each works once if you lose your device. Store them somewhere safe.')}</p>
                 <div className="grid grid-cols-2 gap-1 rounded-md bg-muted p-3 font-mono text-sm">
                   {setup.backupCodes.map((c) => (
                     <span key={c}>{c}</span>
                   ))}
                 </div>
                 <div className="mt-2">
-                  <CopyButton value={setup.backupCodes.join('\n')} label="Copy codes" />
+                  <CopyButton value={setup.backupCodes.join('\n')} label={t('Copy codes')} />
                 </div>
               </div>
-              <FormField label="Code from the app">
+              <FormField label={t('Code from the app')}>
                 {(props) => (
                   <Input {...props} value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required />
                 )}
               </FormField>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={close}>
-                  Cancel
-                </Button>
-                <LoadingButton type="submit" loading={pending}>
-                  Turn on
-                </LoadingButton>
+                <Button type="button" variant="outline" onClick={close}>{t('Cancel')}</Button>
+                <LoadingButton type="submit" loading={pending}>{t('Turn on')}</LoadingButton>
               </DialogFooter>
             </FieldGroup>
           </form>
@@ -314,8 +297,8 @@ function PasskeysCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Passkeys</CardTitle>
-        <CardDescription>Sign in with your fingerprint, face or a security key instead of a password.</CardDescription>
+        <CardTitle>{t('Passkeys')}</CardTitle>
+        <CardDescription>{t('Sign in with your fingerprint, face or a security key instead of a password.')}</CardDescription>
         <CardAction>
           <LoadingButton
             variant="outline"
@@ -329,9 +312,7 @@ function PasskeysCard() {
               await queryClient.invalidateQueries({ queryKey: ['me', 'passkeys'] });
             }}
           >
-            <Fingerprint aria-hidden />
-            Add passkey
-          </LoadingButton>
+            <Fingerprint aria-hidden />{t('Add passkey')}</LoadingButton>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -344,7 +325,7 @@ function PasskeysCard() {
               <li key={p.id} className="flex items-center justify-between py-2">
                 <div>
                   <p className="text-sm font-medium">{p.name || 'Passkey'}</p>
-                  <p className="text-xs text-muted-foreground">Added {formatDate(new Date(p.createdAt).toISOString())}</p>
+                  <p className="text-xs text-muted-foreground">{t('Added')}{' '}{formatDate(new Date(p.createdAt).toISOString())}</p>
                 </div>
                 <Button size="icon-sm" variant="ghost" aria-label={`Remove passkey ${p.name ?? ''}`} onClick={() => setRemoving(p)}>
                   <Trash2 aria-hidden />
@@ -353,15 +334,15 @@ function PasskeysCard() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">No passkeys yet.</p>
+          <p className="text-sm text-muted-foreground">{t('No passkeys yet.')}</p>
         )}
       </CardContent>
       <ConfirmDialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
-        title="Remove this passkey?"
-        description="You will no longer be able to sign in with it."
-        confirmLabel="Remove"
+        title={t('Remove this passkey?')}
+        description={t('You will no longer be able to sign in with it.')}
+        confirmLabel={t('Remove')}
         onConfirm={async () => {
           if (!removing) return;
           const { error: e } = await authClient.passkey.deletePasskey({ id: removing.id });
@@ -413,13 +394,11 @@ function AppPasswordsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>App passwords</CardTitle>
-        <CardDescription>One per mail app or device, so you can revoke a lost phone without changing your password.</CardDescription>
+        <CardTitle>{t('App passwords')}</CardTitle>
+        <CardDescription>{t('One per mail app or device, so you can revoke a lost phone without changing your password.')}</CardDescription>
         <CardAction>
           <Button variant="outline" onClick={() => setCreating(true)}>
-            <Plus aria-hidden />
-            New app password
-          </Button>
+            <Plus aria-hidden />{t('New app password')}</Button>
         </CardAction>
       </CardHeader>
       <CardContent>
@@ -432,11 +411,11 @@ function AppPasswordsCard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Access</TableHead>
-                  <TableHead>Last used</TableHead>
+                  <TableHead>{t('Name')}</TableHead>
+                  <TableHead>{t('Access')}</TableHead>
+                  <TableHead>{t('Last used')}</TableHead>
                   <TableHead className="text-right">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('Actions')}</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -467,34 +446,34 @@ function AppPasswordsCard() {
             </Table>
           </div>
         ) : (
-          <EmptyState icon={KeyRound} title="No app passwords" description="Create one for each mail, calendar or contacts app you use." />
+          <EmptyState icon={KeyRound} title={t('No app passwords')} description={t('Create one for each mail, calendar or contacts app you use.')} />
         )}
       </CardContent>
 
       <AppDialog open={creating} onClose={closeCreate} title={created ? 'Your new app password' : 'New app password'}>
         {created ? (
           <FieldGroup>
-            <Notice tone="warning">Copy it now: it is shown only once.</Notice>
+            <Notice tone="warning">{t('Copy it now: it is shown only once.')}</Notice>
             <div className="flex items-center justify-between gap-2 rounded-md bg-muted p-3">
               <code className="font-mono text-base tracking-wider" data-testid="app-password">
                 {created}
               </code>
               <CopyButton value={created} />
             </div>
-            <p className="text-sm text-muted-foreground">Use your full email address as the user name in your mail app.</p>
+            <p className="text-sm text-muted-foreground">{t('Use your full email address as the user name in your mail app.')}</p>
             <DialogFooter>
-              <Button onClick={closeCreate}>Done</Button>
+              <Button onClick={closeCreate}>{t('Done')}</Button>
             </DialogFooter>
           </FieldGroup>
         ) : (
           <form onSubmit={submit}>
             <FieldGroup>
               {error ? <Notice>{error}</Notice> : null}
-              <FormField label="Name" hint='For example "Thunderbird on my laptop".'>
+              <FormField label={t('Name')} hint={t('For example "Thunderbird on my laptop".')}>
                 {(props) => <Input {...props} name="name" required maxLength={64} autoFocus />}
               </FormField>
               <FieldSet>
-                <FieldLegend variant="label">Access</FieldLegend>
+                <FieldLegend variant="label">{t('Access')}</FieldLegend>
                 <FieldGroup className="gap-3">
                   {(Object.keys(scopeLabel) as (keyof typeof scopeLabel)[]).map((scope) => (
                     <Field key={scope} orientation="horizontal">
@@ -507,13 +486,9 @@ function AppPasswordsCard() {
                 </FieldGroup>
               </FieldSet>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={closeCreate}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="outline" onClick={closeCreate}>{t('Cancel')}</Button>
                 <LoadingButton type="submit" loading={pending}>
-                  <KeyRound aria-hidden />
-                  Create
-                </LoadingButton>
+                  <KeyRound aria-hidden />{t('Create')}</LoadingButton>
               </DialogFooter>
             </FieldGroup>
           </form>
@@ -523,8 +498,8 @@ function AppPasswordsCard() {
         open={revoking !== null}
         onClose={() => setRevoking(null)}
         title={`Revoke "${revoking?.name ?? ''}"?`}
-        description="Apps using it stop working immediately."
-        confirmLabel="Revoke"
+        description={t('Apps using it stop working immediately.')}
+        confirmLabel={t('Revoke')}
         onConfirm={async () => {
           if (!revoking) return;
           await api.delete(`/me/app-passwords/${revoking.id}`);
@@ -538,7 +513,7 @@ function AppPasswordsCard() {
 export default function AccountPage() {
   return (
     <>
-      <PageHeader title="Your account" description="Sign-in security and access for mail apps." />
+      <PageHeader title={t('Your account')} description={t('Sign-in security and access for mail apps.')} />
       <div className="grid gap-6 lg:grid-cols-2">
         <ProfileCard />
         <PasswordCard />

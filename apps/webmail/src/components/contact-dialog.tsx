@@ -9,6 +9,7 @@ import { Plus, X } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { type ContactInput, useSaveContact } from '@/lib/contacts';
+import { t } from '@/lib/i18n';
 
 const blank: ContactInput = { firstName: '', lastName: '', company: '', jobTitle: '', notes: '', emails: [{ type: 'personal', value: '' }], phones: [{ type: 'mobile', value: '' }] };
 
@@ -45,9 +46,7 @@ function ListField({
         </div>
       ))}
       <Button type="button" variant="ghost" size="sm" onClick={() => onChange([...items, { type: items[0]?.type ?? 'other', value: '' }])}>
-        <Plus aria-hidden />
-        Add another
-      </Button>
+        <Plus aria-hidden />{t('Add another')}</Button>
     </fieldset>
   );
 }
@@ -96,32 +95,32 @@ export function ContactDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl">{contact ? 'Edit contact' : 'New contact'}</DialogTitle>
-          <DialogDescription className="sr-only">Contact details</DialogDescription>
+          <DialogDescription className="sr-only">{t('Contact details')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit}>
           <FieldGroup className="gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <FieldLabel htmlFor="contact-first">First name</FieldLabel>
+                <FieldLabel htmlFor="contact-first">{t('First name')}</FieldLabel>
                 <Input id="contact-first" value={input.firstName} onChange={(e) => set({ firstName: e.target.value })} autoFocus />
               </Field>
               <Field>
-                <FieldLabel htmlFor="contact-last">Last name</FieldLabel>
+                <FieldLabel htmlFor="contact-last">{t('Last name')}</FieldLabel>
                 <Input id="contact-last" value={input.lastName} onChange={(e) => set({ lastName: e.target.value })} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="contact-company">Company</FieldLabel>
+                <FieldLabel htmlFor="contact-company">{t('Company')}</FieldLabel>
                 <Input id="contact-company" value={input.company} onChange={(e) => set({ company: e.target.value })} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="contact-title">Job title</FieldLabel>
+                <FieldLabel htmlFor="contact-title">{t('Job title')}</FieldLabel>
                 <Input id="contact-title" value={input.jobTitle} onChange={(e) => set({ jobTitle: e.target.value })} />
               </Field>
             </div>
-            <ListField label="Email" type="email" items={input.emails} onChange={(emails) => set({ emails })} placeholder="name@example.com" />
-            <ListField label="Phone" type="tel" items={input.phones} onChange={(phones) => set({ phones })} placeholder="+57 300 000 0000" />
+            <ListField label={t('Email')} type="email" items={input.emails} onChange={(emails) => set({ emails })} placeholder={t('name@example.com')} />
+            <ListField label={t('Phone')} type="tel" items={input.phones} onChange={(phones) => set({ phones })} placeholder="+57 300 000 0000" />
             <Field>
-              <FieldLabel htmlFor="contact-notes">Notes</FieldLabel>
+              <FieldLabel htmlFor="contact-notes">{t('Notes')}</FieldLabel>
               <Textarea id="contact-notes" rows={3} value={input.notes} onChange={(e) => set({ notes: e.target.value })} />
             </Field>
             {error ? (
@@ -130,13 +129,9 @@ export function ContactDialog({
               </p>
             ) : null}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
               <Button type="submit" disabled={save.isPending}>
-                {save.isPending ? <Spinner /> : null}
-                Save contact
-              </Button>
+                {save.isPending ? <Spinner /> : null}{t('Save contact')}</Button>
             </DialogFooter>
           </FieldGroup>
         </form>

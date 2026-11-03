@@ -14,6 +14,7 @@ import { emptyDraft } from '@/lib/compose';
 import { type AccountContact, contactKeys, contactName, matchesContact, primaryEmail, useContacts, useDeleteContact } from '@/lib/contacts';
 import { navigate } from '@/lib/router';
 import { useComposer } from './mail';
+import { t } from '@/lib/i18n';
 
 const contactPath = (id: string | null, search: string) => `/contacts${id ? `/${encodeURIComponent(id)}` : ''}${search ? `?q=${encodeURIComponent(search)}` : ''}`;
 
@@ -31,9 +32,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Accou
   return (
     <article className="mx-auto w-full max-w-2xl px-4 py-6 md:px-8 md:py-10" aria-label={name}>
       <Button variant="ghost" size="sm" className="mb-4 lg:hidden" onClick={() => navigate('/contacts')}>
-        <ArrowLeft aria-hidden />
-        All contacts
-      </Button>
+        <ArrowLeft aria-hidden />{t('All contacts')}</Button>
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
         <Avatar name={name} email={email ?? contact.id} className="size-16 text-xl" />
         <div className="min-w-0 flex-1">
@@ -41,20 +40,17 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Accou
           {contact.jobTitle || contact.company ? (
             <p className="mt-1 text-muted-foreground">{[contact.jobTitle, contact.company].filter(Boolean).join(', ')}</p>
           ) : null}
-          {contact.sharedBy ? <p className="mt-1 text-sm text-muted-foreground">In the contacts {contact.sharedBy} shares with you</p> : null}
+          {contact.sharedBy ? <p className="mt-1 text-sm text-muted-foreground">{t('In the contacts')}{' '}{contact.sharedBy}{' '}{t('shares with you')}</p> : null}
         </div>
       </div>
       <div className="mt-6 flex flex-wrap gap-2">
         {email ? (
           <Button onClick={() => onWrite(email)}>
-            <Mail aria-hidden />
-            Write to {contact.firstName || name}
+            <Mail aria-hidden />{t('Write to')}{' '}{contact.firstName || name}
           </Button>
         ) : null}
         <Button variant="outline" onClick={onEdit}>
-          <Pencil aria-hidden />
-          Edit
-        </Button>
+          <Pencil aria-hidden />{t('Edit')}</Button>
         <Button
           variant="ghost"
           className="text-destructive hover:text-destructive"
@@ -100,7 +96,7 @@ function ContactDetail({ contact, onEdit, onWrite, onDeleted }: { contact: Accou
         ))}
         {contact.notes ? (
           <div className="flex gap-4 px-4 py-3">
-            <dt className="w-20 shrink-0 text-sm text-muted-foreground">Notes</dt>
+            <dt className="w-20 shrink-0 text-sm text-muted-foreground">{t('Notes')}</dt>
             <dd className="min-w-0 flex-1 text-sm whitespace-pre-wrap">{contact.notes}</dd>
           </div>
         ) : null}
@@ -122,29 +118,23 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
   const nav = (
     <div className="flex flex-col gap-4">
       <Button variant="stamp" className="h-9 w-full justify-start" onClick={() => setEditing('new')}>
-        <UserPlus aria-hidden />
-        New contact
-      </Button>
+        <UserPlus aria-hidden />{t('New contact')}</Button>
       <p className="px-1.5 text-sm text-sidebar-foreground">
         {contacts.data ? `${contacts.data.length} ${contacts.data.length === 1 ? 'contact' : 'contacts'}` : ' '}
       </p>
       <Button variant="ghost" size="sm" className="justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-white" onClick={() => setSharing(true)}>
-        <Share2 aria-hidden />
-        Share contacts
-      </Button>
+        <Share2 aria-hidden />{t('Share contacts')}</Button>
       <ImportButton kind="contacts" queryKey={contactKeys.all} />
-      <p className="px-1.5 text-xs leading-relaxed text-sidebar-muted">
-        Your contacts also sync to phones and desktop apps over CardDAV, with an app password.
-      </p>
+      <p className="px-1.5 text-xs leading-relaxed text-sidebar-muted">{t('Your contacts also sync to phones and desktop apps over CardDAV, with an app password.')}</p>
     </div>
   );
 
   return (
     <AppShell email={email} name={name} nav={nav}>
       <div className="flex h-full min-h-0">
-        <section className={cn('flex min-h-0 w-full flex-col border-r lg:w-80 lg:shrink-0', selected && 'max-lg:hidden')} aria-label="Contact list">
+        <section className={cn('flex min-h-0 w-full flex-col border-r lg:w-80 lg:shrink-0', selected && 'max-lg:hidden')} aria-label={t('Contact list')}>
           <div className="flex h-14 shrink-0 items-center border-b px-4">
-            <h1 className="text-lg font-semibold">Contacts</h1>
+            <h1 className="text-lg font-semibold">{t('Contacts')}</h1>
           </div>
           <div className="px-4 pt-3 pb-2">
             <div className="relative" role="search">
@@ -153,8 +143,8 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search contacts"
-                aria-label="Search contacts"
+                placeholder={t('Search contacts')}
+                aria-label={t('Search contacts')}
                 className="h-9 bg-background pl-9"
               />
             </div>
@@ -175,7 +165,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
                 <p className="mt-1 text-sm text-muted-foreground">{query ? 'Try a name, a company or part of an address.' : 'Add the people you write to most.'}</p>
               </div>
             ) : (
-              <ul aria-label="Contacts">
+              <ul aria-label={t('Contacts')}>
                 {list.map((contact, index) => {
                   const letter = initialOf(contact);
                   const showLetter = index === 0 || initialOf(list[index - 1]!) !== letter;
@@ -207,15 +197,13 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
             )}
           </div>
         </section>
-        <section className={cn('min-h-0 min-w-0 flex-1 overflow-y-auto', !selected && 'max-lg:hidden')} aria-label="Contact">
+        <section className={cn('min-h-0 min-w-0 flex-1 overflow-y-auto', !selected && 'max-lg:hidden')} aria-label={t('Contact')}>
           {selected ? (
             <ContactDetail contact={selected} onEdit={() => setEditing(selected)} onWrite={write} onDeleted={() => navigate(contactPath(null, query))} />
           ) : (
             <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground">
               <div>
-                <UsersRound className="mx-auto mb-3 size-10 stroke-[1.25] text-muted-foreground/40" aria-hidden />
-                Pick a contact to see their details.
-              </div>
+                <UsersRound className="mx-auto mb-3 size-10 stroke-[1.25] text-muted-foreground/40" aria-hidden />{t('Pick a contact to see their details.')}</div>
             </div>
           )}
         </section>

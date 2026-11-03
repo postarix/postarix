@@ -14,6 +14,7 @@ import { jmap } from '@/lib/jmap';
 import { keys } from '@/lib/mail';
 import { RecipientInput } from './recipient-input';
 import { RichEditor, type RichEditorHandle } from './rich-editor';
+import { t } from '@/lib/i18n';
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
@@ -115,7 +116,7 @@ export function Composer({
       <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="border-b px-5 py-3.5 pr-12 text-left">
           <DialogTitle className="truncate text-base">{subject.trim() || 'New message'}</DialogTitle>
-          <DialogDescription className="sr-only">Write and send an email</DialogDescription>
+          <DialogDescription className="sr-only">{t('Write and send an email')}</DialogDescription>
         </DialogHeader>
         <form
           className="flex min-h-0 flex-1 flex-col overflow-y-auto"
@@ -126,9 +127,7 @@ export function Composer({
         >
           {identities.length > 1 ? (
             <div className={ROW}>
-              <label htmlFor={`${id}-from`} className={LABEL}>
-                From
-              </label>
+              <label htmlFor={`${id}-from`} className={LABEL}>{t('From')}</label>
               <NativeSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)} className={`${BARE} w-full pr-8`}>
                 {identities.map((address) => (
                   <NativeSelectOption key={address} value={address}>
@@ -139,41 +138,31 @@ export function Composer({
             </div>
           ) : null}
           <div className={ROW}>
-            <label htmlFor={`${id}-to`} className={LABEL}>
-              To
-            </label>
-            <RecipientInput id={`${id}-to`} value={to} onChange={setTo} autoFocus={!to} placeholder="Name or address" className={BARE} />
+            <label htmlFor={`${id}-to`} className={LABEL}>{t('To')}</label>
+            <RecipientInput id={`${id}-to`} value={to} onChange={setTo} autoFocus={!to} placeholder={t('Name or address')} className={BARE} />
             {!showCopies ? (
-              <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowCopies(true)}>
-                Cc/Bcc
-              </Button>
+              <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowCopies(true)}>{t('Cc/Bcc')}</Button>
             ) : null}
           </div>
           {showCopies ? (
             <>
               <div className={ROW}>
-                <label htmlFor={`${id}-cc`} className={LABEL}>
-                  Cc
-                </label>
+                <label htmlFor={`${id}-cc`} className={LABEL}>{t('Cc')}</label>
                 <RecipientInput id={`${id}-cc`} value={cc} onChange={setCc} className={BARE} />
               </div>
               <div className={ROW}>
-                <label htmlFor={`${id}-bcc`} className={LABEL}>
-                  Bcc
-                </label>
+                <label htmlFor={`${id}-bcc`} className={LABEL}>{t('Bcc')}</label>
                 <RecipientInput id={`${id}-bcc`} value={bcc} onChange={setBcc} className={BARE} />
               </div>
             </>
           ) : null}
           <div className={ROW}>
-            <label htmlFor={`${id}-subject`} className={LABEL}>
-              Subject
-            </label>
+            <label htmlFor={`${id}-subject`} className={LABEL}>{t('Subject')}</label>
             <Input id={`${id}-subject`} value={subject} onChange={(e) => setSubject(e.target.value)} className={BARE} />
           </div>
           <RichEditor ref={body} initialHtml={initial.html || textToHtml(initial.text)} autoFocus={Boolean(to)} />
           {attachments.length || uploading ? (
-            <ul className="flex flex-wrap gap-2 px-5 pb-3" aria-label="Attachments">
+            <ul className="flex flex-wrap gap-2 px-5 pb-3" aria-label={t('Attachments')}>
               {attachments.map((a) => (
                 <li key={a.blobId} className="inline-flex items-center gap-2 rounded-lg border bg-muted/40 py-1 pr-1 pl-2.5 text-sm">
                   <Paperclip className="size-3.5 text-muted-foreground" aria-hidden />
@@ -192,8 +181,7 @@ export function Composer({
               ))}
               {uploading ? (
                 <li className="inline-flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
-                  <Spinner /> Uploading…
-                </li>
+                  <Spinner />{' '}{t('Uploading…')}</li>
               ) : null}
             </ul>
           ) : null}
@@ -205,18 +193,12 @@ export function Composer({
           <input ref={fileInput} type="file" multiple hidden onChange={(e) => void attach(e.target.files).then(() => (e.target.value = ''))} />
           <DialogFooter className="sticky bottom-0 items-center gap-2 border-t bg-card px-4 py-3 sm:justify-between">
             <Button type="button" variant="ghost" className="text-muted-foreground" onClick={() => fileInput.current?.click()} disabled={uploading > 0}>
-              <Paperclip aria-hidden />
-              Attach
-            </Button>
+              <Paperclip aria-hidden />{t('Attach')}</Button>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => void run('save')} disabled={busy !== null || uploading > 0}>
-                {busy === 'save' ? <Spinner /> : null}
-                Save draft
-              </Button>
+                {busy === 'save' ? <Spinner /> : null}{t('Save draft')}</Button>
               <Button type="submit" variant="stamp" disabled={busy !== null || uploading > 0}>
-                {busy === 'send' ? <Spinner /> : <Send aria-hidden />}
-                Send
-              </Button>
+                {busy === 'send' ? <Spinner /> : <Send aria-hidden />}{t('Send')}</Button>
             </div>
           </DialogFooter>
         </form>

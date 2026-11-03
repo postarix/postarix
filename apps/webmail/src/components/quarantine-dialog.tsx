@@ -5,6 +5,7 @@ import { Spinner } from '@postarix/ui/components/spinner';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 interface Item {
   id: string;
@@ -54,10 +55,8 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Quarantine</DialogTitle>
-          <DialogDescription>
-            Mail the spam filter refused for you, kept for a few weeks. Release a message that is not spam to get it in your inbox.
-          </DialogDescription>
+          <DialogTitle>{t('Quarantine')}</DialogTitle>
+          <DialogDescription>{t('Mail the spam filter refused for you, kept for a few weeks. Release a message that is not spam to get it in your inbox.')}</DialogDescription>
         </DialogHeader>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {!items ? (
@@ -69,14 +68,12 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{item.subject || '(no subject)'}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {item.fromHeader || item.envelopeFrom || '(no sender)'} · {new Date(item.createdAt).toLocaleString()} · score{' '}
+                    {item.fromHeader || item.envelopeFrom || '(no sender)'} · {new Date(item.createdAt).toLocaleString()}{' '}{t('· score')}{' '}
                     {item.score.toFixed(1)}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void act(item.id, true)}>
-                  {busy === item.id ? <Spinner /> : null}
-                  Release
-                </Button>
+                  {busy === item.id ? <Spinner /> : null}{t('Release')}</Button>
                 <Button size="icon-sm" variant="ghost" aria-label={`Delete ${item.subject}`} disabled={busy !== null} onClick={() => void act(item.id, false)}>
                   <Trash2 aria-hidden />
                 </Button>
@@ -84,10 +81,10 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Nothing in quarantine.</p>
+          <p className="text-sm text-muted-foreground">{t('Nothing in quarantine.')}</p>
         )}
         <label className="flex items-center gap-3 text-sm">
-          <span>Tell me about new items</span>
+          <span>{t('Tell me about new items')}</span>
           <NativeSelect
             value={notify}
             onChange={async (e) => {
@@ -100,14 +97,14 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
               }
             }}
           >
-            <NativeSelectOption value="never">Never</NativeSelectOption>
-            <NativeSelectOption value="hourly">Hourly</NativeSelectOption>
-            <NativeSelectOption value="daily">Daily</NativeSelectOption>
-            <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+            <NativeSelectOption value="never">{t('Never')}</NativeSelectOption>
+            <NativeSelectOption value="hourly">{t('Hourly')}</NativeSelectOption>
+            <NativeSelectOption value="daily">{t('Daily')}</NativeSelectOption>
+            <NativeSelectOption value="weekly">{t('Weekly')}</NativeSelectOption>
           </NativeSelect>
         </label>
         <DialogFooter>
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t('Done')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

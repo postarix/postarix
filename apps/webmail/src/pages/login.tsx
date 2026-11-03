@@ -11,6 +11,7 @@ import { authClient } from '@/lib/auth-client';
 import { useBranding } from '@/lib/branding';
 import { navigate } from '@/lib/router';
 import { ssoErrorMessage, startSso } from '@/lib/sso';
+import { t } from '@/lib/i18n';
 
 export function LoginPage() {
   const branding = useBranding();
@@ -84,7 +85,7 @@ export function LoginPage() {
               {step === 'password' ? (
                 <>
                   <Field>
-                    <FieldLabel htmlFor="email">Email</FieldLabel>
+                    <FieldLabel htmlFor="email">{t('Email')}</FieldLabel>
                     <Input
                       id="email"
                       name="email"
@@ -97,41 +98,33 @@ export function LoginPage() {
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
+                    <FieldLabel htmlFor="password">{t('Password')}</FieldLabel>
                     <Input id="password" name="password" type="password" autoComplete="current-password" required />
                   </Field>
                   <Button type="submit" disabled={pending}>
-                    {pending ? <Spinner /> : null}
-                    Sign in
-                  </Button>
-                  <FieldSeparator>or</FieldSeparator>
+                    {pending ? <Spinner /> : null}{t('Sign in')}</Button>
+                  <FieldSeparator>{t('or')}</FieldSeparator>
                   <Button type="button" variant="outline" onClick={() => void passkey()}>
-                    <KeyRound aria-hidden />
-                    Sign in with a passkey
-                  </Button>
+                    <KeyRound aria-hidden />{t('Sign in with a passkey')}</Button>
                   <Button type="button" variant="outline" disabled={ssoPending} onClick={() => void sso()}>
-                    {ssoPending ? <Spinner /> : <Building2 aria-hidden />}
-                    Sign in with your company account
-                  </Button>
+                    {ssoPending ? <Spinner /> : <Building2 aria-hidden />}{t('Sign in with your company account')}</Button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-muted-foreground">Enter the 6-digit code from your authenticator app.</p>
+                  <p className="text-sm text-muted-foreground">{t('Enter the 6-digit code from your authenticator app.')}</p>
                   <Field>
-                    <FieldLabel htmlFor="code">Authentication code</FieldLabel>
+                    <FieldLabel htmlFor="code">{t('Authentication code')}</FieldLabel>
                     <Input id="code" name="code" inputMode="numeric" autoComplete="one-time-code" required autoFocus />
                   </Field>
                   <Button type="submit" disabled={pending}>
-                    {pending ? <Spinner /> : null}
-                    Verify
-                  </Button>
+                    {pending ? <Spinner /> : null}{t('Verify')}</Button>
                 </>
               )}
             </FieldGroup>
           </form>
         </CardContent>
       </Card>
-        <p className="mt-6 text-center text-xs text-sidebar-muted">Mail apps sign in with an app password from your account settings.</p>
+        <p className="mt-6 text-center text-xs text-sidebar-muted">{t('Mail apps sign in with an app password from your account settings.')}</p>
         {branding?.loginMessage ? (
           <p className="mt-3 text-center text-xs whitespace-pre-line text-sidebar-muted">{branding.loginMessage}</p>
         ) : null}

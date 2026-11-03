@@ -28,6 +28,7 @@ import {
 } from '@/lib/calendar';
 import { parseAddresses } from '@/lib/format';
 import { RecipientInput } from './recipient-input';
+import { t } from '@/lib/i18n';
 
 /** What the dialog edits: an existing event (or occurrence), or a new one starting at `start`. */
 export type EventDraft = { event: AccountEvent } | { start: Date; allDay: boolean };
@@ -185,8 +186,8 @@ export function EventDialog({
           <fieldset disabled={readOnly} className="contents">
           <FieldGroup className="gap-4">
             <Input
-              aria-label="Title"
-              placeholder="Add a title"
+              aria-label={t('Title')}
+              placeholder={t('Add a title')}
               value={input.title}
               onChange={(e) => set({ title: e.target.value })}
               autoFocus
@@ -194,9 +195,7 @@ export function EventDialog({
             />
             <Field orientation="horizontal">
               <Checkbox id="event-all-day" checked={input.allDay} disabled={Boolean(seriesId)} onCheckedChange={(v) => set({ allDay: v === true })} />
-              <FieldLabel htmlFor="event-all-day" className="font-normal">
-                All day
-              </FieldLabel>
+              <FieldLabel htmlFor="event-all-day" className="font-normal">{t('All day')}</FieldLabel>
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field>
@@ -227,18 +226,18 @@ export function EventDialog({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <FieldLabel htmlFor="event-repeat">Repeats</FieldLabel>
+                <FieldLabel htmlFor="event-repeat">{t('Repeats')}</FieldLabel>
                 <NativeSelect id="event-repeat" value={input.repeat} disabled={Boolean(seriesId)} onChange={(e) => set({ repeat: e.target.value as EventInput['repeat'] })}>
-                  <NativeSelectOption value="none">Does not repeat</NativeSelectOption>
-                  <NativeSelectOption value="daily">Every day</NativeSelectOption>
-                  <NativeSelectOption value="weekly">Every week</NativeSelectOption>
-                  <NativeSelectOption value="monthly">Every month</NativeSelectOption>
-                  <NativeSelectOption value="yearly">Every year</NativeSelectOption>
+                  <NativeSelectOption value="none">{t('Does not repeat')}</NativeSelectOption>
+                  <NativeSelectOption value="daily">{t('Every day')}</NativeSelectOption>
+                  <NativeSelectOption value="weekly">{t('Every week')}</NativeSelectOption>
+                  <NativeSelectOption value="monthly">{t('Every month')}</NativeSelectOption>
+                  <NativeSelectOption value="yearly">{t('Every year')}</NativeSelectOption>
                 </NativeSelect>
               </Field>
               {writable.length > 1 && !readOnly ? (
                 <Field>
-                  <FieldLabel htmlFor="event-calendar">Calendar</FieldLabel>
+                  <FieldLabel htmlFor="event-calendar">{t('Calendar')}</FieldLabel>
                   <NativeSelect
                     id="event-calendar"
                     value={`${accountId}::${input.calendarId}`}
@@ -261,20 +260,20 @@ export function EventDialog({
               ) : null}
             </div>
             <Field>
-              <FieldLabel htmlFor="event-location">Place</FieldLabel>
-              <Input id="event-location" value={input.location} onChange={(e) => set({ location: e.target.value })} placeholder="Room, address or link" />
+              <FieldLabel htmlFor="event-location">{t('Place')}</FieldLabel>
+              <Input id="event-location" value={input.location} onChange={(e) => set({ location: e.target.value })} placeholder={t('Room, address or link')} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="event-description">Notes</FieldLabel>
+              <FieldLabel htmlFor="event-description">{t('Notes')}</FieldLabel>
               <Textarea id="event-description" rows={3} value={input.description} onChange={(e) => set({ description: e.target.value })} />
             </Field>
             {canInvite ? (
               <Field>
-                <FieldLabel htmlFor="event-guests">Guests</FieldLabel>
-                <RecipientInput id="event-guests" value={guestText} onChange={setGuestText} placeholder="Add people by email" />
+                <FieldLabel htmlFor="event-guests">{t('Guests')}</FieldLabel>
+                <RecipientInput id="event-guests" value={guestText} onChange={setGuestText} placeholder={t('Add people by email')} />
                 {resources.data?.some((r) => !guestEmails.includes(r.email)) ? (
-                  <div className="flex flex-wrap items-center gap-1.5" aria-label="Rooms and equipment">
-                    <span className="text-xs text-muted-foreground">Book:</span>
+                  <div className="flex flex-wrap items-center gap-1.5" aria-label={t('Rooms and equipment')}>
+                    <span className="text-xs text-muted-foreground">{t('Book:')}</span>
                     {resources.data
                       .filter((r) => !guestEmails.includes(r.email))
                       .map((r) => (
@@ -311,7 +310,7 @@ export function EventDialog({
               </Field>
             ) : currentGuests.length ? (
               <Field>
-                <FieldLabel>Guests</FieldLabel>
+                <FieldLabel>{t('Guests')}</FieldLabel>
                 <GuestList guests={currentGuests} />
               </Field>
             ) : null}
@@ -347,14 +346,10 @@ export function EventDialog({
             )}
             <div className="flex gap-2">
               {readOnly ? (
-                <Button type="button" onClick={onClose}>
-                  Close
-                </Button>
+                <Button type="button" onClick={onClose}>{t('Close')}</Button>
               ) : (
                 <>
-                  <Button type="button" variant="outline" onClick={onClose}>
-                    Cancel
-                  </Button>
+                  <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
                   <Button type="submit" disabled={busy}>
                     {busy ? <Spinner /> : null}
                     {canInvite && guestEmails.length ? 'Save and send' : 'Save'}
@@ -380,7 +375,7 @@ function safeDate(local: string, zone: string): Date | null {
 function GuestList({ guests }: { guests: { email: string; name: string | null; status: string }[] }) {
   if (!guests.length) return null;
   return (
-    <ul className="grid gap-1 text-sm" aria-label="Answers">
+    <ul className="grid gap-1 text-sm" aria-label={t('Answers')}>
       {guests.map((g) => (
         <li key={g.email} className="flex items-center justify-between gap-3">
           <span className="truncate">{g.name ? `${g.name} <${g.email}>` : g.email}</span>
