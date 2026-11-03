@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { organization, session, user } from './auth.js';
 import { domains, type RatePeriod, ratePeriods } from './domains.js';
+import { relayHosts } from './routing.js';
 
 /** active; no_login: receives mail but nobody can sign in; disabled: neither. */
 export const mailboxStatuses = ['active', 'no_login', 'disabled'] as const;
@@ -60,6 +61,8 @@ export const mailboxes = pgTable(
     /** Messages it may send per period; null: its domain's limit, if any. */
     rateLimit: integer(),
     ratePeriod: text({ enum: Object.keys(ratePeriods) as [RatePeriod, ...RatePeriod[]] }),
+    /** Send its mail through this smart host instead of its domain's (set by instance administrators). */
+    relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
     mailServer: text(),
     /** When its calendars and address books were made private (see MailboxCollectionsService). */

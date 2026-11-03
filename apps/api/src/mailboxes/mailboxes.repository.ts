@@ -28,6 +28,7 @@ export type MailboxChanges = Partial<
     | 'tlsRequiredOut'
     | 'rateLimit'
     | 'ratePeriod'
+    | 'relayHostId'
   >
 >;
 

@@ -103,7 +103,13 @@ postconf -e \
   "propagate_unmatched_extensions = canonical" \
   "virtual_alias_domains =" \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
-  "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination } }" \
+  "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination } }, $(pg transport_routes)" \
+  "sender_dependent_relayhost_maps = $(pg relayhost_by_sender)" \
+  "smtp_tls_policy_maps = $(pg tls_policies)" \
+  "smtp_sasl_auth_enable = yes" \
+  "smtp_sasl_password_maps = $(pg smtp_credentials)" \
+  "smtp_sasl_security_options = noanonymous, noplaintext" \
+  "smtp_sasl_tls_security_options = noanonymous" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
   "smtpd_relay_restrictions = permit_sasl_authenticated, reject_unauth_destination" \
   "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, check_recipient_access $(pg tls_required_in), permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \

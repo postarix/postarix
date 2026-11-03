@@ -54,6 +54,8 @@ export const updateMailboxSchema = z
     tlsRequiredOut: z.boolean().optional(),
     /** Messages it may send per period; null: its domain's limit. */
     rateLimit: rateLimitSchema.optional(),
+    /** Smart host for its mail instead of its domain's (instance administrators only). */
+    relayHostId: z.uuid().nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
@@ -99,6 +101,7 @@ export interface MailboxDto {
   tlsRequiredIn: boolean;
   tlsRequiredOut: boolean;
   rateLimit: RateLimit | null;
+  relayHostId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +120,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
     tlsRequiredIn: row.tlsRequiredIn,
     tlsRequiredOut: row.tlsRequiredOut,
     rateLimit: toRateLimit(row),
+    relayHostId: row.relayHostId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

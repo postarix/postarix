@@ -29,6 +29,7 @@ import { useSession } from '@/lib/auth-client';
 import { formatBytes, formatDate } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
+import { useRelayHosts } from '../../../system/routing';
 import type { DnsRecord, DnsRecordCheck, Domain } from '@/lib/types';
 
 const purposeLabel: Record<DnsRecord['purpose'], string> = {
@@ -130,6 +131,7 @@ function DomainSettingsDialog({
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const instanceAdmin = isSuperAdmin(session?.user.role);
+  const relayHosts = useRelayHosts(instanceAdmin);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -151,6 +153,7 @@ function DomainSettingsDialog({
         body.maxAliases = countFrom(text('maxAliases'));
         body.maxMailboxQuotaBytes = quotaFromGiB(text('maxMailboxQuota'));
         body.totalQuotaBytes = quotaFromGiB(text('totalQuota'));
+        if (relayHosts.data) body.relayHostId = text('relayHostId') || null;
       }
       await api.patch(`/orgs/${orgId}/domains/${domain.id}`, body);
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
@@ -215,6 +218,21 @@ function DomainSettingsDialog({
                   />
                 )}
               </FormField>
+              {relayHosts.data ? (
+                <FormField label="Send through" hint="A smart host from System → Outgoing routing, for every mailbox without its own.">
+                  {(props) => (
+                    <NativeSelect {...props} name="relayHostId" defaultValue={domain.relayHostId ?? ''} className="w-full">
+                      <NativeSelectOption value="">Direct delivery</NativeSelectOption>
+                      {relayHosts.data.map((r) => (
+                        <NativeSelectOption key={r.id} value={r.id}>
+                          {r.host}
+                          {r.enabled ? '' : ' (disabled)'}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  )}
+                </FormField>
+              ) : null}
               <FormField label="Total quota of all mailboxes (GB)">
                 {(props) => (
                   <Input {...props} name="totalQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.limits.totalQuotaBytes)} />

@@ -169,6 +169,13 @@
       "when": 1793700722972,
       "tag": "0023_married_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793703083636,
+      "tag": "0024_regular_risque",
+      "breakpoints": true
     }
   ]
 }

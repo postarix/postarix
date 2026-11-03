@@ -93,6 +93,22 @@ Besides the name, quota and password, a mailbox has:
   messages to deliver them now, hold them, release them or delete them, or
   retry or delete the whole queue.
 
+- **Outgoing routing:**
+  - *Smart hosts*: services (SendGrid, Amazon SES, your provider's relay…)
+    with their login. Choose one for a domain in its settings (every mailbox
+    of the domain) or for a single mailbox in its settings; only instance
+    administrators can.
+  - *Routes*: hand mail for a destination (a domain, `.domain` for its
+    subdomains, or an address) to a given server instead of its MX; not for
+    domains hosted here.
+  - *TLS policies*: how strictly mail to a destination must be encrypted
+    (`encrypt`, `dane-only`, `secure` with `match=`…, or `none`), in
+    Postfix' terms.
+
+  Postfix reads routing from the database: changes apply within seconds.
+  Passwords are never shown again; Postfix needs them in clear, so they are
+  stored as given (readable by the API and Postfix' database accounts only).
+
 Postfix and Cyrus send their logs and the queue to the API every 15 seconds
 (with `POSTARIX_SECRET_REPORTS`; see the [configuration](./configuration)), so
 what you see is at most that old, and queue actions take effect within that

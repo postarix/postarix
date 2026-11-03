@@ -60,6 +60,15 @@ export class DomainsService {
     return this.toDto(ctx, row);
   }
 
+  private async updateRow(...args: Parameters<DomainsRepository['update']>): Promise<DomainRow | undefined> {
+    try {
+      return await this.repository.update(...args);
+    } catch (error) {
+      if (isForeignKeyViolation(error)) throw new UnprocessableEntityException({ message: 'Unknown smart host', code: 'UNKNOWN_RELAY_HOST' });
+      throw error;
+    }
+  }
+
   private async toDto(ctx: TenantContext, row: DomainRow): Promise<DomainDto> {
     return toDomainDto(row, (await this.repository.usage(ctx, row.id)) ?? EMPTY_USAGE);
   }
@@ -72,17 +81,17 @@ export class DomainsService {
   async update(ctx: TenantContext, id: string, input: UpdateDomainInput): Promise<DomainDto> {
     const touchesLimits = domainLimitFields.some((field) => input[field] !== undefined);
     if (touchesLimits && !ctx.instanceAdmin) {
-      throw new ForbiddenException('Only an instance administrator can change the limits of a domain');
+      throw new ForbiddenException('Only an instance administrator can change the limits and smart host of a domain');
     }
     const changes: Parameters<DomainsRepository['update']>[2] = {};
     if (input.description !== undefined) changes.description = input.description;
     if (input.defaultMailboxQuotaBytes !== undefined) changes.defaultMailboxQuotaBytes = input.defaultMailboxQuotaBytes;
     for (const field of domainLimitFields) {
       const value = input[field];
-      if (value !== undefined) changes[field] = value;
+      if (value !== undefined) Object.assign(changes, { [field]: value });
     }
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
-    const row = await this.repository.update(ctx, id, changes, (domain, usage, largestQuota) => {
+    const row = await this.updateRow(ctx, id, changes, (domain, usage, largestQuota) => {
       if (input.enabled !== undefined) {
         if (domain.status === 'pending') {
           throw new UnprocessableEntityException({

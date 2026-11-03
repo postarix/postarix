@@ -23,6 +23,7 @@ import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { formatBytes, formatDate } from '@/lib/format';
 import { isSuperAdmin } from '@/lib/queries';
+import { RoutingTab } from './routing';
 
 interface ServiceStatus {
   name: string;
@@ -307,6 +308,7 @@ export default function SystemPage() {
           <TabsTrigger value="status">Services</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="queue">Mail queue</TabsTrigger>
+          <TabsTrigger value="routing">Outgoing routing</TabsTrigger>
         </TabsList>
         <TabsContent value="status" className="pt-4">
           <StatusTab />
@@ -316,6 +318,9 @@ export default function SystemPage() {
         </TabsContent>
         <TabsContent value="queue" className="pt-4">
           <QueueTab />
+        </TabsContent>
+        <TabsContent value="routing" className="pt-4">
+          <RoutingTab />
         </TabsContent>
       </Tabs>
     </>

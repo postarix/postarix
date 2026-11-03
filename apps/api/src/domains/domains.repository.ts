@@ -56,6 +56,7 @@ export class DomainsRepository {
         | 'totalQuotaBytes'
         | 'rateLimit'
         | 'ratePeriod'
+        | 'relayHostId'
       >
     >,
     check: (domain: DomainRow, usage: DomainUsage, largestQuota: number | null) => void,
