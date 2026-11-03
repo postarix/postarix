@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Inbox, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, Inbox, KeyRound, Pencil, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -28,6 +28,7 @@ import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
+import { SpamDialog } from '@/components/spam-dialog';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
@@ -446,6 +447,7 @@ export default function MailboxesPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Mailbox | null>(null);
   const [resetting, setResetting] = useState<Mailbox | null>(null);
+  const [spamOf, setSpamOf] = useState<Mailbox | null>(null);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
 
   return (
@@ -521,6 +523,9 @@ export default function MailboxesPage() {
                     <Button size="icon-sm" variant="ghost" aria-label={`Edit ${mailbox.address}`} onClick={() => setEditing(mailbox)}>
                       <Pencil aria-hidden />
                     </Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Spam filter of ${mailbox.address}`} onClick={() => setSpamOf(mailbox)}>
+                      <ShieldAlert aria-hidden />
+                    </Button>
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -543,6 +548,25 @@ export default function MailboxesPage() {
       )}
       <CreateMailboxDialog orgId={orgId} domains={activeDomains} open={creating} onClose={() => setCreating(false)} />
       {editing ? <EditMailboxDialog orgId={orgId} mailbox={editing} onClose={() => setEditing(null)} /> : null}
+      {spamOf ? (
+        <SpamDialog
+          title={`Spam filter of ${spamOf.address}`}
+          inherited="the domain's"
+          scores={spamOf.spamScores}
+          saveScores={async (spamScores) => {
+            await api.patch(`/orgs/${orgId}/mailboxes/${spamOf.id}`, { spamScores });
+            refresh();
+          }}
+          lists={{
+            queryKey: [...keys.orgPart(orgId, 'mailboxes'), spamOf.id, 'spam-lists'],
+            listUrl: `/orgs/${orgId}/spam-lists?mailboxId=${spamOf.id}`,
+            addUrl: `/orgs/${orgId}/spam-lists`,
+            deleteUrl: (id) => `/orgs/${orgId}/spam-lists/${id}`,
+            extra: { mailboxId: spamOf.id },
+          }}
+          onClose={() => setSpamOf(null)}
+        />
+      ) : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}

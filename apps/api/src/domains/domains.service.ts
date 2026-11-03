@@ -18,6 +18,7 @@ import type { TenantContext } from '../tenancy/tenant-context.js';
 import type { DkimKeyRow, DomainRow } from '../db/schema/index.js';
 import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
 import { generateDkimKey, importDkimKey, publicKeyBits } from '../dkim/dkim-crypto.js';
+import { SpamService } from '../spam/spam.js';
 import { assertLimitsHold, type DomainUsage } from './domain-limits.js';
 import {
   type CreateDomainInput,
@@ -47,6 +48,7 @@ export class DomainsService {
     @Inject(DkimService) private readonly dkim: DkimService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
+    @Inject(SpamService) private readonly spam: SpamService,
   ) {}
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
@@ -91,6 +93,10 @@ export class DomainsService {
       if (value !== undefined) Object.assign(changes, { [field]: value });
     }
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
+    if (input.spamScores !== undefined) {
+      changes.spamJunkScore = input.spamScores.junkScore;
+      changes.spamRejectScore = input.spamScores.rejectScore;
+    }
     const row = await this.updateRow(ctx, id, changes, (domain, usage, largestQuota) => {
       if (input.enabled !== undefined) {
         if (domain.status === 'pending') {
@@ -116,6 +122,9 @@ export class DomainsService {
     });
     if (!row) throw new NotFoundException('Domain not found');
     if (changes.status === 'disabled') await this.repository.signOutMailboxes(ctx, id);
+    if (input.spamScores !== undefined || changes.status !== undefined) {
+      await this.spam.publishScores(`@${row.name}`, row.status === 'active' ? row : null);
+    }
     if (input.rateLimit !== undefined || changes.status !== undefined) {
       await this.rateLimits.publish(`@${row.name}`, row.status === 'active' ? toRateLimit(row) : null);
     }

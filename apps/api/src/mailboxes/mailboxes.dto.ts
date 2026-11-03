@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizeAddress, normalizeLocalPart } from '../common/addresses.js';
 import { normalizeDomainName } from '../domains/domain-name.js';
 import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
+import { type SpamScores, spamScoresSchema } from '../spam/spam.js';
 import { type MailboxRow, mailboxKinds, mailboxStatuses, mailProtocols } from '../db/schema/index.js';
 
 const MIN_QUOTA = 1024 * 1024; // 1 MiB
@@ -56,6 +57,8 @@ export const updateMailboxSchema = z
     rateLimit: rateLimitSchema.optional(),
     /** Smart host for its mail instead of its domain's (instance administrators only). */
     relayHostId: z.uuid().nullable().optional(),
+    /** Spam thresholds; null values: its domain's. */
+    spamScores: spamScoresSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
@@ -102,6 +105,7 @@ export interface MailboxDto {
   tlsRequiredOut: boolean;
   rateLimit: RateLimit | null;
   relayHostId: string | null;
+  spamScores: SpamScores;
   createdAt: string;
   updatedAt: string;
 }
@@ -121,6 +125,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
     tlsRequiredOut: row.tlsRequiredOut,
     rateLimit: toRateLimit(row),
     relayHostId: row.relayHostId,
+    spamScores: { junkScore: row.spamJunkScore, rejectScore: row.spamRejectScore },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

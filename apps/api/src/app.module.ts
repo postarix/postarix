@@ -22,6 +22,7 @@ import { MailboxesModule } from './mailboxes/mailboxes.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SystemModule } from './system/system.module.js';
 import { RoutingModule } from './routing/routing.js';
+import { SpamModule } from './spam/spam.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RoutingModule } from './routing/routing.js';
     MailLogModule,
     SystemModule,
     RoutingModule,
+    SpamModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

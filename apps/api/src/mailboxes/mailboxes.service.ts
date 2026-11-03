@@ -25,6 +25,7 @@ import {
   type UpdateMailboxInput,
 } from './mailboxes.dto.js';
 import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
+import { SpamService } from '../spam/spam.js';
 import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
 import { type MailboxChanges, MailboxesRepository } from './mailboxes.repository.js';
@@ -48,6 +49,7 @@ export class MailboxesService {
     @Inject(MailboxCollectionsService) private readonly collections: MailboxCollectionsService,
     @Inject(ArchivingService) private readonly archiving: ArchivingService,
     @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
+    @Inject(SpamService) private readonly spam: SpamService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -170,6 +172,10 @@ export class MailboxesService {
     if (input.tlsRequiredOut !== undefined) changes.tlsRequiredOut = input.tlsRequiredOut;
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
     if (input.relayHostId !== undefined) changes.relayHostId = input.relayHostId;
+    if (input.spamScores !== undefined) {
+      changes.spamJunkScore = input.spamScores.junkScore;
+      changes.spamRejectScore = input.spamScores.rejectScore;
+    }
 
     // A new quota must fit the domain's limits; the mail server gets it while
     // the domain is locked, so two changes cannot both take the last space.
@@ -201,6 +207,7 @@ export class MailboxesService {
       await this.accounts.rename(row.userId, input.displayName || row.address);
     }
     if (input.rateLimit !== undefined) await this.rateLimits.publish(row.address, toRateLimit(row));
+    if (input.spamScores !== undefined) await this.spam.publishScores(row.address, row);
     // Nobody may stay signed in to a mailbox that can no longer sign in.
     if (losesSignIn && current.status === 'active' && row.userId) {
       await this.accounts.signOutEverywhere(row.userId);

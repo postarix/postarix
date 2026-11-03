@@ -79,6 +79,25 @@ Besides the name, quota and password, a mailbox has:
 - Spam for an alias goes to the Junk folder of its destinations on this
   server, and is never forwarded outside.
 
+## Spam filter
+
+Every incoming message gets a spam score. From the **junk** score (6 by
+default) it is filed in the recipient's Junk folder; from the **refuse** score
+(15 by default) it is refused. The shield button of a domain or a mailbox sets
+both, and lists senders:
+
+- **Block:** mail from them is refused.
+- **Allow:** mail from them skips the spam filter, as long as their server
+  proves who they are (SPF for the envelope sender, or DMARC for the From
+  address): anyone can write any address in a From line.
+
+A sender is an address, `@example.com`, or `@.example.com` for its
+subdomains. A mailbox's settings come first, then its domain's, then the
+server's. People can change their own in the webmail (their menu → Spam
+filter). Instance administrators keep a list for every mailbox on the server
+in **System → Spam filter**. A message sent to several people at once is
+judged by the first recipient's settings.
+
 ## System (instance administrators)
 
 **System**, in the sidebar, shows the server itself:

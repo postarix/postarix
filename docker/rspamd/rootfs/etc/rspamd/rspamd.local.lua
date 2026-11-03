@@ -406,3 +406,142 @@ rspamd_config:register_symbol({
 })
 
 rspamd_config:set_metric_symbol({ name = 'POSTARIX_RATELIMIT', score = 0.0, description = 'Over the sending rate limit' })
+
+-- Postarix: spam thresholds and allow/block lists set per mailbox, per domain
+-- and for the whole server, published by the API in Valkey:
+--   POSTARIX_SPAM_SCORES: "address" or "@domain" -> "junk:reject" (either may be empty)
+--   POSTARIX_SPAM_LISTS:  "address", "@domain" or "*" -> "a:pattern,b:pattern…"
+--     (a = allow, b = block; a pattern is an address, "@domain" or "@.domain")
+-- A message is scanned once for all its recipients: the first recipient's
+-- settings apply (most mail has one).
+local SPAM_SCORES_HASH = 'POSTARIX_SPAM_SCORES'
+local SPAM_LISTS_HASH = 'POSTARIX_SPAM_LISTS'
+
+local function first_recipient(task)
+  local rcpts = task:get_recipients('smtp')
+  local rcpt = rcpts and rcpts[1]
+  if not rcpt or not rcpt.domain or rcpt.domain == '' then
+    return nil
+  end
+  return base_address(rcpt.user, rcpt.domain), string.lower(rcpt.domain)
+end
+
+rspamd_config:register_symbol({
+  name = 'POSTARIX_SPAM_SCORES',
+  type = 'prefilter',
+  priority = 8,
+  callback = function(task)
+    if task:get_user() or is_cyrus(task) or not redis_params then
+      return
+    end
+    local address, domain = first_recipient(task)
+    if not address then
+      return
+    end
+    lua_redis.redis_make_request(task, redis_params, SPAM_SCORES_HASH, false, function(err, data)
+      if err or type(data) ~= 'table' then
+        return
+      end
+      local value = type(data[1]) == 'string' and data[1] or (type(data[2]) == 'string' and data[2] or nil)
+      if not value then
+        return
+      end
+      local junk, reject = value:match('^([%d.]*):([%d.]*)$')
+      junk, reject = tonumber(junk), tonumber(reject)
+      if not junk and not reject then
+        return
+      end
+      -- Rspamd applies the action with the highest threshold below the score:
+      -- lower thresholds must stay below the reject threshold.
+      local defaults = rspamd_config:get_all_actions() or {}
+      local reject_at = reject or tonumber(defaults['reject'])
+      local junk_at = junk or tonumber(defaults['add header'])
+      local actions = {}
+      if reject then
+        actions['reject'] = reject
+      end
+      if junk_at and reject_at and junk_at >= reject_at then
+        junk_at = reject_at - 0.01
+      end
+      if junk or junk_at ~= tonumber(defaults['add header']) then
+        actions['add header'] = junk_at
+        actions['rewrite subject'] = junk_at
+      end
+      local greylist_at = tonumber(defaults['greylist'])
+      if greylist_at and junk_at and greylist_at >= junk_at then
+        actions['greylist'] = junk_at - 0.01
+      end
+      task:set_settings({ actions = actions })
+      task:insert_result('POSTARIX_SPAM_SCORES', 1.0, value)
+    end, 'HMGET', { SPAM_SCORES_HASH, address, '@' .. domain })
+  end,
+})
+
+local function pattern_matches(pattern, sender)
+  if not sender or sender == '' then
+    return false
+  end
+  local sender_domain = sender:match('@([^@]+)$') or ''
+  if pattern:sub(1, 2) == '@.' then
+    local parent = pattern:sub(3)
+    return sender_domain:sub(-(#parent + 1)) == '.' .. parent
+  elseif pattern:sub(1, 1) == '@' then
+    return sender_domain == pattern:sub(2)
+  end
+  return sender == pattern
+end
+
+local spam_list_id = rspamd_config:register_symbol({
+  name = 'POSTARIX_SPAM_LIST',
+  type = 'callback',
+  callback = function(task)
+    if task:get_user() or is_cyrus(task) or not redis_params then
+      return
+    end
+    local address, domain = first_recipient(task)
+    if not address then
+      return
+    end
+    local envelope = task:get_from('smtp')
+    local envelope_addr = envelope and envelope[1] and string.lower(envelope[1].addr or '') or ''
+    local mime = task:get_from('mime')
+    local from_addr = mime and #mime == 1 and string.lower(mime[1].addr or '') or ''
+    -- Allowing needs proof the sender is genuine (anyone can write any From):
+    -- an envelope sender passing SPF, or a From passing DMARC.
+    local spf_ok = task:has_symbol('R_SPF_ALLOW')
+    local dmarc_ok = task:has_symbol('DMARC_POLICY_ALLOW')
+    lua_redis.redis_make_request(task, redis_params, SPAM_LISTS_HASH, false, function(err, data)
+      if err or type(data) ~= 'table' then
+        return
+      end
+      local allowed, blocked = nil, nil
+      for i = 1, 3 do
+        if type(data[i]) == 'string' then
+          for kind, pattern in data[i]:gmatch('([ab]):([^,]+)') do
+            local by_envelope = pattern_matches(pattern, envelope_addr)
+            local by_from = pattern_matches(pattern, from_addr)
+            if kind == 'a' and not allowed and ((by_envelope and spf_ok) or (by_from and dmarc_ok)) then
+              allowed = pattern
+            elseif kind == 'b' and not blocked and (by_envelope or by_from) then
+              blocked = pattern
+            end
+          end
+        end
+      end
+      if allowed then
+        task:insert_result('POSTARIX_ALLOWLIST', 1.0, allowed)
+      elseif blocked then
+        task:insert_result('POSTARIX_BLOCKLIST', 1.0, blocked)
+      end
+    end, 'HMGET', { SPAM_LISTS_HASH, address, '@' .. domain, '*' })
+  end,
+})
+rspamd_config:register_symbol({ name = 'POSTARIX_ALLOWLIST', type = 'virtual', parent = spam_list_id })
+rspamd_config:register_symbol({ name = 'POSTARIX_BLOCKLIST', type = 'virtual', parent = spam_list_id })
+rspamd_config:register_dependency('POSTARIX_SPAM_LIST', 'DMARC_CHECK')
+rspamd_config:register_dependency('POSTARIX_SPAM_LIST', 'SPF_CHECK')
+
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_SPAM_SCORES', score = 0.0, description = 'Spam thresholds of the recipient' })
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_SPAM_LIST', score = 0.0, description = 'Allow and block lists checked' })
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_ALLOWLIST', score = -100.0, description = 'Sender allowed by the recipient' })
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_BLOCKLIST', score = 100.0, description = 'Sender blocked by the recipient' })

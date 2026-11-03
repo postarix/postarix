@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type DomainRow } from '../db/schema/index.js';
 import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
+import { type SpamScores, spamScoresSchema } from '../spam/spam.js';
 import type { DomainUsage } from './domain-limits.js';
 import { normalizeDomainName } from './domain-name.js';
 
@@ -48,6 +49,8 @@ export const updateDomainSchema = z
     rateLimit: rateLimitSchema.optional(),
     /** Smart host for the domain's mail (instance administrators only). */
     relayHostId: z.uuid().nullable().optional(),
+    /** Spam thresholds for its mailboxes without their own. */
+    spamScores: spamScoresSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateDomainInput = z.infer<typeof updateDomainSchema>;
@@ -101,6 +104,7 @@ export interface DomainDto {
   usage: DomainUsage;
   rateLimit: RateLimit | null;
   relayHostId: string | null;
+  spamScores: SpamScores;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +128,7 @@ export function toDomainDto(row: DomainRow, usage: DomainUsage): DomainDto {
     usage,
     rateLimit: toRateLimit(row),
     relayHostId: row.relayHostId,
+    spamScores: { junkScore: row.spamJunkScore, rejectScore: row.spamRejectScore },
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
