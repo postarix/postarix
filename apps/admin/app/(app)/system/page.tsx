@@ -25,6 +25,7 @@ import { formatBytes, formatDate } from '@/lib/format';
 import { isSuperAdmin } from '@/lib/queries';
 import { RoutingTab } from './routing';
 import { SettingsTab } from './settings';
+import { ApiKeysTab } from './api-keys';
 import { SpamLists } from '@/components/spam-lists';
 import { t } from '@/lib/i18n';
 
@@ -295,6 +296,7 @@ export default function SystemPage() {
           <TabsTrigger value="queue">{t('Mail queue')}</TabsTrigger>
           <TabsTrigger value="routing">{t('Outgoing routing')}</TabsTrigger>
           <TabsTrigger value="spam">{t('Spam filter')}</TabsTrigger>
+          <TabsTrigger value="api-keys">{t('API keys')}</TabsTrigger>
           <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
         </TabsList>
         <TabsContent value="status" className="pt-4">
@@ -308,6 +310,9 @@ export default function SystemPage() {
         </TabsContent>
         <TabsContent value="routing" className="pt-4">
           <RoutingTab />
+        </TabsContent>
+        <TabsContent value="api-keys" className="pt-4">
+          <ApiKeysTab />
         </TabsContent>
         <TabsContent value="settings" className="pt-4">
           <SettingsTab />

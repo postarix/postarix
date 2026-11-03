@@ -143,6 +143,13 @@ settings). Organization admins see their mailboxes' items in the
   Passwords are never shown again; Postfix needs them in clear, so they are
   stored as given (readable by the API and Postfix' database accounts only).
 
+- **API keys:** for scripts and other software (provisioning, monitoring).
+  They call the same API as the admin panel with
+  `Authorization: Bearer px_…`, as the administrator who created the key:
+  read-only keys can only read, and a key can be limited to some addresses
+  or networks and given an expiry. The key is shown once; it stops working
+  when deleted, when it expires, or when its creator is no longer an
+  instance administrator.
 - **Settings:**
   - *Sign-in protection:* how many wrong passwords (web or mail apps) lock
     an account, and for how long (10 and 15 minutes by default). App
