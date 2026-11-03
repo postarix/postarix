@@ -67,7 +67,7 @@ sync_log_channels: squatter
 quota_db: quotalegacy
 sieve_maxscriptsize: 64
 sieve_maxscripts: 5
-sieve_extensions: fileinto reject vacation vacation-seconds imap4flags notify envelope relational regex subaddress copy date index body mailbox mboxmetadata servermetadata variables
+sieve_extensions: fileinto reject vacation vacation-seconds imap4flags notify envelope relational regex subaddress copy date index body mailbox mboxmetadata servermetadata variables editheader
 
 imapidresponse: no
 syslog_prefix: cyrus

@@ -43,6 +43,11 @@ export const mailSettingsSchema = z
       address: z.union([z.literal(''), z.email().max(254)]),
       keepCopy: z.boolean(),
     }),
+    /**
+     * Mail to the address with a tag (ann+news@example.com): left in the
+     * inbox, filed in a folder named after the tag, or marked in the subject.
+     */
+    taggedMail: z.enum(['inbox', 'folder', 'subject']).default('inbox'),
   })
   .superRefine((value, ctx) => {
     if (value.vacation.enabled && value.vacation.message.trim() === '') {
@@ -54,11 +59,14 @@ export const mailSettingsSchema = z
   });
 
 export type MailSettings = z.infer<typeof mailSettingsSchema>;
+/** Settings as given (fields with a default may be left out). */
+export type MailSettingsInput = z.input<typeof mailSettingsSchema>;
 
 export const DEFAULT_SETTINGS: MailSettings = {
   filters: [],
   vacation: { enabled: false, subject: 'Out of office', message: '', until: null },
   forwarding: { enabled: false, address: '', keepCopy: true },
+  taggedMail: 'inbox',
 };
 
 const MARKER = '# Postarix settings:';
@@ -74,12 +82,31 @@ function filterTest(filter: MailFilter): string {
   return `header :contains ${headers} ${quoted(filter.contains)}`;
 }
 
-export function renderSettingsScript(settings: MailSettings): string | null {
+export function renderSettingsScript(settings: MailSettingsInput): string | null {
   const { vacation, forwarding } = settings;
   const filters = settings.filters ?? [];
-  if (!vacation.enabled && !forwarding.enabled && filters.length === 0) return null;
+  const tagged = settings.taggedMail ?? 'inbox';
+  if (!vacation.enabled && !forwarding.enabled && filters.length === 0 && tagged === 'inbox') return null;
   const extensions = new Set<string>();
   const body: string[] = [];
+  // Tagged mail (ann+news@): the tag, except "Junk" (spam is filed by the server).
+  if (tagged !== 'inbox') {
+    for (const e of ['envelope', 'subaddress', 'variables']) extensions.add(e);
+    body.push('if envelope :detail :matches "to" "?*" {', '  set "tag" "${1}${2}";', '  if not string :comparator "i;ascii-casemap" :is "${tag}" "Junk" {');
+    if (tagged === 'folder') {
+      extensions.add('fileinto');
+      extensions.add('mailbox');
+      body.push('    fileinto :create "${tag}";');
+    } else {
+      extensions.add('editheader');
+      body.push(
+        '    if header :matches "Subject" "*" { set "subject" "${1}"; } else { set "subject" ""; }',
+        '    deleteheader "Subject";',
+        '    addheader "Subject" "[${tag}] ${subject}";',
+      );
+    }
+    body.push('  }', '}');
+  }
   // Flags first (they apply to wherever the message is then filed), then the
   // first matching move or delete only.
   for (const filter of filters) {

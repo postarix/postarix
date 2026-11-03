@@ -7,7 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { useLabels, useMailboxes } from '@/lib/mail';
-import { type MailFilter, useMailSettings, useSaveMailSettings } from '@/lib/mail-settings';
+import { type MailFilter, type MailSettings, useMailSettings, useSaveMailSettings } from '@/lib/mail-settings';
 import { t } from '@/lib/i18n';
 
 const FIELDS: { value: MailFilter['field']; label: string }[] = [
@@ -29,11 +29,15 @@ export function FiltersDialog({ onClose }: { onClose: () => void }) {
   const mailboxes = useMailboxes();
   const labels = useLabels();
   const [filters, setFilters] = useState<MailFilter[]>([]);
+  const [taggedMail, setTaggedMail] = useState<MailSettings['taggedMail']>('inbox');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (current.data) setFilters(current.data.filters ?? []);
+    if (current.data) {
+      setFilters(current.data.filters ?? []);
+      setTaggedMail(current.data.taggedMail ?? 'inbox');
+    }
   }, [current.data]);
 
   // Folders a filter can move mail to (their full names, as Sieve uses them).
@@ -55,7 +59,7 @@ export function FiltersDialog({ onClose }: { onClose: () => void }) {
     if (!current.data) return;
     setError(null);
     try {
-      await save.mutateAsync({ filters: cleaned, vacation: current.data.vacation, forwarding: current.data.forwarding });
+      await save.mutateAsync({ filters: cleaned, vacation: current.data.vacation, forwarding: current.data.forwarding, taggedMail });
       setSaved(true);
     } catch (e) {
       setError(errorMessage(e));
@@ -123,6 +127,14 @@ export function FiltersDialog({ onClose }: { onClose: () => void }) {
             </ol>
             <Button type="button" variant="outline" size="sm" disabled={filters.length >= 50} onClick={() => setFilters((list) => [...list, { field: 'from', contains: '', action: 'move' }])}>
               <Plus aria-hidden />{t('Add filter')}</Button>
+            <label className="flex flex-wrap items-center gap-2 text-sm">
+              <span>{t('Mail to your address with a tag (you+news@…)')}</span>
+              <NativeSelect value={taggedMail} onChange={(e) => setTaggedMail(e.target.value as MailSettings['taggedMail'])}>
+                <NativeSelectOption value="inbox">{t('stays in the inbox')}</NativeSelectOption>
+                <NativeSelectOption value="folder">{t('goes to a folder named after the tag')}</NativeSelectOption>
+                <NativeSelectOption value="subject">{t('gets [tag] in its subject')}</NativeSelectOption>
+              </NativeSelect>
+            </label>
             {current.data?.otherFiltersActive ? (
               <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{t('Filters set up in a mail app are active. Saving here turns them off.')}</p>
             ) : null}
