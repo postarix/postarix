@@ -53,7 +53,7 @@ The full picture, with the reasons behind each choice, is in
   **reverse DNS (PTR)** of your IP address. Without these, other mail servers
   will not accept your mail.
 
-Ready? [Install on Ubuntu](./install-ubuntu) or [with Dokploy](./install-dokploy).
+Ready? [Install on Ubuntu](./install-ubuntu) or [with Dokploy](./install-dokploy) — or first [try it on your computer](./try-locally).
 
 ## Project status
 

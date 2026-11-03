@@ -63,6 +63,7 @@ export default defineConfig({
         text: 'Getting started',
         items: [
           { text: 'What is Postarix', link: '/introduction' },
+          { text: 'Try it on your computer', link: '/try-locally' },
           { text: 'Install on Ubuntu', link: '/install-ubuntu' },
           { text: 'Install with Dokploy', link: '/install-dokploy' },
           { text: 'Production guide (any Linux, Kubernetes)', link: '/install' },
