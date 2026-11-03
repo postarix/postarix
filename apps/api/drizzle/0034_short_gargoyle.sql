@@ -1,0 +1,1 @@
+ALTER TABLE "api_keys" ADD COLUMN "organization_ids" text[] DEFAULT ARRAY[]::text[] NOT NULL;

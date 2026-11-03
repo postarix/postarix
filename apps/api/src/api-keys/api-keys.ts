@@ -13,6 +13,7 @@ import {
   Param,
   Post,
   Req,
+  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -27,7 +28,7 @@ import { SuperAdminGuard } from '../auth/super-admin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { apiKeys, type ApiKeyRow, user } from '../db/schema/index.js';
+import { apiKeys, type ApiKeyRow, organization, user } from '../db/schema/index.js';
 
 export const API_KEY_PREFIX = 'px_';
 const LOOKUP_LENGTH = 12;
@@ -52,6 +53,8 @@ export const createApiKeySchema = z.strictObject({
   allowedIps: z.array(networkSchema).max(50).default([]),
   /** Days until it stops working; omitted: never. */
   expiresInDays: z.number().int().min(1).max(3650).optional(),
+  /** Only these organizations (empty: the whole instance). */
+  organizationIds: z.array(z.string().min(1).max(100)).max(100).default([]),
 });
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 
@@ -60,16 +63,19 @@ export interface ApiKeyDto {
   name: string;
   access: ApiKeyRow['access'];
   allowedIps: string[];
+  /** Empty: the whole instance. */
+  organizations: { id: string; name: string | null }[];
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
 }
 
-const toDto = (row: ApiKeyRow): ApiKeyDto => ({
+const toDto = (row: ApiKeyRow, names: Map<string, string> = new Map()): ApiKeyDto => ({
   id: row.id,
   name: row.name,
   access: row.access,
   allowedIps: row.allowedIps,
+  organizations: row.organizationIds.map((id) => ({ id, name: names.get(id) ?? null })),
   lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
   expiresAt: row.expiresAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
@@ -106,11 +112,19 @@ export class ApiKeysService {
     @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
+  private async orgNames(): Promise<Map<string, string>> {
+    return new Map((await this.db.select({ id: organization.id, name: organization.name }).from(organization)).map((o) => [o.id, o.name]));
+  }
+
   async list(): Promise<ApiKeyDto[]> {
-    return (await this.db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt))).map(toDto);
+    const names = await this.orgNames();
+    return (await this.db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt))).map((row) => toDto(row, names));
   }
 
   async create(session: AuthSession, ipAddress: string | null, input: CreateApiKeyInput): Promise<ApiKeyDto & { key: string }> {
+    const organizationIds = [...new Set(input.organizationIds)];
+    const names = await this.orgNames();
+    if (organizationIds.some((id) => !names.has(id))) throw new UnprocessableEntityException('Unknown organization');
     const key = `${API_KEY_PREFIX}${randomBytes(32).toString('base64url')}`;
     const [row] = await this.db
       .insert(apiKeys)
@@ -120,6 +134,7 @@ export class ApiKeysService {
         keyHash: hash(key),
         access: input.access,
         allowedIps: input.allowedIps,
+        organizationIds,
         createdBy: session.user.id,
         expiresAt: input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 86_400_000) : null,
       })
@@ -132,9 +147,9 @@ export class ApiKeysService {
         id: row!.id,
         label: input.name,
       },
-      { access: input.access, allowedIps: input.allowedIps },
+      { access: input.access, allowedIps: input.allowedIps, organizationIds },
     );
-    return { ...toDto(row!), key };
+    return { ...toDto(row!, names), key };
   }
 
   async remove(session: AuthSession, ipAddress: string | null, id: string): Promise<void> {
@@ -150,9 +165,10 @@ export class ApiKeysService {
   /**
    * The session an API key stands for, or null if the key is unknown, expired,
    * used from an address it does not allow, read-only for a change, or its
-   * creator is no longer an instance administrator.
+   * creator is no longer an instance administrator. A key limited to some
+   * organizations is refused anywhere but under /api/orgs/<one of them>/.
    */
-  async authenticate(key: string, ip: string | undefined, method: string): Promise<AuthSession | null> {
+  async authenticate(key: string, ip: string | undefined, method: string, path = ''): Promise<AuthSession | null> {
     if (!key.startsWith(API_KEY_PREFIX) || key.length < 20 || key.length > 200) return null;
     const candidates = await this.db
       .select({ key: apiKeys, owner: user })
@@ -169,6 +185,10 @@ export class ApiKeysService {
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
     if (!hasInstanceAdminRole(owner.role) || owner.banned) return null;
     if (row.access === 'read' && method !== 'GET' && method !== 'HEAD') return null;
+    if (row.organizationIds.length > 0) {
+      const orgId = /^\/api\/orgs\/([^/?#]+)(?:[/?#]|$)/.exec(path)?.[1];
+      if (!orgId || !row.organizationIds.includes(decodeURIComponent(orgId))) return null;
+    }
     if (!allows(row.allowedIps, ip)) {
       this.logger.warn(`API key "${row.name}" used from a refused address: ${ip ?? 'unknown'}`);
       return null;
@@ -191,6 +211,7 @@ export class ApiKeysService {
         ipAddress: ip ?? null,
         userAgent: null,
       },
+      ...(row.organizationIds.length > 0 ? { apiKeyOrganizations: row.organizationIds } : {}),
     } as unknown as AuthSession;
   }
 }

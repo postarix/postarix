@@ -28,6 +28,12 @@ export const CurrentSession = createParamDecorator((_data: unknown, ctx: Executi
   return request.auth;
 });
 
+/** The organizations an API key is limited to (see ApiKeysService); absent for people and unlimited keys. */
+export function apiKeyOrganizations(session: AuthSession): string[] | undefined {
+  return (session as AuthSession & { apiKeyOrganizations?: string[] }).apiKeyOrganizations;
+}
+
+/** An instance administrator: their sessions and unlimited API keys, not keys limited to organizations. */
 export function isSuperAdmin(session: AuthSession): boolean {
-  return hasInstanceAdminRole(session.user.role);
+  return hasInstanceAdminRole(session.user.role) && apiKeyOrganizations(session) === undefined;
 }

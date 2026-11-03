@@ -271,6 +271,12 @@ export const apiKeys = pgTable(
     access: text({ enum: ['read', 'write'] }).notNull(),
     /** Addresses or networks (CIDR) it works from; empty: anywhere. */
     allowedIps: text().array().notNull().default(sql`ARRAY[]::text[]`),
+    /**
+     * Organizations it is limited to (empty: the whole instance). A limited key
+     * only reaches /api/orgs/<one of them>/…, as an owner of the organization,
+     * not as an instance administrator (no limits, no smart hosts).
+     */
+    organizationIds: text().array().notNull().default(sql`ARRAY[]::text[]`),
     /** It acts as this instance administrator, and stops working when they no longer are one. */
     createdBy: text()
       .notNull()

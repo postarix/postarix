@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { and, eq } from 'drizzle-orm';
-import { isSuperAdmin } from '../auth/session.js';
+import { apiKeyOrganizations, isSuperAdmin } from '../auth/session.js';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { member, organization } from '../db/schema/index.js';
@@ -61,6 +61,19 @@ export class OrgAccessGuard implements CanActivate {
       .limit(1);
 
     if (membership) role = highestRole(membership.role);
+
+    // An API key limited to some organizations acts as an owner of those only.
+    const keyScope = apiKeyOrganizations(session);
+    if (keyScope) {
+      role = null;
+      if (keyScope.includes(organizationId)) {
+        const [org] = await this.db.select({ id: organization.id }).from(organization).where(eq(organization.id, organizationId)).limit(1);
+        if (org) {
+          role = 'owner';
+          viaSuperAdmin = true;
+        }
+      }
+    }
 
     // Super-admins get owner-level access even where they are also a plain member.
     if (role !== 'owner' && isSuperAdmin(session)) {
