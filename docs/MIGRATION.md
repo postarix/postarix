@@ -49,6 +49,13 @@ Notes:
   `api.mailImportAllowedHosts` (Helm). Imports otherwise only reach public
   servers on the standard IMAP ports.
 
+### Administrators, from the admin console
+
+Organization administrators can do the same for any of their mailboxes, once
+or on a schedule, under **Mailboxes › sync jobs** (see
+[Administration](administration.md#sync-jobs)). A repeating job keeps the new
+mailbox up to date until the MX record moves.
+
 ### Administrators, in bulk (imapsync)
 
 For Microsoft 365, or to migrate many mailboxes at once with an admin

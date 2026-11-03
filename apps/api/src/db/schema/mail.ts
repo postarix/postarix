@@ -387,16 +387,26 @@ export type MailImportStatus = (typeof mailImportStatuses)[number];
  * Copying a person's mail from another provider (any IMAP server: Gmail,
  * Fastmail, an old server…) into their mailbox. The source password is kept
  * encrypted with AUTH_SECRET while the import runs and erased when it ends.
+ *
+ * Organization administrators can also set up sync jobs for any of their
+ * mailboxes (organizationId and mailboxId set, userId null); a job with an
+ * interval keeps its password and runs again, copying only what is new.
  */
 export const mailImports = pgTable(
   'mail_imports',
   {
     id: uuid().primaryKey().defaultRandom(),
-    userId: text()
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    /** The mailbox the mail goes into (the person's own). */
+    /** The person who started it; null for administrators' sync jobs. */
+    userId: text().references(() => user.id, { onDelete: 'cascade' }),
+    /** Set for administrators' sync jobs. */
+    organizationId: text().references(() => organization.id, { onDelete: 'cascade' }),
+    mailboxId: uuid().references(() => mailboxes.id, { onDelete: 'cascade' }),
+    /** The mailbox the mail goes into. */
     mailboxAddress: text().notNull(),
+    /** Run again this many minutes after each run ends (null: once). */
+    intervalMinutes: integer(),
+    /** When a recurring job runs next. */
+    nextRunAt: timestamp({ withTimezone: true }),
     host: text().notNull(),
     port: bigint({ mode: 'number' }).notNull(),
     security: text({ enum: ['tls', 'starttls'] }).notNull(),
@@ -414,7 +424,17 @@ export const mailImports = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp({ withTimezone: true }),
   },
-  (table) => [index('mail_imports_user_id_idx').on(table.userId), index('mail_imports_status_idx').on(table.status)],
+  (table) => [
+    index('mail_imports_user_id_idx').on(table.userId),
+    index('mail_imports_status_idx').on(table.status),
+    index('mail_imports_organization_id_idx').on(table.organizationId),
+    index('mail_imports_mailbox_id_idx').on(table.mailboxId),
+    check(
+      'mail_imports_owner_valid',
+      sql`(${table.userId} IS NOT NULL AND ${table.organizationId} IS NULL) OR (${table.userId} IS NULL AND ${table.organizationId} IS NOT NULL AND ${table.mailboxId} IS NOT NULL)`,
+    ),
+    check('mail_imports_interval_valid', sql`${table.intervalMinutes} IS NULL OR ${table.intervalMinutes} >= 5`),
+  ],
 );
 
 /**

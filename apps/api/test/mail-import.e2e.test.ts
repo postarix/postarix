@@ -216,4 +216,84 @@ describe('Importing mail from another IMAP account', () => {
     await noMailbox.agent.post('/api/me/mail-imports').send(start).expect(404);
     await ann.agent.post(`/api/me/mail-imports/${job.body.id}/cancel`).expect(200);
   });
+
+  describe('administrators’ sync jobs', () => {
+    const setup = async (prefix: string) => {
+      const org = await mailboxInNewOrg(app, prefix);
+      const list = await org.owner.agent.get(`/api/orgs/${org.orgId}/mailboxes`).expect(200);
+      const mailboxId = (list.body.data as { id: string; address: string }[]).find((m) => m.address === org.address)!.id;
+      return { ...org, mailboxId };
+    };
+
+    it('copies into a mailbox of the organization, and a recurring job runs again with only what is new', async () => {
+      const org = await setup('sync-admin');
+      const res = await org.owner.agent
+        .post(`/api/orgs/${org.orgId}/sync-jobs`)
+        .send({ ...start, mailboxId: org.mailboxId, intervalMinutes: 30 })
+        .expect(201);
+      expect(res.body).toMatchObject({ mailboxAddress: org.address, intervalMinutes: 30, status: 'queued' });
+      expect(res.body).not.toHaveProperty('password');
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs`).send({ ...start, mailboxId: org.mailboxId }).expect(409);
+
+      await work();
+      expect(new Set(imported.map((m) => m.address))).toEqual(new Set([org.address]));
+      expect(imported).toHaveLength(3);
+      const [done] = await db.select().from(mailImports).where(eq(mailImports.id, res.body.id));
+      expect(done).toMatchObject({ status: 'done', imported: 3 });
+      expect(done!.password).toMatch(/^enc:v1:/);
+      expect(done!.nextRunAt!.getTime()).toBeGreaterThan(Date.now() + 29 * 60_000);
+
+      // Not due yet: nothing happens.
+      await service.requeueDue();
+      expect((await db.select().from(mailImports).where(eq(mailImports.id, res.body.id)))[0]!.status).toBe('done');
+      // Due: it runs again and copies only the new message.
+      source.folders.INBOX!.messages.push({ uid: 20, flags: [], raw: 'Subject: later\r\n\r\nNew' });
+      imported = [];
+      await db.update(mailImports).set({ nextRunAt: new Date(Date.now() - 1000) }).where(eq(mailImports.id, res.body.id));
+      await service.requeueDue();
+      await work();
+      expect(imported.map((m) => m.raw.split('\r\n')[0])).toEqual(['Subject: later']);
+      source.folders.INBOX!.messages.pop();
+
+      // Run now, then cancel: the password is gone and it stops recurring.
+      const now = await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs/${res.body.id}/run`).expect(200);
+      expect(now.body.status).toBe('queued');
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs/${res.body.id}/run`).expect(409);
+      const cancelled = await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs/${res.body.id}/cancel`).expect(200);
+      expect(cancelled.body).toMatchObject({ status: 'cancelled', nextRunAt: null });
+      expect((await db.select().from(mailImports).where(eq(mailImports.id, res.body.id)))[0]!.password).toBeNull();
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs/${res.body.id}/run`).expect(409);
+
+      const listed = await org.owner.agent.get(`/api/orgs/${org.orgId}/sync-jobs?mailboxId=${org.mailboxId}`).expect(200);
+      expect(listed.body.data.map((j: { id: string }) => j.id)).toEqual([res.body.id]);
+      // The person's own list shows only what they started.
+      expect((await org.agent.get('/api/me/mail-imports').expect(200)).body.data).toEqual([]);
+      await org.owner.agent.delete(`/api/orgs/${org.orgId}/sync-jobs/${res.body.id}`).expect(204);
+      expect((await org.owner.agent.get(`/api/orgs/${org.orgId}/sync-jobs`).expect(200)).body.data).toEqual([]);
+    });
+
+    it('checks the account and the interval before saving', async () => {
+      const org = await setup('sync-check');
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs`).send({ ...start, password: 'wrong', mailboxId: org.mailboxId }).expect(422);
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs`).send({ ...start, mailboxId: org.mailboxId, intervalMinutes: 1 }).expect(400);
+      await org.owner.agent.post(`/api/orgs/${org.orgId}/sync-jobs`).send({ ...start, mailboxId: '00000000-0000-4000-8000-000000000000' }).expect(404);
+      // Members who are not administrators cannot use it.
+      await org.agent.get(`/api/orgs/${org.orgId}/sync-jobs`).expect(403);
+    });
+
+    it('keeps each organization’s jobs and mailboxes to itself', async () => {
+      const a = await setup('sync-iso-a');
+      const b = await setup('sync-iso-b');
+      const job = await a.owner.agent.post(`/api/orgs/${a.orgId}/sync-jobs`).send({ ...start, mailboxId: a.mailboxId }).expect(201);
+      // B cannot sync into A's mailbox, nor see or touch A's job, from its own organization or A's.
+      await b.owner.agent.post(`/api/orgs/${b.orgId}/sync-jobs`).send({ ...start, mailboxId: a.mailboxId }).expect(404);
+      expect((await b.owner.agent.get(`/api/orgs/${b.orgId}/sync-jobs`).expect(200)).body.data).toEqual([]);
+      await b.owner.agent.get(`/api/orgs/${a.orgId}/sync-jobs`).expect(404);
+      for (const action of ['run', 'cancel']) await b.owner.agent.post(`/api/orgs/${b.orgId}/sync-jobs/${job.body.id}/${action}`).expect(404);
+      await b.owner.agent.delete(`/api/orgs/${b.orgId}/sync-jobs/${job.body.id}`).expect(404);
+      await b.owner.agent.delete(`/api/orgs/${a.orgId}/sync-jobs/${job.body.id}`).expect(404);
+      expect((await a.owner.agent.get(`/api/orgs/${a.orgId}/sync-jobs`).expect(200)).body.data[0].status).toBe('queued');
+      await a.owner.agent.post(`/api/orgs/${a.orgId}/sync-jobs/${job.body.id}/cancel`).expect(200);
+    });
+  });
 });

@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Inbox, KeyRound, Pencil, Plus, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, Inbox, KeyRound, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -29,6 +29,7 @@ import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
+import { SyncJobsDialog } from '@/components/sync-jobs-dialog';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
@@ -435,6 +436,7 @@ export default function MailboxesPage() {
   const [editing, setEditing] = useState<Mailbox | null>(null);
   const [resetting, setResetting] = useState<Mailbox | null>(null);
   const [spamOf, setSpamOf] = useState<Mailbox | null>(null);
+  const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
 
   return (
@@ -504,6 +506,9 @@ export default function MailboxesPage() {
                     <Button size="icon-sm" variant="ghost" aria-label={`Spam filter of ${mailbox.address}`} onClick={() => setSpamOf(mailbox)}>
                       <ShieldAlert aria-hidden />
                     </Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`Sync jobs of ${mailbox.address}`} onClick={() => setSyncOf(mailbox)}>
+                      <RefreshCw aria-hidden />
+                    </Button>
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -545,6 +550,7 @@ export default function MailboxesPage() {
           onClose={() => setSpamOf(null)}
         />
       ) : null}
+      {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
