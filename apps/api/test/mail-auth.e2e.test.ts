@@ -183,6 +183,60 @@ describe('App passwords and the mail login bridge', () => {
       await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(401);
       await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`).send({ status: 'active' }).expect(200);
       await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(204);
+      // Disabling it signed its web sessions out.
+      await owner.get('/api/me/app-passwords').expect(401);
+      await owner.post('/api/auth/sign-in/email').send({ email: address, password: MAILBOX_PASSWORD }).expect(200);
+    });
+
+    it('lets a mailbox receive mail without anyone signing in to it', async () => {
+      await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`).send({ status: 'no_login' }).expect(200);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(401);
+      const web = await newAgent(app).post('/api/auth/sign-in/email').send({ email: address, password: MAILBOX_PASSWORD });
+      expect(web.status).toBe(403);
+      await owner.get('/api/me/app-passwords').expect(401);
+      const db = app.get<Database>(DATABASE);
+      const listed = await db.execute(sql`SELECT 1 FROM mail.mailboxes WHERE address = ${address}`);
+      expect(listed.rows).toHaveLength(1);
+
+      await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`).send({ status: 'active' }).expect(200);
+      await owner.post('/api/auth/sign-in/email').send({ email: address, password: MAILBOX_PASSWORD }).expect(200);
+    });
+
+    it('allows only the protocols the organization chose', async () => {
+      const res = await admin.agent
+        .patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`)
+        .send({ allowedProtocols: ['smtp', 'dav'] })
+        .expect(200);
+      expect(res.body.allowedProtocols).toEqual(['smtp', 'dav']);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(401);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'pop3' }).expect(401);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'sieve' }).expect(401);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'submission' }).expect(204);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'caldav' }).expect(204);
+      // The webmail keeps working.
+      await mailAuth({ username: address, password: mintJmapToken(process.env.AUTH_SECRET!, address), service: 'http', instance: 'jmap' }).expect(204);
+
+      await admin.agent.patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`).send({ allowedProtocols: ['imaps'] }).expect(400);
+      await admin.agent
+        .patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`)
+        .send({ allowedProtocols: ['imap', 'pop3', 'smtp', 'sieve', 'dav'] })
+        .expect(200);
+      await mailAuth({ username: address, password: MAILBOX_PASSWORD, service: 'imap' }).expect(204);
+    });
+
+    it('lists mailboxes that require TLS for Postfix', async () => {
+      await admin.agent
+        .patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`)
+        .send({ tlsRequiredIn: true, tlsRequiredOut: true })
+        .expect(200);
+      const db = app.get<Database>(DATABASE);
+      expect((await db.execute(sql`SELECT 1 FROM mail.tls_required_in WHERE address = ${address}`)).rows).toHaveLength(1);
+      expect((await db.execute(sql`SELECT 1 FROM mail.tls_required_out WHERE address = ${address}`)).rows).toHaveLength(1);
+      await admin.agent
+        .patch(`/api/orgs/${orgId}/mailboxes/${mailboxId}`)
+        .send({ tlsRequiredIn: false, tlsRequiredOut: false })
+        .expect(200);
+      expect((await db.execute(sql`SELECT 1 FROM mail.tls_required_in WHERE address = ${address}`)).rows).toHaveLength(0);
     });
 
     it('refuses banned users', async () => {

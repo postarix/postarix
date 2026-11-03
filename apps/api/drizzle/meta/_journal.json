@@ -141,6 +141,20 @@
       "when": 1793698897538,
       "tag": "0019_warm_lester",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793699465137,
+      "tag": "0020_colossal_tomas",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793699859521,
+      "tag": "0021_goofy_jamie_braddock",
+      "breakpoints": true
     }
   ]
 }

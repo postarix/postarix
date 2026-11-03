@@ -106,7 +106,9 @@ postconf -e \
   "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination } }" \
   "smtpd_sender_login_maps = $(pg sender_logins)" \
   "smtpd_relay_restrictions = permit_sasl_authenticated, reject_unauth_destination" \
-  "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
+  "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, check_recipient_access $(pg tls_required_in), permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
+  "sender_dependent_default_transport_maps = $(pg tls_required_out)" \
+  "plaintext_reject_code = 550" \
   "relay_domains = $MAIL_HOSTNAME" \
   "relay_recipient_maps = $(pg srs_recipients)" \
   "recipient_canonical_maps = $(pg srs_reverse)" \
@@ -135,6 +137,14 @@ postconf -e \
   "milter_protocol = 6" \
   "milter_default_action = tempfail" \
   "milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}"
+
+# Outgoing mail of mailboxes that require TLS (sender_dependent_default_transport_maps):
+# delivered only over TLS; without it the message waits and eventually bounces.
+postconf -M "postarix-tls/unix=postarix-tls unix - - n - - smtp"
+postconf -P \
+  "postarix-tls/unix/syslog_name=postfix/tls-required" \
+  "postarix-tls/unix/smtp_tls_security_level=encrypt" \
+  "postarix-tls/unix/smtp_tls_mandatory_protocols=>=TLSv1.2"
 
 # Submission: the null sender (bounces) is never legitimate from a client, and
 # the envelope sender must be one the logged-in user owns.

@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
@@ -18,6 +19,8 @@ import {
   createMailboxSchema,
   type MailboxDto,
   mailboxIdSchema,
+  type SendAsInput,
+  sendAsSchema,
   setPasswordSchema,
   type UpdateMailboxInput,
   updateMailboxSchema,
@@ -62,6 +65,21 @@ export class MailboxesController {
     @Body(new ZodValidationPipe(updateMailboxSchema)) body: UpdateMailboxInput,
   ): Promise<MailboxDto> {
     return this.mailboxes.update(ctx, id, body);
+  }
+
+  /** Further addresses (or "@domain") the mailbox may send as. */
+  @Get(':id/send-as')
+  sendAs(@Tenant() ctx: TenantContext, @Param('id', idPipe) id: string): Promise<{ senders: string[] }> {
+    return this.mailboxes.sendAs(ctx, id);
+  }
+
+  @Put(':id/send-as')
+  setSendAs(
+    @Tenant() ctx: TenantContext,
+    @Param('id', idPipe) id: string,
+    @Body(new ZodValidationPipe(sendAsSchema)) body: SendAsInput,
+  ): Promise<{ senders: string[] }> {
+    return this.mailboxes.setSendAs(ctx, id, body.senders);
   }
 
   @Post(':id/password')

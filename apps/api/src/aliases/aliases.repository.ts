@@ -30,7 +30,7 @@ export class AliasesRepository {
 
   async create(
     ctx: TenantContext,
-    input: Pick<AliasRow, 'domainId' | 'localPart' | 'address' | 'destinations' | 'enabled'>,
+    input: Pick<AliasRow, 'domainId' | 'localPart' | 'address' | 'destinations' | 'enabled' | 'discard'>,
     check: (domain: DomainRow, usage: DomainUsage) => void,
   ): Promise<AliasRow> {
     return this.db.transaction(async (tx) => {
@@ -49,7 +49,7 @@ export class AliasesRepository {
   async update(
     ctx: TenantContext,
     id: string,
-    changes: Partial<Pick<AliasRow, 'destinations' | 'enabled'>>,
+    changes: Partial<Pick<AliasRow, 'destinations' | 'enabled' | 'discard'>>,
   ): Promise<AliasRow | undefined> {
     const [row] = await this.db
       .update(aliases)

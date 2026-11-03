@@ -48,6 +48,9 @@ webmail at `https://mail.example.com` with their address and that password.
   addresses): `info@`, `sales@`…
 - A mailbox of type **Room** or **Equipment** can be booked from the calendar
   (see [Calendar](./calendar)).
+- Each domain and mailbox has more settings (limits, status, protocols,
+  TLS, catch-all, send-as…): see [Domains, mailboxes and
+  aliases](./administration).
 - **Members** gives people roles in the organization: *owner*, *admin* (manages
   mailboxes and domains) or *member*.
 

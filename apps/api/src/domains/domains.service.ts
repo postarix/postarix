@@ -100,6 +100,7 @@ export class DomainsService {
       );
     });
     if (!row) throw new NotFoundException('Domain not found');
+    if (changes.status === 'disabled') await this.repository.signOutMailboxes(ctx, id);
     await this.audit.record(ctx, 'domain.updated', { type: 'domain', id: row.id, label: row.name }, { ...changes });
     return this.toDto(ctx, row);
   }

@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, max } from 'drizzle-orm';
+import { and, asc, eq, inArray, max } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { type DomainRow, domains, mailboxes, ssoProvider } from '../db/schema/index.js';
+import { type DomainRow, domains, mailboxes, session, ssoProvider } from '../db/schema/index.js';
 import { type DomainUsage, domainUsage, lockDomain } from './domain-limits.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 
@@ -62,6 +62,15 @@ export class DomainsRepository {
         .returning();
       return row;
     });
+  }
+
+  /** Ends the web sessions of the domain's mailboxes. */
+  async signOutMailboxes(ctx: TenantContext, id: string): Promise<void> {
+    const owners = this.db
+      .select({ userId: mailboxes.userId })
+      .from(mailboxes)
+      .where(and(eq(mailboxes.organizationId, ctx.organizationId), eq(mailboxes.domainId, id)));
+    await this.db.delete(session).where(inArray(session.userId, owners));
   }
 
   async create(ctx: TenantContext, name: string): Promise<DomainRow> {

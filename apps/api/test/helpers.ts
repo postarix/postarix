@@ -47,9 +47,9 @@ export async function signUp(app: INestApplication, prefix: string): Promise<Tes
   return { id: res.body.user.id as string, email, agent };
 }
 
-export async function signIn(app: INestApplication, email: string): Promise<TestAgent> {
+export async function signIn(app: INestApplication, email: string, password = PASSWORD): Promise<TestAgent> {
   const agent = newAgent(app);
-  const res = await agent.post('/api/auth/sign-in/email').send({ email, password: PASSWORD });
+  const res = await agent.post('/api/auth/sign-in/email').send({ email, password });
   if (res.status !== 200) {
     throw new Error(`sign-in failed (${res.status}): ${JSON.stringify(res.body)}`);
   }

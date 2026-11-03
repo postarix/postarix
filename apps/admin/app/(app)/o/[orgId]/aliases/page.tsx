@@ -44,23 +44,26 @@ function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domain
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [catchAll, setCatchAll] = useState(false);
+  const [discard, setDiscard] = useState(alias?.discard ?? false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const destinations = parseDestinations(String(data.get('destinations')));
+    const destinations = discard ? [] : parseDestinations(String(data.get('destinations')));
     const enabled = data.get('enabled') !== null;
     setPending(true);
     setError(null);
     try {
       if (alias) {
-        await api.patch(`/orgs/${orgId}/aliases/${alias.id}`, { destinations, enabled });
+        await api.patch(`/orgs/${orgId}/aliases/${alias.id}`, { ...(discard ? {} : { destinations }), enabled, discard });
       } else {
         await api.post(`/orgs/${orgId}/aliases`, {
           domainId: String(data.get('domainId')),
-          localPart: String(data.get('localPart')),
+          localPart: catchAll ? '' : String(data.get('localPart')),
           destinations,
           enabled,
+          discard,
         });
       }
       refresh();
@@ -77,12 +80,30 @@ function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domain
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          {alias ? null : <AddressFields domains={domains} placeholder="sales" />}
-          <FormField label="Deliver to" hint="One address per line (up to 50). External addresses are allowed.">
-            {(props) => (
-              <Textarea {...props} name="destinations" required rows={4} defaultValue={alias?.destinations.join('\n')} className="font-mono" />
-            )}
-          </FormField>
+          {alias ? null : (
+            <>
+              <AddressFields domains={domains} placeholder="sales" anyAddress={catchAll} />
+              <Field orientation="horizontal">
+                <Checkbox id="alias-catch-all" checked={catchAll} onCheckedChange={(v) => setCatchAll(v === true)} />
+                <FieldLabel htmlFor="alias-catch-all" className="font-normal">
+                  Catch-all: every address of the domain that is not a mailbox or another alias
+                </FieldLabel>
+              </Field>
+            </>
+          )}
+          {discard ? null : (
+            <FormField label="Deliver to" hint="One address per line (up to 50). External addresses are allowed.">
+              {(props) => (
+                <Textarea {...props} name="destinations" required rows={4} defaultValue={alias?.destinations.join('\n')} className="font-mono" />
+              )}
+            </FormField>
+          )}
+          <Field orientation="horizontal">
+            <Checkbox id="alias-discard" checked={discard} onCheckedChange={(v) => setDiscard(v === true)} />
+            <FieldLabel htmlFor="alias-discard" className="font-normal">
+              Accept mail and silently drop it
+            </FieldLabel>
+          </Field>
           <Field orientation="horizontal">
             <Checkbox id="alias-enabled" name="enabled" defaultChecked={alias?.enabled ?? true} />
             <FieldLabel htmlFor="alias-enabled" className="font-normal">
@@ -143,13 +164,24 @@ export default function AliasesPage() {
           <TableBody>
             {aliases.data.map((alias) => (
               <TableRow key={alias.id}>
-                <TableCell className="pl-4 font-medium">{alias.address}</TableCell>
+                <TableCell className="pl-4 font-medium">
+                  {alias.address}
+                  {alias.catchAll ? (
+                    <Badge variant="secondary" className="ml-2">
+                      Catch-all
+                    </Badge>
+                  ) : null}
+                </TableCell>
                 <TableCell>
-                  <ul className="space-y-0.5 text-sm">
-                    {alias.destinations.map((d) => (
-                      <li key={d}>{d}</li>
-                    ))}
-                  </ul>
+                  {alias.discard ? (
+                    <span className="text-sm text-muted-foreground">Dropped silently</span>
+                  ) : (
+                    <ul className="space-y-0.5 text-sm">
+                      {alias.destinations.map((d) => (
+                        <li key={d}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
                 </TableCell>
                 <TableCell>{alias.enabled ? <Badge variant="success">Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>}</TableCell>
                 <TableCell className="pr-4">

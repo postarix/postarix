@@ -26,7 +26,7 @@ import {
 } from './mailboxes.dto.js';
 import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
-import { MailboxesRepository } from './mailboxes.repository.js';
+import { type MailboxChanges, MailboxesRepository } from './mailboxes.repository.js';
 
 export interface MailboxUsageDto {
   usedBytes: number | null;
@@ -149,15 +149,19 @@ export class MailboxesService {
 
   async update(ctx: TenantContext, id: string, input: UpdateMailboxInput): Promise<MailboxDto> {
     const current = await this.require(ctx, id);
-    if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: input.status === 'disabled' });
+    const losesSignIn = input.status !== undefined && input.status !== 'active';
+    if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: losesSignIn });
     if (input.status === 'disabled' && current.status !== 'disabled') await this.archiving.assertMayRemove(ctx, id);
 
     const quotaChanges = input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes;
-    const changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind'>> = {};
+    const changes: MailboxChanges = {};
     if (input.displayName !== undefined) changes.displayName = input.displayName;
     if (input.quotaBytes !== undefined) changes.quotaBytes = input.quotaBytes;
     if (input.status !== undefined) changes.status = input.status;
     if (input.kind !== undefined) changes.kind = input.kind;
+    if (input.allowedProtocols !== undefined) changes.allowedProtocols = input.allowedProtocols;
+    if (input.tlsRequiredIn !== undefined) changes.tlsRequiredIn = input.tlsRequiredIn;
+    if (input.tlsRequiredOut !== undefined) changes.tlsRequiredOut = input.tlsRequiredOut;
 
     // A new quota must fit the domain's limits; the mail server gets it while
     // the domain is locked, so two changes cannot both take the last space.
@@ -181,8 +185,43 @@ export class MailboxesService {
     if (input.displayName !== undefined && row.userId) {
       await this.accounts.rename(row.userId, input.displayName || row.address);
     }
+    // Nobody may stay signed in to a mailbox that can no longer sign in.
+    if (losesSignIn && current.status === 'active' && row.userId) {
+      await this.accounts.signOutEverywhere(row.userId);
+    }
     await this.audit.record(ctx, 'mailbox.updated', { type: 'mailbox', id: row.id, label: row.address }, changes);
     return toMailboxDto(row);
+  }
+
+  async sendAs(ctx: TenantContext, id: string): Promise<{ senders: string[] }> {
+    await this.require(ctx, id);
+    return { senders: await this.repository.sendAs(ctx, id) };
+  }
+
+  /**
+   * Sets the further addresses (or whole domains, as "@domain") the mailbox
+   * may send as. Only the organization's own domains: an organization must
+   * never send as another's addresses.
+   */
+  async setSendAs(ctx: TenantContext, id: string, senders: string[]): Promise<{ senders: string[] }> {
+    const mailbox = await this.require(ctx, id);
+    const domainOf = (sender: string) => sender.slice(sender.lastIndexOf('@') + 1);
+    const own = await this.repository.ownDomains(ctx, [...new Set(senders.map(domainOf))]);
+    const foreign = senders.filter((sender) => !own.has(domainOf(sender)));
+    if (foreign.length > 0) {
+      throw new UnprocessableEntityException({
+        message: `Only addresses on this organization's domains: ${foreign.join(', ')}`,
+        code: 'SEND_AS_FOREIGN_DOMAIN',
+      });
+    }
+    const list = senders.filter((sender) => sender !== mailbox.address);
+    await this.repository.setSendAs(
+      ctx,
+      id,
+      list.map((sender) => ({ sender, domainId: own.get(domainOf(sender)) as string })),
+    );
+    await this.audit.record(ctx, 'mailbox.send_as_changed', { type: 'mailbox', id, label: mailbox.address }, { senders: list });
+    return { senders: await this.repository.sendAs(ctx, id) };
   }
 
   async setPassword(ctx: TenantContext, id: string, password: string): Promise<void> {

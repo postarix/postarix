@@ -3,6 +3,9 @@
 # see rspamd.local.lua): hosted destinations get "+Junk" too, so the message is
 # filed in their Junk folder. Spam is never forwarded to outside destinations:
 # they get the discard address instead (see transport_maps in the entrypoint).
+# Mailboxes are in mail.aliases too (mapped to themselves), and an address no
+# mailbox or alias has goes to the domain's catch-all, if any. (No SQL comments
+# in the query: Postfix joins its lines into one.)
 hosts = ${POSTFIX_DB_HOST}
 user = ${POSTFIX_DB_USER}
 password = ${POSTFIX_DB_PASSWORD}
@@ -15,4 +18,6 @@ query = SELECT CASE
   END
   FROM mail.aliases al
   WHERE position('+junk@' IN lower('%s')) > 0
-    AND al.address = replace(lower('%s'), '+junk@', '@')
+    AND (al.address = replace(lower('%s'), '+junk@', '@')
+      OR (al.address = '@' || split_part(lower('%s'), '@', 2)
+        AND NOT EXISTS (SELECT 1 FROM mail.aliases x WHERE x.address = replace(lower('%s'), '+junk@', '@'))))

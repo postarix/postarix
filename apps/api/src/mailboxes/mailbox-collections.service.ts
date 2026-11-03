@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Env } from '../config/env.js';
 import { DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
@@ -50,7 +50,7 @@ export class MailboxCollectionsService implements OnApplicationBootstrap, OnAppl
         const rows = await this.db
           .select({ address: mailboxes.address })
           .from(mailboxes)
-          .where(and(isNull(mailboxes.collectionsRestrictedAt), eq(mailboxes.status, 'active')))
+          .where(and(isNull(mailboxes.collectionsRestrictedAt), inArray(mailboxes.status, ['active', 'no_login'])))
           .orderBy(mailboxes.createdAt)
           .limit(BATCH + failed.size);
         const pending = rows.filter((r) => !failed.has(r.address));

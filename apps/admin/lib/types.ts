@@ -48,7 +48,11 @@ export interface Mailbox {
   localPart: string;
   displayName: string;
   quotaBytes: number | null;
-  status: 'active' | 'disabled';
+  /** no_login: receives mail, but nobody can sign in. */
+  status: 'active' | 'no_login' | 'disabled';
+  allowedProtocols: ('imap' | 'pop3' | 'smtp' | 'sieve' | 'dav')[];
+  tlsRequiredIn: boolean;
+  tlsRequiredOut: boolean;
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
   createdAt: string;
@@ -61,6 +65,10 @@ export interface Alias {
   localPart: string;
   destinations: string[];
   enabled: boolean;
+  /** Accepts mail and drops it. */
+  discard: boolean;
+  /** "@domain": every address of the domain that is not a mailbox or another alias. */
+  catchAll: boolean;
 }
 
 export interface Member {

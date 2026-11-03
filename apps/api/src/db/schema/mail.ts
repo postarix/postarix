@@ -14,12 +14,17 @@ import {
 import { organization, session, user } from './auth.js';
 import { domains } from './domains.js';
 
-export const mailboxStatuses = ['active', 'disabled'] as const;
+/** active; no_login: receives mail but nobody can sign in; disabled: neither. */
+export const mailboxStatuses = ['active', 'no_login', 'disabled'] as const;
 export type MailboxStatus = (typeof mailboxStatuses)[number];
 
 /** People's mailboxes, or bookable resources: their calendar answers invitations by itself. */
 export const mailboxKinds = ['person', 'room', 'equipment'] as const;
 export type MailboxKind = (typeof mailboxKinds)[number];
+
+/** Mail protocols a mailbox may sign in with (the webmail is always allowed). */
+export const mailProtocols = ['imap', 'pop3', 'smtp', 'sieve', 'dav'] as const;
+export type MailProtocol = (typeof mailProtocols)[number];
 
 /**
  * A mailbox stored in the mail engine. Each one belongs to a user account whose
@@ -43,6 +48,14 @@ export const mailboxes = pgTable(
     quotaBytes: bigint({ mode: 'number' }),
     status: text({ enum: mailboxStatuses }).notNull().default('active'),
     kind: text({ enum: mailboxKinds }).notNull().default('person'),
+    allowedProtocols: text({ enum: mailProtocols })
+      .array()
+      .notNull()
+      .default(sql`ARRAY['imap','pop3','smtp','sieve','dav']::text[]`),
+    /** Refuse mail for it from servers that do not use TLS. */
+    tlsRequiredIn: boolean().notNull().default(false),
+    /** Its outgoing mail is only handed to servers over TLS (otherwise it waits, then bounces). */
+    tlsRequiredOut: boolean().notNull().default(false),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
     mailServer: text(),
     /** When its calendars and address books were made private (see MailboxCollectionsService). */
@@ -72,10 +85,13 @@ export const aliases = pgTable(
     domainId: uuid()
       .notNull()
       .references(() => domains.id, { onDelete: 'no action' }),
+    /** Empty for a catch-all ("@domain": every address of the domain that is not a mailbox or alias). */
     localPart: text().notNull(),
     address: text().notNull().unique(),
     destinations: text().array().notNull(),
     enabled: boolean().notNull().default(true),
+    /** Accept the mail and drop it, whatever the destinations (e.g. an old address that only gets spam). */
+    discard: boolean().notNull().default(false),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -84,7 +100,7 @@ export const aliases = pgTable(
   },
   (table) => [
     index('aliases_organization_id_idx').on(table.organizationId),
-    check('aliases_destinations_not_empty', sql`cardinality(${table.destinations}) > 0`),
+    check('aliases_destinations_not_empty', sql`cardinality(${table.destinations}) > 0 OR ${table.discard}`),
   ],
 );
 
@@ -111,6 +127,29 @@ export const appPasswords = pgTable(
     index('app_passwords_user_id_idx').on(table.userId),
     uniqueIndex('app_passwords_user_id_name_unique').on(table.userId, table.name),
     index('app_passwords_lookup_idx').on(table.userId, table.lookupPrefix),
+  ],
+);
+
+/**
+ * Further addresses a mailbox may send as, besides itself and the aliases
+ * that deliver to it: one address, or "@domain" for every address of the
+ * domain. Only addresses on the organization's own domains.
+ */
+export const mailboxSendAs = pgTable(
+  'mailbox_send_as',
+  {
+    mailboxId: uuid()
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: 'cascade' }),
+    domainId: uuid()
+      .notNull()
+      .references(() => domains.id, { onDelete: 'cascade' }),
+    sender: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('mailbox_send_as_unique').on(table.mailboxId, table.sender),
+    index('mailbox_send_as_sender_idx').on(table.sender),
   ],
 );
 

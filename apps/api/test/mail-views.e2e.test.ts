@@ -78,6 +78,45 @@ describe('Postfix views', () => {
     expect(await logins('outside@external.example')).toEqual([]);
   });
 
+  it('maps mailboxes to themselves, so a catch-all only takes unknown addresses', async () => {
+    await admin.agent
+      .post(`/api/orgs/${orgId}/aliases`)
+      .send({ domainId: active.id, localPart: '', destinations: [`ann@${active.name}`] })
+      .expect(201);
+    const target = async (address: string) =>
+      (await rows(sql`SELECT destination FROM mail.aliases WHERE address = ${address}`)).map((r) => r.destination);
+    expect(await target(`ann@${active.name}`)).toEqual([`ann@${active.name}`]);
+    expect(await target(`@${active.name}`)).toEqual([`ann@${active.name}`]);
+    // A disabled mailbox is not listed, so the catch-all takes its mail.
+    expect(await target(`off@${active.name}`)).toEqual([]);
+    // A catch-all does not let its destination send as the whole domain.
+    expect(await rows(sql`SELECT login FROM mail.sender_logins WHERE sender = ${`@${active.name}`}`)).toEqual([]);
+  });
+
+  it('sends the mail of a discarding alias to the discard transport', async () => {
+    await admin.agent
+      .post(`/api/orgs/${orgId}/aliases`)
+      .send({ domainId: active.id, localPart: 'void', discard: true })
+      .expect(201);
+    const result = await rows(sql`SELECT destination FROM mail.aliases WHERE address = ${`void@${active.name}`}`);
+    expect(result.map((r) => r.destination)).toEqual(['discard@discard.postarix.invalid']);
+  });
+
+  it('lets a mailbox send as the addresses and domains it was allowed', async () => {
+    const list = await admin.agent.get(`/api/orgs/${orgId}/mailboxes`).expect(200);
+    const ann = list.body.data.find((m: { localPart: string }) => m.localPart === 'ann');
+    await admin.agent
+      .put(`/api/orgs/${orgId}/mailboxes/${ann.id}/send-as`)
+      .send({ senders: [`news@${active.name}`, `@${active.name}`] })
+      .expect(200);
+    const logins = async (sender: string) =>
+      (await rows(sql`SELECT login FROM mail.sender_logins WHERE sender = ${sender}`)).map((r) => r.login);
+    expect(await logins(`news@${active.name}`)).toEqual([`ann@${active.name}`]);
+    expect(await logins(`@${active.name}`)).toEqual([`ann@${active.name}`]);
+    await admin.agent.put(`/api/orgs/${orgId}/mailboxes/${ann.id}/send-as`).send({ senders: [] }).expect(200);
+    expect(await logins(`news@${active.name}`)).toEqual([]);
+  });
+
   it('does not grant send-as through an alias owned by another organization', async () => {
     const other = await signUp(app, 'views-other');
     const otherOrg = await createOrg(other, 'Views other');

@@ -175,7 +175,8 @@ export class SendService {
     const address = await findOwnMailbox(this.db, userId);
     if (!address) throw new NotFoundException('You have no mailbox');
     const result = await this.db.execute<{ sender: string }>(
-      sql`SELECT sender FROM mail.sender_logins WHERE login = ${address} ORDER BY sender <> ${address}, sender`,
+      // "@domain" entries allow any address of a domain; the webmail offers the listed addresses.
+      sql`SELECT sender FROM mail.sender_logins WHERE login = ${address} AND sender NOT LIKE '@%' ORDER BY sender <> ${address}, sender`,
     );
     return { address, addresses: result.rows.map((r) => r.sender) };
   }
@@ -190,7 +191,8 @@ export class SendService {
   /** The same ownership rule Postfix uses for authenticated submission. */
   private async maySendAs(login: string, sender: string): Promise<boolean> {
     const result = await this.db.execute(
-      sql`SELECT 1 FROM mail.sender_logins WHERE sender = ${sender} AND login = ${login} LIMIT 1`,
+      sql`SELECT 1 FROM mail.sender_logins
+          WHERE (sender = ${sender} OR sender = '@' || split_part(${sender}, '@', 2)) AND login = ${login} LIMIT 1`,
     );
     return result.rows.length > 0;
   }
