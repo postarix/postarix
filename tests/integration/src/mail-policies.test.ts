@@ -60,6 +60,12 @@ describe('Server-wide mail policies', () => {
     const subject = unique('forwarded');
     await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: mailbox.address, subject, text: `Offer\n${SPAM_MARKER}\n` });
     await waitForMessage(mailbox.address, PASSWORD, subject);
+
+    // With the filter on, its spam is filed as junk rather than refused.
+    await admin.ok('PATCH', `/api/system/forwarding-hosts/${host.id}`, { spamFilter: true });
+    const junk = unique('forwarded-junk');
+    await smtp(config.smtpPort).sendMail({ from: 'promo@outside.example', to: mailbox.address, subject: junk, text: `Offer\n${SPAM_MARKER}\n` });
+    await waitForMessage(mailbox.address, PASSWORD, junk, 45_000, 'Junk');
     await admin.ok('DELETE', `/api/system/forwarding-hosts/${host.id}`);
     created.shift();
   });
