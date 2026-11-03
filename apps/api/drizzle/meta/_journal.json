@@ -134,6 +134,13 @@
       "when": 1793643491526,
       "tag": "0018_nice_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793698897538,
+      "tag": "0019_warm_lester",
+      "breakpoints": true
     }
   ]
 }

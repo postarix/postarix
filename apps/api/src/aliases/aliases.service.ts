@@ -10,6 +10,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { isUniqueViolation } from '../common/pg-errors.js';
 import type { AliasRow } from '../db/schema/index.js';
+import { assertMayAddAlias } from '../domains/domain-limits.js';
 import { DomainsRepository } from '../domains/domains.repository.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import {
@@ -62,7 +63,7 @@ export class AliasesService {
         address,
         destinations: input.destinations,
         enabled: input.enabled,
-      });
+      }, assertMayAddAlias);
       await this.audit.record(
         ctx,
         'alias.created',

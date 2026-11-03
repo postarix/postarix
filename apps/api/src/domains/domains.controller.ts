@@ -6,6 +6,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,8 @@ import {
   type DnsRecordDto,
   type DomainDto,
   domainIdSchema,
+  type UpdateDomainInput,
+  updateDomainSchema,
 } from './domains.dto.js';
 import type { DnsRecordCheckDto } from './dns-check.js';
 import { DomainsService } from './domains.service.js';
@@ -47,6 +50,17 @@ export class DomainsController {
     @Body(new ZodValidationPipe(createDomainSchema)) body: CreateDomainInput,
   ): Promise<DomainDto> {
     return this.domains.create(ctx, body);
+  }
+
+  /** Settings and, for instance administrators, limits. */
+  @Patch(':id')
+  @RequireOrgRole('admin')
+  async update(
+    @Tenant() ctx: TenantContext,
+    @Param('id', new ZodValidationPipe(domainIdSchema)) id: string,
+    @Body(new ZodValidationPipe(updateDomainSchema)) body: UpdateDomainInput,
+  ): Promise<DomainDto> {
+    return this.domains.update(ctx, id, body);
   }
 
   @Get(':id/dns-records')

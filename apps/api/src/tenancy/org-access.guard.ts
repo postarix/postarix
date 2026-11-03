@@ -85,6 +85,7 @@ export class OrgAccessGuard implements CanActivate {
       ipAddress: request.ip ?? null,
       role,
       viaSuperAdmin,
+      instanceAdmin: isSuperAdmin(session),
     };
     return true;
   }

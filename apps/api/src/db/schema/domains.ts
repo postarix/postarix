@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organization } from './auth.js';
 
 export const domainStatuses = ['pending', 'active', 'disabled'] as const;
@@ -28,6 +28,17 @@ export const domains = pgTable(
       .notNull()
       .$defaultFn(() => randomBytes(24).toString('base64url')),
     verifiedAt: timestamp({ withTimezone: true }),
+    /** Free text for administrators. */
+    description: text().notNull().default(''),
+    /** Quota given to new mailboxes when none is chosen (null: unlimited). */
+    defaultMailboxQuotaBytes: bigint({ mode: 'number' }),
+    // Limits, set by instance administrators only (null: no limit).
+    maxMailboxes: integer(),
+    maxAliases: integer(),
+    /** Largest quota one mailbox may have; with it set, no mailbox is unlimited. */
+    maxMailboxQuotaBytes: bigint({ mode: 'number' }),
+    /** Sum of the quotas of all the domain's mailboxes; with it set, no mailbox is unlimited. */
+    totalQuotaBytes: bigint({ mode: 'number' }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -40,6 +51,14 @@ export const domains = pgTable(
     uniqueIndex('domains_name_verified_unique')
       .on(table.name)
       .where(sql`${table.status} <> 'pending'`),
+    check(
+      'domains_limits_valid',
+      sql`(${table.maxMailboxes} IS NULL OR ${table.maxMailboxes} >= 0)
+        AND (${table.maxAliases} IS NULL OR ${table.maxAliases} >= 0)
+        AND (${table.defaultMailboxQuotaBytes} IS NULL OR ${table.defaultMailboxQuotaBytes} > 0)
+        AND (${table.maxMailboxQuotaBytes} IS NULL OR ${table.maxMailboxQuotaBytes} > 0)
+        AND (${table.totalQuotaBytes} IS NULL OR ${table.totalQuotaBytes} > 0)`,
+    ),
   ],
 );
 

@@ -16,6 +16,16 @@ export interface Domain {
   status: 'pending' | 'active' | 'disabled';
   verificationRecord: string;
   verifiedAt: string | null;
+  description: string;
+  defaultMailboxQuotaBytes: number | null;
+  /** Set by instance administrators; null: no limit. */
+  limits: {
+    maxMailboxes: number | null;
+    maxAliases: number | null;
+    maxMailboxQuotaBytes: number | null;
+    totalQuotaBytes: number | null;
+  };
+  usage: { mailboxes: number; aliases: number; quotaBytes: number; unlimitedMailboxes: number };
   createdAt: string;
 }
 

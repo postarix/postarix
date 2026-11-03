@@ -29,7 +29,8 @@ export const createMailboxSchema = z.strictObject({
   localPart: localPartSchema,
   displayName: displayNameSchema.default(''),
   password: passwordSchema,
-  quotaBytes: quotaSchema.default(null),
+  /** Omitted: the domain's default quota. Null: unlimited (where the domain allows it). */
+  quotaBytes: quotaSchema.optional(),
   /** A room or equipment: invitations to it are answered by itself (see CalendarService). */
   kind: z.enum(mailboxKinds).default('person'),
 });

@@ -15,6 +15,7 @@ import { engineErrorToHttp } from '../common/engine-errors.js';
 import { isUniqueViolation } from '../common/pg-errors.js';
 import { MAIL_ENGINE } from '../core/tokens.js';
 import type { MailboxRow } from '../db/schema/index.js';
+import { assertMayAddMailbox, assertQuotaFits } from '../domains/domain-limits.js';
 import { DomainsRepository } from '../domains/domains.repository.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 import {
@@ -84,6 +85,16 @@ export class MailboxesService {
     if (await this.addresses.isTaken(address)) {
       throw new ConflictException('This address is already in use');
     }
+    // Without a choice, the domain's default quota.
+    const quotaBytes = input.quotaBytes === undefined ? domain.defaultMailboxQuotaBytes : input.quotaBytes;
+    const checkLimits = (locked: typeof domain, usage: Parameters<typeof assertMayAddMailbox>[1]) => {
+      assertMayAddMailbox(locked, usage);
+      assertQuotaFits(locked, usage, quotaBytes);
+    };
+    // Checked once before creating the account (cheap refusal), and again,
+    // under a lock, when the mailbox is inserted.
+    const usage = await this.domains.usage(ctx, domain.id);
+    if (usage) checkLimits(domain, usage);
 
     const userId = await this.accounts.create({
       email: address,
@@ -99,9 +110,9 @@ export class MailboxesService {
         localPart: input.localPart,
         address,
         displayName: input.displayName,
-        quotaBytes: input.quotaBytes,
+        quotaBytes,
         kind: input.kind,
-      });
+      }, checkLimits);
     } catch (error) {
       await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
       if (isUniqueViolation(error)) throw new ConflictException('This address is already in use');
@@ -109,7 +120,7 @@ export class MailboxesService {
     }
 
     try {
-      await this.engine.createMailbox(address, { quotaBytes: input.quotaBytes });
+      await this.engine.createMailbox(address, { quotaBytes });
     } catch (error) {
       // The engine removes a mailbox it created only partly; undo our side.
       await this.undo(`mailbox row of ${address}`, () => this.repository.delete(ctx, row.id));
@@ -131,7 +142,7 @@ export class MailboxesService {
       ctx,
       'mailbox.created',
       { type: 'mailbox', id: row.id, label: address },
-      { quotaBytes: input.quotaBytes },
+      { quotaBytes },
     );
     return toMailboxDto(row);
   }
@@ -141,21 +152,31 @@ export class MailboxesService {
     if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: input.status === 'disabled' });
     if (input.status === 'disabled' && current.status !== 'disabled') await this.archiving.assertMayRemove(ctx, id);
 
-    if (input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes) {
-      try {
-        await this.engine.setQuota(current.address, input.quotaBytes);
-      } catch (error) {
-        throw engineErrorToHttp(error);
-      }
-    }
-
+    const quotaChanges = input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes;
     const changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind'>> = {};
     if (input.displayName !== undefined) changes.displayName = input.displayName;
     if (input.quotaBytes !== undefined) changes.quotaBytes = input.quotaBytes;
     if (input.status !== undefined) changes.status = input.status;
     if (input.kind !== undefined) changes.kind = input.kind;
 
-    const row = await this.repository.update(ctx, id, changes);
+    // A new quota must fit the domain's limits; the mail server gets it while
+    // the domain is locked, so two changes cannot both take the last space.
+    const row = await this.repository.update(
+      ctx,
+      id,
+      changes,
+      quotaChanges
+        ? async (domain, usage) => {
+            const quota = input.quotaBytes ?? null;
+            assertQuotaFits(domain, usage, quota, current.quotaBytes);
+            try {
+              await this.engine.setQuota(current.address, quota);
+            } catch (error) {
+              throw engineErrorToHttp(error);
+            }
+          }
+        : undefined,
+    );
     if (!row) throw new NotFoundException('Mailbox not found');
     if (input.displayName !== undefined && row.userId) {
       await this.accounts.rename(row.userId, input.displayName || row.address);
