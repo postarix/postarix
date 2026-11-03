@@ -165,7 +165,8 @@ judged by the first recipient's settings.
 
 Spam that is refused (not viruses, not blocked senders) is kept for its
 recipients for 30 days (`QUARANTINE_RETENTION_DAYS`), up to 10 MB per
-message (`QUARANTINE_MAX_BYTES`). The sender is still told it was refused.
+message (`QUARANTINE_MAX_BYTES`); instance administrators change both, and
+the rest of its behaviour, in **System → Quarantine**. The sender is still told it was refused.
 People see theirs in the webmail (their menu → Quarantine) and release a
 message to their inbox, or delete it; they get a digest of new items daily
 by default (never, hourly, daily or weekly: in the webmail or the mailbox's
@@ -175,13 +176,14 @@ settings). Organization admins see their mailboxes' items in the
 ## System (instance administrators)
 
 The sidebar has the organization in view (switch with the box at the top),
-its sections, the **Server** sections for instance administrators and the
-**Apps**: the webmail and Rspamd's own web interface. The **Dashboard** (the
-first entry) sums the server up: organizations, domains, mailboxes, aliases,
-quarantine and queue, the mail of the last 24 hours per hour, the services'
-state and disk use, and the largest organizations.
+its sections, the sections for instance administrators (in three groups:
+**Server**, **Mail policy** and **Administration**) and the **Apps**: the
+webmail, Rspamd's own web interface and any links set in **Customize**. The
+**Dashboard** (the first entry) sums the server up: organizations, domains,
+mailboxes, aliases, quarantine and queue, the mail of the last 24 hours per
+hour, the services' state and disk use, and the largest organizations.
 
-The **Server** sections:
+**Server:**
 
 - **Services:** whether the API, PostgreSQL, Valkey, Rspamd, Postfix, Cyrus,
   Unbound (and ClamAV, CrowdSec when they run) answer, their versions and
@@ -207,6 +209,8 @@ The **Server** sections:
   messages to deliver them now, hold them, release them or delete them, or
   retry or delete the whole queue.
 
+**Mail policy:**
+
 - **Outgoing routing:**
   - *Smart hosts*: services (SendGrid, Amazon SES, your provider's relay…)
     with their login. Choose one for a domain in its settings (every mailbox
@@ -228,6 +232,46 @@ The **Server** sections:
   Passwords are never shown again; Postfix needs them in clear, so they are
   stored as given (readable by the API and Postfix' database accounts only).
 
+- **Spam filter:** senders blocked or allowed for every mailbox (see above).
+- **Content filters:** regular expressions on the subject, the sender (its
+  address and name), the recipients or any header of incoming mail, matched
+  without regard to case. Matching mail is refused, or filed as junk. Mail
+  your own people send (signed in) is never checked.
+- **Forwarding hosts:** servers that forward mail here (say, another
+  provider where someone keeps a forwarding rule), as an address, a network
+  or a host name (looked up again every 10 minutes). Their mail is never
+  greylisted, refused as spam or checked against DNS blocklists;
+  with *Do not scan* it is not scanned at all.
+- **IP access:** networks *blocked* (refused by Postfix when they connect to
+  send mail, and by the API: the panel, the webmail, JMAP) or *allowed*
+  (Postfix's client checks let them through; the spam filter and sign-in
+  still apply). A block wins; you cannot block the address you are using.
+  Below, the accounts with recent wrong passwords (web or mail apps): locked
+  ones can be unlocked at once.
+- **Quarantine:** how long refused spam is kept (empty:
+  `QUARANTINE_RETENTION_DAYS`), the largest message kept, domains whose
+  refused mail is never kept, a spam score above which nobody is told
+  (obvious spam), the notices' sender and subject, an address that gets every
+  notice instead of the recipients (a help desk) or a blind copy of them, and
+  whether released mail arrives as it was or attached to a short note.
+- **DKIM keys:** every domain's signing key (selector, size, date) and
+  whether DNS publishes it: *Published*, *Not in DNS* or *Another key in
+  DNS*. *Use another domain's key* gives a domain a copy of another's key and
+  selector, so both share one DNS record.
+
+**Administration:**
+
+- **Administrators:** the instance administrators, whether they use
+  two-step verification, and adding one: an existing account (someone's
+  mailbox) gets the rights, or a new account is created with a name and a
+  password. Removing the rights keeps the account and signs it out; you
+  cannot remove your own, nor the last administrator.
+- **Mail to everyone:** a plain-text message from the server to every active
+  mailbox, or to those of some organizations, except chosen addresses. The
+  number of recipients is shown before sending; each mailbox gets its own
+  copy, sent in the background.
+- **Templates:** domain and mailbox templates (see above).
+
 - **API keys:** for scripts and other software (provisioning, monitoring).
   They call the same API as the admin panel with
   `Authorization: Bearer px_…`, as the administrator who created the key:
@@ -237,18 +281,22 @@ The **Server** sections:
   owner (not as an instance administrator: no limits or smart hosts). The key is shown once; it stops working
   when deleted, when it expires, or when its creator is no longer an
   instance administrator.
+- **Customize:** the name and logo (PNG, JPEG, WebP or SVG, up to 200 KB)
+  shown in the panel, the webmail and the sign-in pages; a sign-in message
+  and a footer; whether the sign-in pages offer only single sign-on and
+  passkeys (the password form stays at `?password=1`); an announcement shown
+  to everyone signed in, as information, important or urgent; the help page,
+  and links to your other apps in the Apps menus.
 - **Settings:**
   - *Sign-in protection:* how many wrong passwords (web or mail apps) lock
     an account, and for how long (10 and 15 minutes by default). App
     passwords are never locked.
   - *Passwords:* minimum length (12 or more) and whether to require a mix
     of lowercase, uppercase, digits and symbols.
-  - *Mailbox quota:* at what percentage people are told by mail that their
-    mailbox is filling up (90% by default; reminded weekly while it stays
-    full).
-  - *Branding:* the name on the sign-in pages, a sign-in message (e.g. who
-    to call for help), an announcement shown to everyone signed in, and a
-    help page.
+  - *Mailbox quota notice:* at what percentage people are told by mail that
+    their mailbox is filling up (90% by default; reminded weekly while it
+    stays full), and the notice's sender, subject and text (`{address}`,
+    `{percent}`, `{used}`, `{quota}`).
 
 Postfix and Cyrus send their logs and the queue to the API every 15 seconds
 (with `POSTARIX_SECRET_REPORTS`; see the [configuration](./configuration)), so

@@ -15,6 +15,8 @@ export interface CounterStore {
   getValue(key: string): Promise<string | null>;
   setValue(key: string, value: string, ttlMs: number): Promise<void>;
   delete(key: string): Promise<void>;
+  /** Counters whose key starts with `prefix` (at most `max`), with their time left. */
+  list(prefix: string, max?: number): Promise<{ key: string; value: string; ttlMs: number }[]>;
   close(): Promise<void>;
 }
 
@@ -59,6 +61,26 @@ export class ValkeyCounterStore implements CounterStore {
 
   async delete(key: string): Promise<void> {
     await this.client.del(key);
+  }
+
+  async list(prefix: string, max = 1000): Promise<{ key: string; value: string; ttlMs: number }[]> {
+    // SCAN matches full key names: the client's key prefix is not applied.
+    const pattern = `${PREFIX}${prefix.replace(/[*?[\]\\]/g, '\\$&')}*`;
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [next, batch] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 500);
+      cursor = next;
+      keys.push(...batch.map((k) => k.slice(PREFIX.length)));
+    } while (cursor !== '0' && keys.length < max);
+    const found = keys.slice(0, max);
+    if (found.length === 0) return [];
+    const pipeline = this.client.multi();
+    for (const key of found) pipeline.get(key).pttl(key);
+    const results = ((await pipeline.exec()) ?? []).map(([, value]) => value);
+    return found
+      .map((key, i) => ({ key, value: results[i * 2] as string | null, ttlMs: Number(results[i * 2 + 1]) }))
+      .filter((e): e is { key: string; value: string; ttlMs: number } => e.value !== null);
   }
 
   async close(): Promise<void> {
@@ -119,6 +141,17 @@ export class MemoryCounterStore implements CounterStore {
 
   async delete(key: string): Promise<void> {
     this.entries.delete(key);
+  }
+
+  async list(prefix: string, max = 1000): Promise<{ key: string; value: string; ttlMs: number }[]> {
+    const out: { key: string; value: string; ttlMs: number }[] = [];
+    for (const key of [...this.entries.keys()]) {
+      if (out.length >= max) break;
+      if (!key.startsWith(prefix)) continue;
+      const value = this.read(key);
+      if (value !== null) out.push({ key, value, ttlMs: this.entries.get(key)!.expiresAt - this.now() });
+    }
+    return out;
   }
 
   async close(): Promise<void> {

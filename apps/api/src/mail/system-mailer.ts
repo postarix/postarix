@@ -6,6 +6,10 @@ export interface SystemMessage {
   to: string;
   subject: string;
   text: string;
+  /** Instead of SYSTEM_MAIL_FROM. */
+  from?: string | undefined;
+  /** A blind copy. */
+  bcc?: string | undefined;
 }
 
 /** Notices the server itself sends to people (plain text, from SYSTEM_MAIL_FROM). */
@@ -24,11 +28,11 @@ export class SmtpSystemMailer implements SystemMailer {
 
   async send(message: SystemMessage): Promise<void> {
     if (!this.transport) return;
-    const from = this.env.SYSTEM_MAIL_FROM ?? `no-reply@${this.env.MAIL_HOSTNAME}`;
+    const from = message.from || (this.env.SYSTEM_MAIL_FROM ?? `no-reply@${this.env.MAIL_HOSTNAME}`);
     try {
       await this.transport.sendMail({
         from: { name: 'Postarix', address: from },
-        envelope: { from, to: message.to },
+        envelope: { from, to: message.bcc ? [message.to, message.bcc] : message.to },
         to: message.to,
         subject: message.subject,
         text: message.text,

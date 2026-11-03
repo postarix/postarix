@@ -81,6 +81,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       email={session.user.email}
       name={session.user.name}
       productName={branding.data?.productName || t('Postarix')}
+      logo={branding.data?.logo}
+      appLinks={branding.data?.appLinks}
       onCreateOrganization={() => setCreating(true)}
       onSignOut={() => void signOut()}
       {...(onNavigate ? { onNavigate } : {})}

@@ -17,12 +17,16 @@ import { cn } from '@postarix/ui/lib/utils';
 import {
   Activity,
   AtSign,
+  Ban,
   Building2,
   ChartColumnBig,
   Check,
   ChevronsUpDown,
   Copy,
+  FileKey,
   FileText,
+  Filter,
+  Forward,
   Gauge,
   Globe,
   Inbox,
@@ -33,6 +37,8 @@ import {
   LogOut,
   type LucideIcon,
   Mail,
+  Megaphone,
+  Palette,
   Plus,
   Route,
   ScrollText,
@@ -42,6 +48,7 @@ import {
   ShieldAlert,
   ShieldX,
   SquareArrowOutUpRight,
+  UserCog,
   UserRound,
   Users,
   Waypoints,
@@ -81,22 +88,49 @@ export function orgNav(orgId: string, isAdmin: boolean): NavItem[] {
   return isAdmin ? all : all.slice(0, 1);
 }
 
-export const systemNav: NavItem[] = [
-  { href: '/system/services', label: t('Services'), icon: Server },
-  { href: '/system/logs', label: t('Logs'), icon: FileText },
-  { href: '/system/rspamd', label: t('Spam filter history'), icon: ChartColumnBig },
-  { href: '/system/queue', label: t('Mail queue'), icon: Mail },
-  { href: '/system/routing', label: t('Outgoing routing'), icon: Route },
-  { href: '/system/spam', label: t('Spam filter'), icon: ShieldAlert },
-  { href: '/system/templates', label: t('Templates'), icon: LayoutTemplate },
-  { href: '/system/api-keys', label: t('API keys'), icon: Waypoints },
-  { href: '/system/settings', label: t('Settings'), icon: Settings },
+/** The instance administrators' pages, in groups. */
+export const systemGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: t('Server'),
+    items: [
+      { href: '/system/services', label: t('Services'), icon: Server },
+      { href: '/system/logs', label: t('Logs'), icon: FileText },
+      { href: '/system/rspamd', label: t('Spam filter history'), icon: ChartColumnBig },
+      { href: '/system/queue', label: t('Mail queue'), icon: Mail },
+    ],
+  },
+  {
+    label: t('Mail policy'),
+    items: [
+      { href: '/system/routing', label: t('Outgoing routing'), icon: Route },
+      { href: '/system/spam', label: t('Spam filter'), icon: ShieldAlert },
+      { href: '/system/filters', label: t('Content filters'), icon: Filter },
+      { href: '/system/forwarding-hosts', label: t('Forwarding hosts'), icon: Forward },
+      { href: '/system/ip-access', label: t('IP access'), icon: Ban },
+      { href: '/system/quarantine', label: t('Quarantine'), icon: ShieldX },
+      { href: '/system/dkim', label: t('DKIM keys'), icon: FileKey },
+    ],
+  },
+  {
+    label: t('Administration'),
+    items: [
+      { href: '/system/admins', label: t('Administrators'), icon: UserCog },
+      { href: '/system/broadcast', label: t('Mail to everyone'), icon: Megaphone },
+      { href: '/system/templates', label: t('Templates'), icon: LayoutTemplate },
+      { href: '/system/api-keys', label: t('API keys'), icon: Waypoints },
+      { href: '/system/customize', label: t('Customize'), icon: Palette },
+      { href: '/system/settings', label: t('Settings'), icon: Settings },
+    ],
+  },
 ];
 
-export function appsNav(superAdmin: boolean): NavItem[] {
+export const systemNav: NavItem[] = systemGroups.flatMap((group) => group.items);
+
+export function appsNav(superAdmin: boolean, links: { name: string; url: string }[] = []): NavItem[] {
   return [
     { href: '/', label: t('Webmail'), icon: Mail, external: true },
     ...(superAdmin ? [{ href: '/api/rspamd-ui/', label: t('Rspamd web interface'), icon: Shield, external: true }] : []),
+    ...links.map((link) => ({ href: link.url, label: link.name, icon: SquareArrowOutUpRight, external: true })),
   ];
 }
 
@@ -182,6 +216,8 @@ export function AppSidebar({
   email,
   name,
   productName,
+  logo,
+  appLinks,
   onCreateOrganization,
   onSignOut,
   onNavigate,
@@ -192,6 +228,8 @@ export function AppSidebar({
   email: string;
   name: string;
   productName: string;
+  logo?: string | undefined;
+  appLinks?: { name: string; url: string }[] | undefined;
   onCreateOrganization: () => void;
   onSignOut: () => void;
   onNavigate?: () => void;
@@ -204,7 +242,7 @@ export function AppSidebar({
     <div className="flex h-full flex-col text-sidebar-foreground">
       <div className="px-4 pt-5 pb-3">
         <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 rounded-md text-white focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
-          <BrandMark className="size-8" />
+          <BrandMark className="size-8" logo={logo} />
           <span className="min-w-0 leading-tight">
             <span className="block truncate text-[0.95rem] font-semibold tracking-tight">{productName}</span>
             <span className="block text-xs text-sidebar-muted">{superAdmin ? t('Instance administration') : t('Administration')}</span>
@@ -276,15 +314,17 @@ export function AppSidebar({
             ))}
           </Section>
         ) : null}
-        {superAdmin ? (
-          <Section label={t('Server')}>
-            {systemNav.map((item) => (
-              <NavLink key={item.href} item={item} active={isActive(pathname, item, false)} onNavigate={onNavigate} />
-            ))}
-          </Section>
-        ) : null}
+        {superAdmin
+          ? systemGroups.map((group) => (
+              <Section key={group.label} label={group.label}>
+                {group.items.map((item) => (
+                  <NavLink key={item.href} item={item} active={isActive(pathname, item, false)} onNavigate={onNavigate} />
+                ))}
+              </Section>
+            ))
+          : null}
         <Section label={t('Apps')}>
-          {appsNav(superAdmin).map((item) => (
+          {appsNav(superAdmin, appLinks).map((item) => (
             <NavLink key={item.href} item={item} active={false} />
           ))}
         </Section>

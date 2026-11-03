@@ -246,6 +246,13 @@
       "when": 1793717735911,
       "tag": "0034_short_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793718736781,
+      "tag": "0035_known_mephisto",
+      "breakpoints": true
     }
   ]
 }

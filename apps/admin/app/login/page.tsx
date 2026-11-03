@@ -26,6 +26,8 @@ function LoginForm() {
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState('');
   const [ssoPending, setSsoPending] = useState(false);
+  // System → Customize can leave only single sign-on here; ?password=1 still shows the form.
+  const passwordForm = !branding.data?.hidePasswordSignIn || params.get('password') === '1';
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,7 +75,7 @@ function LoginForm() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-6 flex items-center justify-center gap-2.5">
-        <BrandMark className="size-8" />
+        <BrandMark className="size-8" logo={branding.data?.logo} />
         <span className="text-lg font-semibold tracking-tight text-white">{branding.data?.productName ?? 'Postarix'}</span>
       </div>
     <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
@@ -83,7 +85,13 @@ function LoginForm() {
       </CardHeader>
       <CardContent>
         {step === 'password' ? (
-          <form onSubmit={signIn}>
+          <form
+            onSubmit={(event) => {
+              if (passwordForm) return void signIn(event);
+              event.preventDefault();
+              void signInWithSso();
+            }}
+          >
             <FieldGroup>
               {error ? <Notice>{error}</Notice> : null}
               <FormField label={t('Email')}>
@@ -100,17 +108,31 @@ function LoginForm() {
                   />
                 )}
               </FormField>
-              <FormField label={t('Password')}>
-                {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
-              </FormField>
-              <LoadingButton type="submit" className="w-full" loading={pending}>{t('Sign in')}</LoadingButton>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <Separator className="flex-1" />{t('or')}<Separator className="flex-1" />
-              </div>
+              {passwordForm ? (
+                <>
+                  <FormField label={t('Password')}>
+                    {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
+                  </FormField>
+                  <LoadingButton type="submit" className="w-full" loading={pending}>{t('Sign in')}</LoadingButton>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <Separator className="flex-1" />{t('or')}<Separator className="flex-1" />
+                  </div>
+                </>
+              ) : null}
+              {passwordForm ? null : (
+                <LoadingButton type="submit" className="w-full" loading={ssoPending}>
+                  <Building2 aria-hidden />{t('Sign in with your company account')}</LoadingButton>
+              )}
               <Button type="button" variant="outline" className="w-full" onClick={signInWithPasskey}>
                 <KeyRound aria-hidden />{t('Sign in with a passkey')}</Button>
-              <LoadingButton type="button" variant="outline" className="w-full" loading={ssoPending} onClick={signInWithSso}>
-                <Building2 aria-hidden />{t('Sign in with your company account')}</LoadingButton>
+              {passwordForm ? (
+                <LoadingButton type="button" variant="outline" className="w-full" loading={ssoPending} onClick={signInWithSso}>
+                  <Building2 aria-hidden />{t('Sign in with your company account')}</LoadingButton>
+              ) : (
+                <a href="?password=1" className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline">
+                  {t('Sign in with a password')}
+                </a>
+              )}
             </FieldGroup>
           </form>
         ) : (
@@ -139,6 +161,9 @@ function LoginForm() {
     </Card>
       {branding.data?.loginMessage ? (
         <p className="mt-6 text-center text-xs whitespace-pre-line text-sidebar-muted">{branding.data.loginMessage}</p>
+      ) : null}
+      {branding.data?.footer ? (
+        <p className="mt-4 text-center text-[0.7rem] whitespace-pre-line text-sidebar-muted/80">{branding.data.footer}</p>
       ) : null}
     </div>
   );

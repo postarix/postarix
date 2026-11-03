@@ -154,8 +154,15 @@ test('reaches every server section from the sidebar', async ({ page }) => {
     ['Spam filter history', 'Spam filter history'],
     ['Mail queue', 'Mail queue'],
     ['Outgoing routing', 'Outgoing routing'],
+    ['Content filters', 'Content filters'],
+    ['Forwarding hosts', 'Forwarding hosts'],
+    ['IP access', 'IP access'],
+    ['DKIM keys', 'DKIM keys'],
+    ['Administrators', 'Administrators'],
+    ['Mail to everyone', 'Mail to everyone'],
     ['Templates', 'Domain templates'],
     ['API keys', 'API keys'],
+    ['Customize', 'Customize'],
     ['Settings', 'Settings'],
   ]) {
     await nav.getByRole('link', { name: link, exact: true }).click();
@@ -165,4 +172,62 @@ test('reaches every server section from the sidebar', async ({ page }) => {
   // The logs of the API itself are listed with the others.
   await page.goto('/admin/system/logs?service=api');
   await expect(page.getByRole('tab', { name: 'API' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('keeps server-wide mail policies', async ({ page }) => {
+  const host = `${unique('relay').toLowerCase()}.example.test`;
+  await page.goto('/admin/system/forwarding-hosts');
+  await page.getByRole('button', { name: 'Add host' }).first().click();
+  await page.getByRole('dialog').getByLabel('Host').fill(host);
+  await page.getByRole('dialog').getByRole('button', { name: 'Add host' }).click();
+  const hostRow = page.getByRole('row').filter({ hasText: host });
+  await expect(hostRow).toBeVisible();
+
+  await page.goto('/admin/system/ip-access');
+  await page.getByRole('button', { name: 'Block a network' }).click();
+  await page.getByRole('dialog').getByLabel('Network').fill('198.51.100.0/24');
+  await page.getByRole('dialog').getByRole('button', { name: 'Block' }).click();
+  const networkRow = page.getByRole('row').filter({ hasText: '198.51.100.0/24' });
+  await expect(networkRow.getByText('Blocked')).toBeVisible();
+  await networkRow.getByRole('switch').click();
+  await expect(networkRow.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+  await networkRow.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(networkRow).toHaveCount(0);
+
+  await page.goto('/admin/system/filters');
+  await page.getByRole('button', { name: 'Add rule' }).first().click();
+  await page.getByRole('dialog').getByLabel('Regular expression').fill('(casino|lottery) e2e');
+  await page.getByRole('dialog').getByRole('button', { name: 'Add rule' }).click();
+  const ruleRow = page.getByRole('row').filter({ hasText: '(casino|lottery) e2e' });
+  await expect(ruleRow.getByText('File as junk')).toBeVisible();
+  await ruleRow.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(ruleRow).toHaveCount(0);
+
+  await page.goto('/admin/system/forwarding-hosts');
+  await hostRow.getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+  await expect(hostRow).toHaveCount(0);
+});
+
+test('customizes the sign-in page', async ({ page, browser }) => {
+  await page.goto('/admin/system/customize');
+  await page.getByLabel('Footer').fill('Example Corp · Legal notice');
+  await page.getByLabel(/Only single sign-on and passkeys/).check();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+
+  const visitor = await browser.newPage();
+  await visitor.goto('/admin/login');
+  await expect(visitor.getByText('Example Corp · Legal notice')).toBeVisible();
+  await expect(visitor.getByLabel('Password')).toHaveCount(0);
+  await visitor.getByRole('link', { name: 'Sign in with a password' }).click();
+  await expect(visitor.getByLabel('Password')).toBeVisible();
+  await visitor.close();
+
+  await page.getByLabel('Footer').fill('');
+  await page.getByLabel(/Only single sign-on and passkeys/).uncheck();
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
 });

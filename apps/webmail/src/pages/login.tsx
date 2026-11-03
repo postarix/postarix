@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@post
 import { Field, FieldGroup, FieldLabel, FieldSeparator } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Spinner } from '@postarix/ui/components/spinner';
-import { Postmark } from '@postarix/ui/components/postmark';
 import { Building2, CircleAlert, KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { BrandLogo } from '@/components/brand-logo';
 import { authClient } from '@/lib/auth-client';
 import { useBranding } from '@/lib/branding';
 import { navigate } from '@/lib/router';
@@ -20,6 +20,8 @@ export function LoginPage() {
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState('');
   const [ssoPending, setSsoPending] = useState(false);
+  // The administrators can leave only single sign-on here; ?password=1 still shows the form.
+  const passwordForm = !branding?.hidePasswordSignIn || new URLSearchParams(window.location.search).get('password') === '1';
 
   const done = () => navigate('/', true);
 
@@ -65,7 +67,7 @@ export function LoginPage() {
     <main className="grid min-h-full place-items-center bg-sidebar bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgb(43_76_155/0.45),transparent)] p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2.5">
-          <Postmark className="size-8" />
+          <BrandLogo logo={branding?.logo} className="size-8" />
           <span className="text-lg font-semibold tracking-tight text-white">{branding?.productName ?? 'Postarix'}</span>
         </div>
       <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
@@ -74,7 +76,14 @@ export function LoginPage() {
           <CardDescription>{step === 'password' ? 'Sign in to your mailbox.' : 'One more step to keep your account safe.'}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={step === 'password' ? signIn : verify}>
+          <form
+            onSubmit={(event) => {
+              if (step === '2fa') return void verify(event);
+              if (passwordForm) return void signIn(event);
+              event.preventDefault();
+              void sso();
+            }}
+          >
             <FieldGroup>
               {error ? (
                 <Alert variant="destructive">
@@ -97,17 +106,30 @@ export function LoginPage() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </Field>
-                  <Field>
-                    <FieldLabel htmlFor="password">{t('Password')}</FieldLabel>
-                    <Input id="password" name="password" type="password" autoComplete="current-password" required />
-                  </Field>
-                  <Button type="submit" disabled={pending}>
-                    {pending ? <Spinner /> : null}{t('Sign in')}</Button>
-                  <FieldSeparator>{t('or')}</FieldSeparator>
+                  {passwordForm ? (
+                    <>
+                      <Field>
+                        <FieldLabel htmlFor="password">{t('Password')}</FieldLabel>
+                        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+                      </Field>
+                      <Button type="submit" disabled={pending}>
+                        {pending ? <Spinner /> : null}{t('Sign in')}</Button>
+                      <FieldSeparator>{t('or')}</FieldSeparator>
+                    </>
+                  ) : (
+                    <Button type="submit" disabled={ssoPending}>
+                      {ssoPending ? <Spinner /> : <Building2 aria-hidden />}{t('Sign in with your company account')}</Button>
+                  )}
                   <Button type="button" variant="outline" onClick={() => void passkey()}>
                     <KeyRound aria-hidden />{t('Sign in with a passkey')}</Button>
-                  <Button type="button" variant="outline" disabled={ssoPending} onClick={() => void sso()}>
-                    {ssoPending ? <Spinner /> : <Building2 aria-hidden />}{t('Sign in with your company account')}</Button>
+                  {passwordForm ? (
+                    <Button type="button" variant="outline" disabled={ssoPending} onClick={() => void sso()}>
+                      {ssoPending ? <Spinner /> : <Building2 aria-hidden />}{t('Sign in with your company account')}</Button>
+                  ) : (
+                    <a href="?password=1" className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline">
+                      {t('Sign in with a password')}
+                    </a>
+                  )}
                 </>
               ) : (
                 <>
@@ -127,6 +149,9 @@ export function LoginPage() {
         <p className="mt-6 text-center text-xs text-sidebar-muted">{t('Mail apps sign in with an app password from your account settings.')}</p>
         {branding?.loginMessage ? (
           <p className="mt-3 text-center text-xs whitespace-pre-line text-sidebar-muted">{branding.loginMessage}</p>
+        ) : null}
+        {branding?.footer ? (
+          <p className="mt-3 text-center text-[0.7rem] whitespace-pre-line text-sidebar-muted/80">{branding.footer}</p>
         ) : null}
       </div>
     </main>

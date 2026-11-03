@@ -52,6 +52,14 @@ export interface Branding {
   announcementLevel?: 'info' | 'important' | 'urgent';
   supportUrl: string;
   passwordMinLength: number;
+  /** A line at the bottom of the sign-in page. */
+  footer?: string;
+  /** A data: URL replacing the stamp; empty: the stamp. */
+  logo?: string;
+  /** More apps for the Apps menus. */
+  appLinks?: { name: string; url: string }[];
+  /** Only single sign-on on the sign-in page. */
+  hidePasswordSignIn?: boolean;
 }
 
 /** What instance administrators set for the sign-in page and everyone's screens. */

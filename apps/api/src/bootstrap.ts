@@ -3,6 +3,7 @@ import { ConsoleLogger, type INestApplication, Logger, RequestMethod } from '@ne
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { toNodeHandler } from 'better-auth/node';
+import { IpAccessService } from './policies/policies.js';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module.js';
@@ -38,6 +39,8 @@ export async function createApp(): Promise<INestApplication> {
   app.disable('x-powered-by');
 
   app.use(httpMetrics);
+  // Networks blocked under System → IP access reach nothing but the internal routes.
+  app.use(app.get(IpAccessService).middleware);
   // Rspamd's web interface sets its own security headers (it needs scripts and styles of its own).
   app.use('/api/rspamd-ui', (req: Request, res: Response, next: NextFunction) => {
     // Better Auth needs the client IP for its session checks below.

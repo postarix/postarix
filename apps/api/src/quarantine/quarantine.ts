@@ -34,6 +34,7 @@ import { ServerJmap } from '../mail/jmap-client.js';
 import type { SystemMailer } from '../mail/system-mailer.js';
 import { OrgAccessGuard } from '../tenancy/org-access.guard.js';
 import { RequireOrgRole, Tenant, type TenantContext } from '../tenancy/tenant-context.js';
+import { type InstanceSettings, loadInstanceSettings } from '../settings/instance-settings.js';
 import type { QuarantineSource } from './quarantine-source.js';
 
 const POLL_MS = 10_000;
@@ -82,8 +83,9 @@ function baseAddress(address: string): string {
  * Spam the filter refused, kept for its recipients. Rspamd leaves each
  * refused message (up to a size) in Valkey; this service files it under each
  * hosted mailbox it was for (directly or through aliases), deletes it after
- * QUARANTINE_RETENTION_DAYS, and sends recipients a digest of new items as
- * often as their mailbox asks. Released mail goes to the inbox.
+ * the retention period, and sends recipients a digest of new items as often
+ * as their mailbox asks. Released mail goes to the inbox. The instance
+ * settings (System → Quarantine) shape all of it.
  */
 @Injectable()
 export class QuarantineService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -98,6 +100,14 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
     @Inject(QUARANTINE_SOURCE) private readonly source: QuarantineSource,
     @Inject(SYSTEM_MAILER) private readonly mailer: SystemMailer,
   ) {}
+
+  private settings(): Promise<InstanceSettings['quarantine']> {
+    return loadInstanceSettings(this.db).then((s) => s.quarantine);
+  }
+
+  private retentionDays(settings: InstanceSettings['quarantine']): number {
+    return settings.retentionDays ?? this.env.QUARANTINE_RETENTION_DAYS;
+  }
 
   onApplicationBootstrap(): void {
     if (this.env.NODE_ENV === 'test') return;
@@ -118,12 +128,16 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
     this.polling = true;
     let filed = 0;
     try {
+      const settings = await this.settings();
+      const excluded = new Set(settings.excludedDomains);
       for (;;) {
         const batch = await this.source.take(50);
         if (batch.length === 0) break;
         for (const { meta, raw } of batch) {
-          if (!raw) continue;
-          const targets = await this.recipients(meta.recipients.map(baseAddress));
+          if (!raw || raw.length > settings.maxBytes) continue;
+          const targets = (await this.recipients(meta.recipients.map(baseAddress))).filter(
+            (t) => !excluded.has(t.address.slice(t.address.lastIndexOf('@') + 1)),
+          );
           for (const target of targets) {
             await this.db.insert(quarantineItems).values({
               organizationId: target.organizationId,
@@ -149,7 +163,7 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
   }
 
   /** Hosted mailboxes the addresses deliver to: the mailboxes themselves, through aliases, or a catch-all. */
-  private async recipients(addresses: string[]): Promise<{ id: string; organizationId: string }[]> {
+  private async recipients(addresses: string[]): Promise<{ id: string; organizationId: string; address: string }[]> {
     const destinations = new Set<string>();
     for (const address of new Set(addresses)) {
       const lookup = async (key: string) =>
@@ -162,7 +176,7 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
     }
     if (destinations.size === 0) return [];
     return this.db
-      .select({ id: mailboxes.id, organizationId: mailboxes.organizationId })
+      .select({ id: mailboxes.id, organizationId: mailboxes.organizationId, address: mailboxes.address })
       .from(mailboxes)
       .where(inArray(mailboxes.address, [...destinations]));
   }
@@ -170,7 +184,7 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
   /** Deletes expired items and sends the digests that are due. */
   async housekeeping(now = new Date()): Promise<void> {
     try {
-      const cutoff = new Date(now.getTime() - this.env.QUARANTINE_RETENTION_DAYS * 86_400_000);
+      const cutoff = new Date(now.getTime() - this.retentionDays(await this.settings()) * 86_400_000);
       await this.db.delete(quarantineItems).where(lt(quarantineItems.createdAt, cutoff));
       await this.notify(now);
     } catch (error) {
@@ -180,6 +194,7 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
 
   /** Tells each mailbox about its new items, at most as often as it asks (hourly, daily, weekly). */
   async notify(now = new Date()): Promise<number> {
+    const settings = await this.settings();
     const due = { hourly: 3600_000, daily: 86_400_000, weekly: 7 * 86_400_000 } as const;
     const rows = await this.db
       .select({ ...summary, notify: mailboxes.quarantineNotify })
@@ -187,24 +202,40 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
       .innerJoin(mailboxes, eq(mailboxes.id, quarantineItems.mailboxId))
       .where(and(isNull(quarantineItems.notifiedAt), inArray(mailboxes.quarantineNotify, ['hourly', 'daily', 'weekly'])))
       .orderBy(quarantineItems.createdAt);
+    // Obvious spam (above the notice cutoff) is never announced.
+    const quiet = settings.notifyMaxScore === null ? [] : rows.filter((r) => r.score > settings.notifyMaxScore!);
+    if (quiet.length > 0) {
+      await this.db
+        .update(quarantineItems)
+        .set({ notifiedAt: now })
+        .where(inArray(quarantineItems.id, quiet.map((r) => r.id)));
+    }
     const byMailbox = new Map<string, typeof rows>();
-    for (const row of rows) byMailbox.set(row.mailboxId, [...(byMailbox.get(row.mailboxId) ?? []), row]);
+    for (const row of rows) {
+      if (quiet.includes(row)) continue;
+      byMailbox.set(row.mailboxId, [...(byMailbox.get(row.mailboxId) ?? []), row]);
+    }
     let sent = 0;
     for (const items of byMailbox.values()) {
       const interval = due[items[0]!.notify as keyof typeof due];
       // The oldest unannounced item must have waited a whole interval.
       if (now.getTime() - items[0]!.createdAt.getTime() < interval) continue;
       const lines = items.slice(0, 50).map((i) => `- ${i.createdAt.toISOString().slice(0, 16).replace('T', ' ')}  ${i.fromHeader || i.envelopeFrom || '(no sender)'}: ${i.subject || '(no subject)'}`);
+      const count = `${items.length} message${items.length === 1 ? '' : 's'}`;
       await this.mailer.send({
-        to: items[0]!.recipient,
-        subject: `${items.length} message${items.length === 1 ? '' : 's'} held as spam`,
+        to: settings.redirectTo || items[0]!.recipient,
+        from: settings.sender || undefined,
+        bcc: settings.bccTo || undefined,
+        subject: settings.subject
+          ? settings.subject.replace(/\{count\}/g, count).replace(/\{address\}/g, items[0]!.recipient)
+          : `${count} held as spam`,
         text: [
           `The spam filter refused ${items.length === 1 ? 'this message' : 'these messages'} for ${items[0]!.recipient}:`,
           '',
           ...lines,
           items.length > 50 ? `…and ${items.length - 50} more.` : '',
           '',
-          `If one of them is not spam, release it to your inbox in the webmail (your menu → Quarantine) within ${this.env.QUARANTINE_RETENTION_DAYS} days.`,
+          `If one of them is not spam, release it to your inbox in the webmail (your menu → Quarantine) within ${this.retentionDays(settings)} days.`,
         ]
           .filter((l, i, all) => l !== '' || all[i - 1] !== '')
           .join('\n'),
@@ -245,7 +276,9 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
     const { list } = await jmap.single<{ list: { id: string; role: string | null }[] }>('Mailbox/get', { properties: ['role'] });
     const inbox = list.find((m) => m.role === 'inbox');
     if (!inbox) throw new NotFoundException('The mailbox has no inbox');
-    const blobId = await jmap.upload(item.message, 'message/rfc822');
+    const { releaseFormat } = await this.settings();
+    const message = releaseFormat === 'attachment' ? releaseNote(item) : item.message;
+    const blobId = await jmap.upload(message, 'message/rfc822');
     await jmap.single('Email/import', { emails: { m: { blobId, mailboxIds: { [inbox.id]: true }, keywords: {} } } });
     await this.db.delete(quarantineItems).where(eq(quarantineItems.id, item.id));
   }
@@ -253,6 +286,40 @@ export class QuarantineService implements OnApplicationBootstrap, OnApplicationS
   async remove(id: string): Promise<void> {
     await this.db.delete(quarantineItems).where(eq(quarantineItems.id, id));
   }
+}
+
+/**
+ * A short note from the server with the released message attached, so the
+ * recipient sees it was held as spam before opening it.
+ */
+export function releaseNote(item: QuarantineItemRow & { recipient: string }): Buffer {
+  const boundary = `postarix-${item.id}`;
+  const subject = (item.subject || '(no subject)').replace(/[\r\n]+/g, ' ');
+  const encodedSubject = /^[\x20-\x7e]*$/.test(subject) ? subject : `=?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`;
+  const head = [
+    `From: Postarix <postmaster@${item.recipient.slice(item.recipient.lastIndexOf('@') + 1)}>`,
+    `To: <${item.recipient}>`,
+    `Subject: Released from quarantine: ${encodedSubject}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <released-${item.id}@postarix>`,
+    'MIME-Version: 1.0',
+    'Auto-Submitted: auto-generated',
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    `The spam filter held the attached message for ${item.recipient} (score ${item.score}).`,
+    'It was released from quarantine. Open it only if you trust its sender.',
+    '',
+    `--${boundary}`,
+    'Content-Type: message/rfc822',
+    'Content-Disposition: attachment; filename="released.eml"',
+    '',
+    '',
+  ].join('\r\n');
+  return Buffer.concat([Buffer.from(head), item.message, Buffer.from(`\r\n--${boundary}--\r\n`)]);
 }
 
 const idPipe = new ZodValidationPipe(z.uuid());
