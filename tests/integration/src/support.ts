@@ -127,7 +127,12 @@ export async function waitForMessage(
   const client = await imapLogin(user, pass);
   try {
     while (Date.now() < deadline) {
-      const lock = await client.getMailboxLock(folder);
+      // A folder a Sieve script creates on delivery may not exist yet.
+      const lock = await client.getMailboxLock(folder).catch(() => null);
+      if (!lock) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        continue;
+      }
       try {
         const uids = await client.search({ subject }, { uid: true });
         if (uids && uids.length > 0) {

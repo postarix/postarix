@@ -42,6 +42,12 @@ reply always comes from your own address; the server refuses to send one that
 claims someone else's. Forwarding is limited to 100 messages an hour per
 mailbox, and spam is never forwarded.
 
+Every mailbox also receives mail sent to its address with a tag:
+`you+shop@example.com` reaches `you@example.com`. In the webmail's **Filters**
+you choose what happens to it: it stays in the inbox, goes to a folder named
+after the tag (created when the first message arrives), or gets `[tag]` in front
+of its subject.
+
 Most calendar and contacts apps only need `https://mail.example.com`: they find
 the rest through `/.well-known/caldav` and `/.well-known/carddav`.
 

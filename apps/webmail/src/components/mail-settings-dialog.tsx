@@ -14,6 +14,7 @@ const blank: MailSettings = {
   filters: [],
   vacation: { enabled: false, subject: 'Out of office', message: '', until: null },
   forwarding: { enabled: false, address: '', keepCopy: true },
+  taggedMail: 'inbox',
 };
 
 /** Automatic reply and forwarding, kept on the mail server for this mailbox. */
@@ -25,7 +26,7 @@ export function MailSettingsDialog({ onClose }: { onClose: () => void }) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (current.data) setForm({ filters: current.data.filters ?? [], vacation: current.data.vacation, forwarding: current.data.forwarding });
+    if (current.data) setForm({ filters: current.data.filters ?? [], vacation: current.data.vacation, forwarding: current.data.forwarding, taggedMail: current.data.taggedMail ?? 'inbox' });
   }, [current.data]);
 
   const vacation = (patch: Partial<MailSettings['vacation']>) => setForm((f) => ({ ...f, vacation: { ...f.vacation, ...patch } }));

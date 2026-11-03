@@ -97,7 +97,7 @@ postconf -e \
   "anvil_rate_time_unit = 60s" \
   "virtual_mailbox_domains = $(pg domains)" \
   "virtual_mailbox_maps = $(pg mailboxes)" \
-  "virtual_alias_maps = $(pg aliases), $(pg junk_aliases)" \
+  "virtual_alias_maps = $(pg aliases), $(pg junk_aliases), $(pg tagged_mailboxes)" \
   "recipient_bcc_maps = $(pg archive_copies)" \
   "sender_bcc_maps = $(pg archive_copies)" \
   "propagate_unmatched_extensions = canonical" \

@@ -13,6 +13,8 @@ export interface MailSettings {
   filters: MailFilter[];
   vacation: { enabled: boolean; subject: string; message: string; until: string | null };
   forwarding: { enabled: boolean; address: string; keepCopy: boolean };
+  /** Mail to you+tag@: in the inbox, in a folder named after the tag, or with [tag] in the subject. */
+  taggedMail: 'inbox' | 'folder' | 'subject';
 }
 
 export interface MailSettingsState extends MailSettings {

@@ -17,7 +17,7 @@ describe('webmail Sieve settings', () => {
     expect(script).toContain('if currentdate :value "le" "date" "2026-12-01" {');
     expect(script).toContain('vacation :days 3 :subject "Away \\"until\\" Monday" "Back soon.\nC:\\\\temp";');
     expect(script).toContain('redirect :copy "me@elsewhere.example";');
-    expect(parseSettingsScript(script)).toEqual(settings);
+    expect(parseSettingsScript(script)).toEqual({ ...settings, taggedMail: 'inbox' });
   });
 
   it('forwards without a copy when asked, and ignores scripts it did not write', () => {
@@ -71,5 +71,24 @@ describe('webmail Sieve settings', () => {
     expect(bad({ filters: [{ field: 'from', contains: 'x', action: 'move' }] })).toBe(true);
     expect(bad({ filters: [{ field: 'from', contains: 'x', action: 'label', keyword: 'Seen' }] })).toBe(true);
     expect(bad({ filters: [{ field: 'body', contains: 'x', action: 'delete' }] })).toBe(true);
+  });
+});
+
+describe('tagged mail', () => {
+  it('files ann+tag@ mail in a folder named after the tag, except Junk', () => {
+    const script = renderSettingsScript({ ...DEFAULT_SETTINGS, taggedMail: 'folder' })!;
+    expect(script).toContain('require ["envelope", "subaddress", "variables", "fileinto", "mailbox"];');
+    expect(script).toContain('fileinto :create "${tag}";');
+    expect(script).toContain('"Junk"');
+    expect(parseSettingsScript(script).taggedMail).toBe('folder');
+  });
+
+  it('marks the subject instead', () => {
+    const script = renderSettingsScript({ ...DEFAULT_SETTINGS, taggedMail: 'subject' })!;
+    expect(script).toContain('addheader "Subject" "[${tag}] ${subject}";');
+  });
+
+  it('writes no script for the default', () => {
+    expect(renderSettingsScript(DEFAULT_SETTINGS)).toBeNull();
   });
 });
