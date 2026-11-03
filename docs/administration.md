@@ -27,6 +27,27 @@ Limits cannot be set below what the domain already has (lower a mailbox's
 quota, or delete mailboxes, first). The domain card shows the usage against
 the limits.
 
+### MTA-STS
+
+Each domain publishes an MTA-STS policy (the `mta-sts` records in its DNS
+list), telling other servers whether they must deliver to it over verified
+TLS: **enforce** (refuse otherwise), **testing** (deliver anyway, report
+failures) or **none** (the policy is withdrawn). The domain settings choose
+the mode; by default it is the server's (`MTA_STS_MODE`, `testing` unless
+set). Changing it changes the `_mta-sts` id, so other servers fetch the policy
+again.
+
+### Backup MX
+
+Instance administrators can make a domain a **backup MX** in its settings:
+its mail is hosted on another server, and this one only accepts it while that
+server cannot be reached, then hands it over (to the **primary server** given,
+or else to the domain's most preferred MX). Every address of the domain is
+accepted (the primary server knows its recipients), the spam filter still
+applies, and the domain has no mailboxes, aliases or alias domains here. Its
+DNS list only has an MX record, with a lower preference (20) than the primary
+server's.
+
 ### DKIM key
 
 The key button of a domain shows its DKIM signing key: the selector, the size
@@ -72,6 +93,19 @@ Besides the name, quota and password, a mailbox has:
   own domains. A mailbox can always send as itself and as the aliases that
   deliver to it.
 
+### Templates
+
+The **Templates** button of the mailboxes page keeps the organization's
+mailbox templates: quota, allowed protocols, TLS requirements, sending limit,
+spam scores and quarantine notices. New mailboxes start with the template
+chosen when creating them (the default one is preselected; **None** for no
+template); what is typed in the form wins over the template. Instance
+administrators keep domain templates in **System → Templates**: limits,
+default quota, sending limit, spam scores and MTA-STS mode. The default domain
+template applies to every domain an organization adds, so new domains start
+with the instance's limits. Changing or deleting a template does not change
+what was already made with it.
+
 ### Sync jobs
 
 The **sync jobs** button of a mailbox copies mail from another IMAP server
@@ -98,6 +132,15 @@ private network must be allowed first (see [Migration](MIGRATION.md)).
   with their expiry, and count against the domain's alias limit.
 - Spam for an alias goes to the Junk folder of its destinations on this
   server, and is never forwarded outside.
+
+## Copies (BCC)
+
+The **Copies (BCC)** tab sends a blind copy of the mail an address, or every
+address of a domain (`@example.com`), receives or sends to another address,
+here or elsewhere: a manager, a compliance mailbox, a CRM. Senders and
+recipients do not see the copy. Rules apply to the domain's alias domains too,
+and add to the archive's copies (see [Archiving](ARCHIVING.md)). A rule can be
+disabled for a while without deleting it.
 
 ## Spam filter
 
@@ -151,6 +194,11 @@ settings). Organization admins see their mailboxes' items in the
   - *Routes*: hand mail for a destination (a domain, `.domain` for its
     subdomains, or an address) to a given server instead of its MX; not for
     domains hosted here.
+  - *Recipient rewrites*: mail for an address, here or anywhere else (a
+    partner's old address, a former colleague's), or for every address of a
+    domain (`@old.example`), is delivered to another address instead, whoever
+    sends it. A rewrite wins over mailboxes and aliases; it cannot point to an
+    address that is rewritten itself.
   - *TLS policies*: how strictly mail to a destination must be encrypted
     (`encrypt`, `dane-only`, `secure` with `match=`…, or `none`), in
     Postfix' terms.

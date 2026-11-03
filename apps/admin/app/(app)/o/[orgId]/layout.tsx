@@ -36,6 +36,7 @@ export default function OrganizationLayout({ children }: { children: ReactNode }
           { href: `${base}/domains`, label: t('Domains') },
           { href: `${base}/mailboxes`, label: t('Mailboxes') },
           { href: `${base}/aliases`, label: t('Aliases') },
+          { href: `${base}/bcc`, label: t('Copies (BCC)') },
           { href: `${base}/members`, label: t('Members') },
           { href: `${base}/sso`, label: t('Sign-in') },
           { href: `${base}/mail-log`, label: t('Mail log') },

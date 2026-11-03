@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { type AnyPgColumn, bigint, check, index, integer, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, bigint, boolean, check, index, integer, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organization } from './auth.js';
 import { relayHosts } from './routing.js';
 
 export const domainStatuses = ['pending', 'active', 'disabled'] as const;
+export const mtaStsModes = ['enforce', 'testing', 'none'] as const;
+export type MtaStsMode = (typeof mtaStsModes)[number];
 export type DomainStatus = (typeof domainStatuses)[number];
 
 /** Periods of a sending rate limit, in seconds. */
@@ -59,6 +61,16 @@ export const domains = pgTable(
     spamRejectScore: real(),
     /** Send its mail through this smart host (set by instance administrators). */
     relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
+    /**
+     * Backup MX (set by instance administrators): the domain's mail is hosted
+     * elsewhere; this server accepts it when the primary server is down, and
+     * hands it over later (to `backupMxNexthop`, or the domain's lowest MX).
+     * It has no mailboxes or aliases here.
+     */
+    backupMx: boolean().notNull().default(false),
+    backupMxNexthop: text(),
+    /** The domain's MTA-STS policy mode (null: the server's, MTA_STS_MODE). */
+    mtaStsMode: text({ enum: mtaStsModes }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()

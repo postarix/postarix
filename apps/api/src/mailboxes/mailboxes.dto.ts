@@ -36,6 +36,8 @@ export const createMailboxSchema = z.strictObject({
   quotaBytes: quotaSchema.optional(),
   /** A room or equipment: invitations to it are answered by itself (see CalendarService). */
   kind: z.enum(mailboxKinds).default('person'),
+  /** A mailbox template of the organization; omitted: its default template; null: none. */
+  templateId: z.uuid().nullable().optional(),
 });
 export type CreateMailboxInput = z.infer<typeof createMailboxSchema>;
 

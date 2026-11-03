@@ -1,0 +1,14 @@
+# Generated at container start.
+# Blind copies by sender (sender_bcc_maps): Postfix takes a single address, so
+# when mail.bcc_targets has copies for the address (without its +tag) or its
+# domain, this returns a stand-in, "s.local=domain@bcc.postarix.invalid", which
+# bcc_expand.cf turns into every copy (archive and BCC rules). (No SQL comments
+# in the query: Postfix joins its lines into one.)
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT 's.' || replace(regexp_replace(lower('%s'), '[+][^@]*@', '@'), '@', '=') || '@bcc.postarix.invalid'
+  WHERE position('@' IN '%s') > 1
+    AND EXISTS (SELECT 1 FROM mail.bcc_targets t WHERE t.direction = 'sender'
+      AND (t.address = regexp_replace(lower('%s'), '[+][^@]*@', '@') OR t.address = '@' || split_part(lower('%s'), '@', 2)))

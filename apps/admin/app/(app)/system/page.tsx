@@ -26,6 +26,7 @@ import { isSuperAdmin } from '@/lib/queries';
 import { RoutingTab } from './routing';
 import { SettingsTab } from './settings';
 import { ApiKeysTab } from './api-keys';
+import { DomainTemplateFields, type DomainTemplateSettings, domainSettingsFrom, TemplateList } from '@/components/templates';
 import { SpamLists } from '@/components/spam-lists';
 import { t } from '@/lib/i18n';
 
@@ -296,6 +297,7 @@ export default function SystemPage() {
           <TabsTrigger value="queue">{t('Mail queue')}</TabsTrigger>
           <TabsTrigger value="routing">{t('Outgoing routing')}</TabsTrigger>
           <TabsTrigger value="spam">{t('Spam filter')}</TabsTrigger>
+          <TabsTrigger value="templates">{t('Templates')}</TabsTrigger>
           <TabsTrigger value="api-keys">{t('API keys')}</TabsTrigger>
           <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
         </TabsList>
@@ -310,6 +312,15 @@ export default function SystemPage() {
         </TabsContent>
         <TabsContent value="routing" className="pt-4">
           <RoutingTab />
+        </TabsContent>
+        <TabsContent value="templates" className="pt-4">
+          <TemplateList<DomainTemplateSettings>
+            url="/system/domain-templates"
+            queryKey={['system', 'domain-templates']}
+            description={t('Settings and limits for new domains. The default template applies to every domain an organization adds; instance administrators can choose another when they add one.')}
+            fields={(settings) => <DomainTemplateFields settings={settings} />}
+            read={domainSettingsFrom}
+          />
         </TabsContent>
         <TabsContent value="api-keys" className="pt-4">
           <ApiKeysTab />

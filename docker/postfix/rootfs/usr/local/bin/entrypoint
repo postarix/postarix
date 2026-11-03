@@ -97,13 +97,13 @@ postconf -e \
   "anvil_rate_time_unit = 60s" \
   "virtual_mailbox_domains = $(pg domains)" \
   "virtual_mailbox_maps = $(pg mailboxes)" \
-  "virtual_alias_maps = $(pg aliases), $(pg junk_aliases), $(pg tagged_mailboxes)" \
-  "recipient_bcc_maps = $(pg archive_copies)" \
-  "sender_bcc_maps = $(pg archive_copies)" \
+  "virtual_alias_maps = $(pg recipient_maps), $(pg aliases), $(pg junk_aliases), $(pg tagged_mailboxes), $(pg bcc_expand)" \
+  "recipient_bcc_maps = $(pg bcc_recipient)" \
+  "sender_bcc_maps = $(pg bcc_sender)" \
   "propagate_unmatched_extensions = canonical" \
   "virtual_alias_domains =" \
   "virtual_transport = lmtp:$CYRUS_LMTP" \
-  "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination } }, $(pg transport_routes)" \
+  "transport_maps = inline:{ { discard.postarix.invalid = discard:spam for an outside alias destination }, { bcc.postarix.invalid = discard:no blind copy left } }, $(pg transport_routes)" \
   "sender_dependent_relayhost_maps = $(pg relayhost_by_sender)" \
   "smtp_tls_policy_maps = $(pg tls_policies)" \
   "smtp_sasl_auth_enable = yes" \
@@ -115,8 +115,8 @@ postconf -e \
   "smtpd_recipient_restrictions = check_recipient_access regexp:/etc/postfix/srs_recipients.regexp, check_recipient_access $(pg tls_required_in), permit_sasl_authenticated, reject_unauth_destination, reject_unlisted_recipient" \
   "sender_dependent_default_transport_maps = $(pg tls_required_out)" \
   "plaintext_reject_code = 550" \
-  "relay_domains = $MAIL_HOSTNAME" \
-  "relay_recipient_maps = $(pg srs_recipients)" \
+  "relay_domains = $MAIL_HOSTNAME, $(pg backup_mx_domains)" \
+  "relay_recipient_maps = $(pg srs_recipients), $(pg backup_mx_recipients)" \
   "recipient_canonical_maps = $(pg srs_reverse)" \
   "recipient_canonical_classes = envelope_recipient" \
   "smtpd_restriction_classes = postarix_srs_bounces" \

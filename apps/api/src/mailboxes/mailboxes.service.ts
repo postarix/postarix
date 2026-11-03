@@ -25,6 +25,7 @@ import {
   type UpdateMailboxInput,
 } from './mailboxes.dto.js';
 import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
+import { TemplatesService } from '../templates/templates.js';
 import { SpamService } from '../spam/spam.js';
 import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
@@ -50,6 +51,7 @@ export class MailboxesService {
     @Inject(ArchivingService) private readonly archiving: ArchivingService,
     @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
     @Inject(SpamService) private readonly spam: SpamService,
+    @Inject(TemplatesService) private readonly templates: TemplatesService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -90,8 +92,9 @@ export class MailboxesService {
     if (await this.addresses.isTaken(address)) {
       throw new ConflictException('This address is already in use');
     }
-    // Without a choice, the domain's default quota.
-    const quotaBytes = input.quotaBytes === undefined ? domain.defaultMailboxQuotaBytes : input.quotaBytes;
+    const { quotaBytes: templateQuota, ...templateSettings } = await this.templates.mailboxSettings(ctx, input.templateId);
+    // Without a choice, the template's quota, else the domain's default.
+    const quotaBytes = input.quotaBytes !== undefined ? input.quotaBytes : templateQuota !== undefined ? templateQuota : domain.defaultMailboxQuotaBytes;
     const checkLimits = (locked: typeof domain, usage: Parameters<typeof assertMayAddMailbox>[1]) => {
       assertMayAddMailbox(locked, usage);
       assertQuotaFits(locked, usage, quotaBytes);
@@ -149,6 +152,7 @@ export class MailboxesService {
       { type: 'mailbox', id: row.id, label: address },
       { quotaBytes },
     );
+    if (Object.keys(templateSettings).length > 0) return this.update(ctx, row.id, templateSettings);
     return toMailboxDto(row);
   }
 

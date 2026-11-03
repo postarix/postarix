@@ -22,6 +22,8 @@ import { MailboxesModule } from './mailboxes/mailboxes.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SystemModule } from './system/system.module.js';
 import { RoutingModule } from './routing/routing.js';
+import { RulesModule } from './rules/rules.js';
+import { TemplatesModule } from './templates/templates.js';
 import { SpamModule } from './spam/spam.js';
 import { QuarantineModule } from './quarantine/quarantine.js';
 import { InstanceSettingsModule } from './settings/instance-settings.js';
@@ -49,6 +51,8 @@ import { ApiKeysModule } from './api-keys/api-keys.js';
     MailLogModule,
     SystemModule,
     RoutingModule,
+    RulesModule,
+    TemplatesModule,
     SpamModule,
     QuarantineModule,
     InstanceSettingsModule,

@@ -38,6 +38,13 @@ interface TransportRoute {
   enabled: boolean;
 }
 
+interface RecipientMap {
+  id: string;
+  address: string;
+  destination: string;
+  enabled: boolean;
+}
+
 interface TlsPolicy {
   id: string;
   destination: string;
@@ -65,7 +72,10 @@ function EntryList<T extends { id: string; enabled: boolean }>({
   columns,
   row,
   form,
+  keyField = 'destination',
 }: {
+  /** The field that identifies an entry; it cannot be changed. */
+  keyField?: string;
   path: string;
   title: string;
   description: string;
@@ -100,7 +110,7 @@ function EntryList<T extends { id: string; enabled: boolean }>({
     try {
       if (editing === 'new') await api.post(`/system/${path}`, body);
       else if (editing) {
-        delete body.destination;
+        delete body[keyField];
         await api.patch(`/system/${path}/${editing.id}`, body);
       }
       refresh();
@@ -264,6 +274,24 @@ export function RoutingTab() {
               {(props) => <Input {...props} name="nexthop" defaultValue={r?.nexthop ?? ''} required />}
             </FormField>
             <Credentials entry={r} />
+          </>
+        )}
+      />
+      <EntryList<RecipientMap>
+        path="recipient-maps"
+        keyField="address"
+        title={t('Recipient rewrites')}
+        description={t('Deliver mail for an address (here or anywhere else, e.g. a partner\'s old address), or every address of a domain, to another address instead. It wins over mailboxes and aliases.')}
+        columns={['Address', 'Delivered to']}
+        row={(r) => [r.address, r.destination]}
+        form={(r) => (
+          <>
+            <FormField label={t('Address')} hint={t('An address, or @domain for all of its addresses.')}>
+              {(props) => <Input {...props} name="address" defaultValue={r?.address ?? ''} required disabled={r !== null} placeholder="old@partner.example" />}
+            </FormField>
+            <FormField label={t('Delivered to')}>
+              {(props) => <Input {...props} name="destination" type="email" defaultValue={r?.destination ?? ''} required placeholder="new@partner.example" />}
+            </FormField>
           </>
         )}
       />

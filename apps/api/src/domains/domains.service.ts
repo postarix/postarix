@@ -19,7 +19,8 @@ import type { DkimKeyRow, DomainRow } from '../db/schema/index.js';
 import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
 import { generateDkimKey, importDkimKey, publicKeyBits } from '../dkim/dkim-crypto.js';
 import { SpamService } from '../spam/spam.js';
-import { assertLimitsHold, type DomainUsage } from './domain-limits.js';
+import { TemplatesService } from '../templates/templates.js';
+import { assertLimitsHold, backupMxRefusal, type DomainUsage } from './domain-limits.js';
 import {
   type CreateDomainInput,
   type DnsRecordDto,
@@ -49,6 +50,7 @@ export class DomainsService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
     @Inject(SpamService) private readonly spam: SpamService,
+    @Inject(TemplatesService) private readonly templates: TemplatesService,
   ) {}
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
@@ -83,11 +85,13 @@ export class DomainsService {
   async update(ctx: TenantContext, id: string, input: UpdateDomainInput): Promise<DomainDto> {
     const touchesLimits = domainLimitFields.some((field) => input[field] !== undefined);
     if (touchesLimits && !ctx.instanceAdmin) {
-      throw new ForbiddenException('Only an instance administrator can change the limits and smart host of a domain');
+      throw new ForbiddenException('Only an instance administrator can change the limits, smart host and backup MX of a domain');
     }
+    const aliasDomains = input.backupMx ? await this.repository.aliasDomainsOf(ctx, id) : 0;
     const changes: Parameters<DomainsRepository['update']>[2] = {};
     if (input.description !== undefined) changes.description = input.description;
     if (input.defaultMailboxQuotaBytes !== undefined) changes.defaultMailboxQuotaBytes = input.defaultMailboxQuotaBytes;
+    if (input.mtaStsMode !== undefined) changes.mtaStsMode = input.mtaStsMode;
     for (const field of domainLimitFields) {
       const value = input[field];
       if (value !== undefined) Object.assign(changes, { [field]: value });
@@ -106,6 +110,14 @@ export class DomainsService {
           });
         }
         changes.status = input.enabled ? 'active' : 'disabled';
+      }
+      if (input.backupMx && !domain.backupMx) {
+        if (domain.aliasOfDomainId || aliasDomains > 0 || usage.mailboxes > 0 || usage.aliases > 0) {
+          throw new ConflictException({
+            message: `${domain.name} has mailboxes, aliases or alias domains here; a backup MX domain has none`,
+            code: 'BACKUP_MX_IN_USE',
+          });
+        }
       }
       assertLimitsHold(
         domain.name,
@@ -169,6 +181,11 @@ export class DomainsService {
   }
 
   async create(ctx: TenantContext, input: CreateDomainInput): Promise<DomainDto> {
+    if (input.templateId !== undefined && !ctx.instanceAdmin) {
+      throw new ForbiddenException('Only an instance administrator can choose the template of a domain');
+    }
+    // Alias domains have no settings of their own.
+    const settings = input.aliasOf ? {} : await this.templates.domainSettings(input.templateId);
     if (input.aliasOf) {
       const target = await this.repository.findById(ctx, input.aliasOf);
       if (!target) throw new UnprocessableEntityException({ message: 'Unknown domain', code: 'UNKNOWN_DOMAIN' });
@@ -178,6 +195,7 @@ export class DomainsService {
           code: 'ALIAS_OF_ALIAS_DOMAIN',
         });
       }
+      if (target.backupMx) throw backupMxRefusal();
     }
     let row;
     try {
@@ -196,6 +214,8 @@ export class DomainsService {
       throw error;
     }
     await this.audit.record(ctx, 'domain.created', { type: 'domain', id: row.id, label: row.name });
+    // The template's settings, limits included, whoever creates the domain.
+    if (Object.keys(settings).length > 0) return this.update({ ...ctx, instanceAdmin: true }, row.id, settings);
     return this.toDto(ctx, row);
   }
 
@@ -229,6 +249,11 @@ export class DomainsService {
         value: `postarix-verification=${domain.verificationToken}`,
       });
     }
+    if (domain.backupMx) {
+      // Only an MX record, less preferred than the primary server's.
+      records.push({ purpose: 'mx', type: 'MX', name: domain.name, value: `20 ${host}.` });
+      return records;
+    }
     records.push(
       { purpose: 'mx', type: 'MX', name: domain.name, value: `10 ${host}.` },
       { purpose: 'spf', type: 'TXT', name: domain.name, value: 'v=spf1 mx -all' },
@@ -250,7 +275,7 @@ export class DomainsService {
     });
     // Mail apps configure themselves (Thunderbird autoconfig), and other
     // servers learn to require TLS (MTA-STS: the policy is served on mta-sts.<domain>).
-    const policyId = mtaStsPolicyId(mtaStsPolicy(this.env.MTA_STS_MODE, host));
+    const policyId = mtaStsPolicyId(mtaStsPolicy(domain.mtaStsMode ?? this.env.MTA_STS_MODE, host));
     records.push(
       { purpose: 'autoconfig', type: 'CNAME', name: `autoconfig.${domain.name}`, value: `${host}.` },
       { purpose: 'mta-sts', type: 'CNAME', name: `mta-sts.${domain.name}`, value: `${host}.` },
@@ -293,6 +318,9 @@ export class DomainsService {
         // The domain is verified either way; the periodic sync publishes the key.
         this.logger.error(`Cannot publish the DKIM key of ${row.name}: ${(error as Error).message}`);
       }
+      // Settings made while it was pending take effect now.
+      await this.spam.publishScores(`@${row.name}`, row);
+      await this.rateLimits.publish(`@${row.name}`, toRateLimit(row));
       await this.audit.record(ctx, 'domain.verified', { type: 'domain', id: row.id, label: row.name });
       return this.toDto(ctx, row);
     } catch (error) {
