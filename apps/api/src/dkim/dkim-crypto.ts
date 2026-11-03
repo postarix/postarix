@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, generateKeyPair, hkdfSync, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, generateKeyPair, hkdfSync, randomBytes } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const generateKeyPairAsync = promisify(generateKeyPair);
@@ -10,14 +10,43 @@ export interface GeneratedDkimKey {
   publicKey: string;
 }
 
-/** Generates an RSA-2048 DKIM key pair (the size every receiver supports). */
-export async function generateDkimKey(): Promise<GeneratedDkimKey> {
+export const dkimKeySizes = [1024, 2048, 3072, 4096] as const;
+export type DkimKeySize = (typeof dkimKeySizes)[number];
+
+/** Generates an RSA DKIM key pair; 2048 bits by default (the size every receiver supports). */
+export async function generateDkimKey(bits: DkimKeySize = 2048): Promise<GeneratedDkimKey> {
   const { privateKey, publicKey } = await generateKeyPairAsync('rsa', {
-    modulusLength: 2048,
+    modulusLength: bits,
     privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     publicKeyEncoding: { type: 'spki', format: 'der' },
   });
   return { privateKeyPem: privateKey, publicKey: publicKey.toString('base64') };
+}
+
+/**
+ * Reads an RSA private key brought from elsewhere (PEM, PKCS#1 or PKCS#8), so
+ * a domain can keep the DKIM key it already publishes. Null if it is not an
+ * RSA key of 1024 to 4096 bits.
+ */
+export function importDkimKey(pem: string): (GeneratedDkimKey & { bits: number }) | null {
+  try {
+    const key = createPrivateKey({ key: pem, format: 'pem' });
+    const bits = key.asymmetricKeyDetails?.modulusLength ?? 0;
+    if (key.asymmetricKeyType !== 'rsa' || bits < 1024 || bits > 4096) return null;
+    const publicKey = createPublicKey(key).export({ type: 'spki', format: 'der' }).toString('base64');
+    return { privateKeyPem: key.export({ type: 'pkcs8', format: 'pem' }).toString(), publicKey, bits };
+  } catch {
+    return null;
+  }
+}
+
+/** Size in bits of a published public key ("p=" value). */
+export function publicKeyBits(publicKey: string): number | null {
+  try {
+    return createPublicKey({ key: Buffer.from(publicKey, 'base64'), format: 'der', type: 'spki' }).asymmetricKeyDetails?.modulusLength ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const FORMAT = 'v1';

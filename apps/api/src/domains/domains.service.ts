@@ -15,14 +15,17 @@ import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js
 import { AuditService } from '../audit/audit.service.js';
 import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
-import type { DomainRow } from '../db/schema/index.js';
+import type { DkimKeyRow, DomainRow } from '../db/schema/index.js';
 import { rateColumns, RateLimitsService, toRateLimit } from '../rate-limits/rate-limits.js';
+import { generateDkimKey, importDkimKey, publicKeyBits } from '../dkim/dkim-crypto.js';
 import { assertLimitsHold, type DomainUsage } from './domain-limits.js';
 import {
   type CreateDomainInput,
   type DnsRecordDto,
+  type DkimKeyDto,
   type DomainDto,
   domainLimitFields,
+  type ReplaceDkimInput,
   toDomainDto,
   type UpdateDomainInput,
 } from './domains.dto.js';
@@ -109,6 +112,42 @@ export class DomainsService {
     }
     await this.audit.record(ctx, 'domain.updated', { type: 'domain', id: row.id, label: row.name }, { ...changes });
     return this.toDto(ctx, row);
+  }
+
+  async dkimKey(ctx: TenantContext, id: string): Promise<DkimKeyDto | null> {
+    const domain = await this.repository.findById(ctx, id);
+    if (!domain) throw new NotFoundException('Domain not found');
+    const key = await this.dkim.activeKey(domain.id);
+    return key ? dkimDto(domain.name, key) : null;
+  }
+
+  /** Generates or imports a new DKIM key for the domain (the old one stops signing at once). */
+  async replaceDkim(ctx: TenantContext, id: string, input: ReplaceDkimInput): Promise<DkimKeyDto> {
+    const domain = await this.repository.findById(ctx, id);
+    if (!domain) throw new NotFoundException('Domain not found');
+    let key;
+    if (input.privateKey) {
+      key = importDkimKey(input.privateKey);
+      if (!key) {
+        throw new UnprocessableEntityException({
+          message: 'Not an RSA private key of 1024 to 4096 bits in PEM format',
+          code: 'DKIM_KEY_INVALID',
+        });
+      }
+    } else {
+      key = await generateDkimKey(input.keyBits ?? 2048);
+    }
+    const now = new Date();
+    // A new selector by default, so the new record can be published next to the old one.
+    const selector =
+      input.selector ??
+      `px${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}`;
+    const row = await this.dkim.replace(domain, selector, key);
+    await this.audit.record(ctx, 'domain.dkim_replaced', { type: 'domain', id: domain.id, label: domain.name }, {
+      selector,
+      imported: Boolean(input.privateKey),
+    });
+    return dkimDto(domain.name, row);
   }
 
   async create(ctx: TenantContext, input: CreateDomainInput): Promise<DomainDto> {
@@ -280,3 +319,12 @@ function pick<T>(changed: T | undefined, current: T): T {
 }
 
 const EMPTY_USAGE: DomainUsage = { mailboxes: 0, aliases: 0, quotaBytes: 0, unlimitedMailboxes: 0 };
+
+function dkimDto(domainName: string, key: DkimKeyRow): DkimKeyDto {
+  return {
+    selector: key.selector,
+    bits: publicKeyBits(key.publicKey),
+    record: { name: `${key.selector}._domainkey.${domainName}`, value: `v=DKIM1; k=rsa; p=${key.publicKey}` },
+    createdAt: key.createdAt.toISOString(),
+  };
+}

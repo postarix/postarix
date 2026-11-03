@@ -5,12 +5,12 @@ import {
   type OnApplicationBootstrap,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { Env } from '../config/env.js';
 import { DATABASE, DKIM_PUBLISHER, ENV } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { type DkimKeyRow, dkimKeys, domains } from '../db/schema/index.js';
-import { decryptPrivateKey, encryptPrivateKey, generateDkimKey, selectorFor } from './dkim-crypto.js';
+import { decryptPrivateKey, encryptPrivateKey, type GeneratedDkimKey, generateDkimKey, selectorFor } from './dkim-crypto.js';
 import type { DkimPublisher } from './dkim-publisher.js';
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;
@@ -43,6 +43,37 @@ export class DkimService implements OnApplicationBootstrap, OnApplicationShutdow
       })
       .returning();
     if (!row) throw new Error('Insert returned no row');
+    return row;
+  }
+
+  /**
+   * Replaces the domain's signing key: the new one becomes active, the old one
+   * is kept as retired (its selector stays taken). Mail is signed with the new
+   * key at once, so its DNS record must be published right away.
+   */
+  async replace(domain: { id: string; name: string; status: string }, selector: string, key: GeneratedDkimKey): Promise<DkimKeyRow> {
+    const row = await this.db.transaction(async (tx) => {
+      await tx
+        .update(dkimKeys)
+        .set({ status: 'retired' })
+        .where(and(eq(dkimKeys.domainId, domain.id), eq(dkimKeys.status, 'active')));
+      // A selector used before (by a retired key) is free again.
+      await tx
+        .delete(dkimKeys)
+        .where(and(eq(dkimKeys.domainId, domain.id), eq(dkimKeys.selector, selector), ne(dkimKeys.status, 'active')));
+      const [inserted] = await tx
+        .insert(dkimKeys)
+        .values({
+          domainId: domain.id,
+          selector,
+          publicKey: key.publicKey,
+          privateKeyEncrypted: encryptPrivateKey(key.privateKeyPem, this.env.AUTH_SECRET),
+        })
+        .returning();
+      if (!inserted) throw new Error('Insert returned no row');
+      return inserted;
+    });
+    if (domain.status === 'active') await this.publish(domain);
     return row;
   }
 
