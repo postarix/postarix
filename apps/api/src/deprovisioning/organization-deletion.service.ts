@@ -62,6 +62,7 @@ export class OrganizationDeletionService {
       ipAddress,
       role: 'owner',
       viaSuperAdmin: true,
+      instanceAdmin: true,
     };
     // Deleting a mailbox deletes its account; an account that administers the
     // instance is never removed as a side effect.

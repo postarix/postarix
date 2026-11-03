@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, max } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { type DomainRow, domains, ssoProvider } from '../db/schema/index.js';
+import { type DomainRow, domains, mailboxes, ssoProvider } from '../db/schema/index.js';
+import { type DomainUsage, domainUsage, lockDomain } from './domain-limits.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
 
 /**
@@ -28,6 +29,39 @@ export class DomainsRepository {
       .where(and(this.scope(ctx), eq(domains.id, id)))
       .limit(1);
     return row;
+  }
+
+  /** What the domain holds; undefined if it is not the organization's. */
+  async usage(ctx: TenantContext, id: string): Promise<DomainUsage | undefined> {
+    if (!(await this.findById(ctx, id))) return undefined;
+    return domainUsage(this.db, id);
+  }
+
+  /**
+   * Changes a domain while its row is locked, after `check` (which may throw)
+   * has seen its current usage and largest mailbox quota.
+   */
+  async update(
+    ctx: TenantContext,
+    id: string,
+    changes: Partial<Pick<DomainRow, 'description' | 'status' | 'defaultMailboxQuotaBytes' | 'maxMailboxes' | 'maxAliases' | 'maxMailboxQuotaBytes' | 'totalQuotaBytes'>>,
+    check: (domain: DomainRow, usage: DomainUsage, largestQuota: number | null) => void,
+  ): Promise<DomainRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const locked = await lockDomain(tx, ctx, id);
+      if (!locked) return undefined;
+      const [largest] = await tx
+        .select({ q: max(mailboxes.quotaBytes) })
+        .from(mailboxes)
+        .where(eq(mailboxes.domainId, id));
+      check(locked.domain, locked.usage, largest?.q ?? null);
+      const [row] = await tx
+        .update(domains)
+        .set(changes)
+        .where(and(this.scope(ctx), eq(domains.id, id)))
+        .returning();
+      return row;
+    });
   }
 
   async create(ctx: TenantContext, name: string): Promise<DomainRow> {

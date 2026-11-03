@@ -2,6 +2,7 @@
 
 import { Badge } from '@postarix/ui/components/badge';
 import { Button } from '@postarix/ui/components/button';
+import { Checkbox } from '@postarix/ui/components/checkbox';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@postarix/ui/components/card';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
@@ -9,7 +10,7 @@ import { Input } from '@postarix/ui/components/input';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Globe, Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Globe, Plus, RefreshCw, Settings, ShieldCheck, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { AppDialog } from '@/components/app-dialog';
@@ -21,8 +22,10 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
-import { formatDate } from '@/lib/format';
-import { keys, useOrgList } from '@/lib/queries';
+import { useSession } from '@/lib/auth-client';
+import { formatBytes, formatDate } from '@/lib/format';
+import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
+import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
 import type { DnsRecord, DnsRecordCheck, Domain } from '@/lib/types';
 
 const purposeLabel: Record<DnsRecord['purpose'], string> = {
@@ -97,11 +100,139 @@ function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
   );
 }
 
+/** Converts a count field to a number; empty means no limit. */
+function countFrom(value: string): number | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  if (!Number.isInteger(n) || n < 0) throw new Error('Limits must be whole numbers');
+  return n;
+}
+
+function limitText(used: number, max: number | null, format: (n: number) => string = String): string {
+  return max === null ? format(used) : `${format(used)} of ${format(max)}`;
+}
+
+function DomainSettingsDialog({
+  orgId,
+  domain,
+  open,
+  onClose,
+}: {
+  orgId: string;
+  domain: Domain;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  const instanceAdmin = isSuperAdmin(session?.user.role);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const text = (name: string) => String(data.get(name) ?? '');
+    setPending(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        description: text('description'),
+        defaultMailboxQuotaBytes: quotaFromGiB(text('defaultQuota')),
+      };
+      if (domain.status !== 'pending') body.enabled = data.get('enabled') === 'on';
+      if (instanceAdmin) {
+        body.maxMailboxes = countFrom(text('maxMailboxes'));
+        body.maxAliases = countFrom(text('maxAliases'));
+        body.maxMailboxQuotaBytes = quotaFromGiB(text('maxMailboxQuota'));
+        body.totalQuotaBytes = quotaFromGiB(text('totalQuota'));
+      }
+      await api.patch(`/orgs/${orgId}/domains/${domain.id}`, body);
+      await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
+      onClose();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <AppDialog open={open} onClose={onClose} title={`${domain.name} settings`}>
+      <form onSubmit={submit}>
+        <FieldGroup>
+          {error ? <Notice>{error}</Notice> : null}
+          <FormField label="Description">
+            {(props) => <Input {...props} name="description" defaultValue={domain.description} maxLength={500} />}
+          </FormField>
+          <FormField label="Default mailbox quota (GB)" hint="Given to new mailboxes when none is chosen. Empty: unlimited.">
+            {(props) => (
+              <Input {...props} name="defaultQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.defaultMailboxQuotaBytes)} />
+            )}
+          </FormField>
+          {domain.status !== 'pending' ? (
+            <div className="flex items-start gap-2">
+              <Checkbox id={`enabled-${domain.id}`} name="enabled" defaultChecked={domain.status === 'active'} />
+              <label htmlFor={`enabled-${domain.id}`} className="text-sm">
+                Enabled
+                <span className="block text-muted-foreground">
+                  A disabled domain receives and sends no mail, and its mailboxes cannot sign in to mail apps.
+                </span>
+              </label>
+            </div>
+          ) : null}
+          {instanceAdmin ? (
+            <>
+              <p className="text-sm font-medium">Limits</p>
+              <p className="-mt-2 text-sm text-muted-foreground">
+                Only instance administrators can change these. Leave a field empty for no limit.
+              </p>
+              <FormField label="Mailboxes">
+                {(props) => (
+                  <Input {...props} name="maxMailboxes" inputMode="numeric" defaultValue={domain.limits.maxMailboxes ?? ''} />
+                )}
+              </FormField>
+              <FormField label="Aliases">
+                {(props) => <Input {...props} name="maxAliases" inputMode="numeric" defaultValue={domain.limits.maxAliases ?? ''} />}
+              </FormField>
+              <FormField label="Largest quota per mailbox (GB)">
+                {(props) => (
+                  <Input
+                    {...props}
+                    name="maxMailboxQuota"
+                    inputMode="decimal"
+                    defaultValue={quotaToGiB(domain.limits.maxMailboxQuotaBytes)}
+                  />
+                )}
+              </FormField>
+              <FormField label="Total quota of all mailboxes (GB)">
+                {(props) => (
+                  <Input {...props} name="totalQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.limits.totalQuotaBytes)} />
+                )}
+              </FormField>
+            </>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <LoadingButton type="submit" loading={pending}>
+              Save settings
+            </LoadingButton>
+          </DialogFooter>
+        </FieldGroup>
+      </form>
+    </AppDialog>
+  );
+}
+
 function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
   const queryClient = useQueryClient();
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [showDns, setShowDns] = useState(domain.status === 'pending');
 
   const refresh = () => {
@@ -123,7 +254,15 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
           )}
         </CardTitle>
         <CardDescription>
+          {domain.description ? <span className="block">{domain.description}</span> : null}
           {domain.verifiedAt ? `Verified ${formatDate(domain.verifiedAt)}` : `Added ${formatDate(domain.createdAt)}`}
+          {' · '}
+          {limitText(domain.usage.mailboxes, domain.limits.maxMailboxes)} mailboxes
+          {' · '}
+          {limitText(domain.usage.aliases, domain.limits.maxAliases)} aliases
+          {domain.limits.totalQuotaBytes !== null
+            ? ` · ${limitText(domain.usage.quotaBytes, domain.limits.totalQuotaBytes, formatBytes)} quota`
+            : null}
         </CardDescription>
         <CardAction className="flex gap-2">
           {domain.status === 'pending' ? (
@@ -150,6 +289,9 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
           <Button size="sm" variant="outline" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
             {showDns ? 'Hide DNS records' : 'DNS records'}
           </Button>
+          <Button size="icon-sm" variant="ghost" aria-label={`${domain.name} settings`} onClick={() => setEditing(true)}>
+            <Settings aria-hidden />
+          </Button>
           <Button size="icon-sm" variant="ghost" aria-label={`Delete ${domain.name}`} onClick={() => setDeleting(true)}>
             <Trash2 aria-hidden />
           </Button>
@@ -171,6 +313,7 @@ function DomainCard({ orgId, domain }: { orgId: string; domain: Domain }) {
           ) : null}
         </CardContent>
       ) : null}
+      {editing ? <DomainSettingsDialog orgId={orgId} domain={domain} open={editing} onClose={() => setEditing(false)} /> : null}
       <ConfirmDialog
         open={deleting}
         onClose={() => setDeleting(false)}

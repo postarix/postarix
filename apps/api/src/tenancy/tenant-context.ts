@@ -18,6 +18,8 @@ export interface TenantContext {
   readonly role: OrgRole;
   /** True when access was granted through the instance super-admin role, not membership. */
   readonly viaSuperAdmin: boolean;
+  /** The user administers the whole instance (whether or not also a member). */
+  readonly instanceAdmin: boolean;
 }
 
 export interface TenantRequest extends AuthenticatedRequest {

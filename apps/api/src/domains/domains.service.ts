@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -14,7 +15,16 @@ import { isForeignKeyViolation, isUniqueViolation } from '../common/pg-errors.js
 import { AuditService } from '../audit/audit.service.js';
 import { DkimService } from '../dkim/dkim.service.js';
 import type { TenantContext } from '../tenancy/tenant-context.js';
-import { type CreateDomainInput, type DnsRecordDto, type DomainDto, toDomainDto } from './domains.dto.js';
+import type { DomainRow } from '../db/schema/index.js';
+import { assertLimitsHold, type DomainUsage } from './domain-limits.js';
+import {
+  type CreateDomainInput,
+  type DnsRecordDto,
+  type DomainDto,
+  domainLimitFields,
+  toDomainDto,
+  type UpdateDomainInput,
+} from './domains.dto.js';
 import { DomainsRepository } from './domains.repository.js';
 import { mtaStsPolicy, mtaStsPolicyId } from '../discovery/discovery.js';
 import { checkDnsRecords, type DnsRecordCheckDto } from './dns-check.js';
@@ -36,13 +46,62 @@ export class DomainsService {
 
   async list(ctx: TenantContext): Promise<DomainDto[]> {
     const rows = await this.repository.list(ctx);
-    return rows.map(toDomainDto);
+    return Promise.all(rows.map((row) => this.toDto(ctx, row)));
   }
 
   async get(ctx: TenantContext, id: string): Promise<DomainDto> {
     const row = await this.repository.findById(ctx, id);
     if (!row) throw new NotFoundException('Domain not found');
-    return toDomainDto(row);
+    return this.toDto(ctx, row);
+  }
+
+  private async toDto(ctx: TenantContext, row: DomainRow): Promise<DomainDto> {
+    return toDomainDto(row, (await this.repository.usage(ctx, row.id)) ?? EMPTY_USAGE);
+  }
+
+  /**
+   * Changes a domain's settings. Limits are for instance administrators: an
+   * organization must not lift the limits its host set. New limits must hold
+   * for what the domain already has.
+   */
+  async update(ctx: TenantContext, id: string, input: UpdateDomainInput): Promise<DomainDto> {
+    const touchesLimits = domainLimitFields.some((field) => input[field] !== undefined);
+    if (touchesLimits && !ctx.instanceAdmin) {
+      throw new ForbiddenException('Only an instance administrator can change the limits of a domain');
+    }
+    const changes: Parameters<DomainsRepository['update']>[2] = {};
+    if (input.description !== undefined) changes.description = input.description;
+    if (input.defaultMailboxQuotaBytes !== undefined) changes.defaultMailboxQuotaBytes = input.defaultMailboxQuotaBytes;
+    for (const field of domainLimitFields) {
+      const value = input[field];
+      if (value !== undefined) changes[field] = value;
+    }
+    const row = await this.repository.update(ctx, id, changes, (domain, usage, largestQuota) => {
+      if (input.enabled !== undefined) {
+        if (domain.status === 'pending') {
+          throw new UnprocessableEntityException({
+            message: 'Verify the domain before enabling or disabling it',
+            code: 'DOMAIN_NOT_VERIFIED',
+          });
+        }
+        changes.status = input.enabled ? 'active' : 'disabled';
+      }
+      assertLimitsHold(
+        domain.name,
+        {
+          maxMailboxes: pick(changes.maxMailboxes, domain.maxMailboxes),
+          maxAliases: pick(changes.maxAliases, domain.maxAliases),
+          maxMailboxQuotaBytes: pick(changes.maxMailboxQuotaBytes, domain.maxMailboxQuotaBytes),
+          totalQuotaBytes: pick(changes.totalQuotaBytes, domain.totalQuotaBytes),
+          defaultMailboxQuotaBytes: pick(changes.defaultMailboxQuotaBytes, domain.defaultMailboxQuotaBytes),
+        },
+        usage,
+        largestQuota,
+      );
+    });
+    if (!row) throw new NotFoundException('Domain not found');
+    await this.audit.record(ctx, 'domain.updated', { type: 'domain', id: row.id, label: row.name }, { ...changes });
+    return this.toDto(ctx, row);
   }
 
   async create(ctx: TenantContext, input: CreateDomainInput): Promise<DomainDto> {
@@ -63,7 +122,7 @@ export class DomainsService {
       throw error;
     }
     await this.audit.record(ctx, 'domain.created', { type: 'domain', id: row.id, label: row.name });
-    return toDomainDto(row);
+    return this.toDto(ctx, row);
   }
 
   /** The DNS records the organization must publish for this domain. */
@@ -136,9 +195,9 @@ export class DomainsService {
     if (domain.status === 'active') {
       // Verifying again re-publishes the signing key, in case that failed before.
       await this.dkim.publish(domain);
-      return toDomainDto(domain);
+      return this.toDto(ctx, domain);
     }
-    if (domain.status !== 'pending') return toDomainDto(domain);
+    if (domain.status !== 'pending') return this.toDto(ctx, domain);
 
     if (this.env.DOMAIN_VERIFICATION === 'dns') {
       const expected = `postarix-verification=${domain.verificationToken}`;
@@ -161,7 +220,7 @@ export class DomainsService {
         this.logger.error(`Cannot publish the DKIM key of ${row.name}: ${(error as Error).message}`);
       }
       await this.audit.record(ctx, 'domain.verified', { type: 'domain', id: row.id, label: row.name });
-      return toDomainDto(row);
+      return this.toDto(ctx, row);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException('This domain is already active in another organization');
@@ -198,3 +257,9 @@ export class DomainsService {
     await this.audit.record(ctx, 'domain.deleted', { type: 'domain', id: domain.id, label: domain.name });
   }
 }
+
+function pick<T>(changed: T | undefined, current: T): T {
+  return changed === undefined ? current : changed;
+}
+
+const EMPTY_USAGE: DomainUsage = { mailboxes: 0, aliases: 0, quotaBytes: 0, unlimitedMailboxes: 0 };

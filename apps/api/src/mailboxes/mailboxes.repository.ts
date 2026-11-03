@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, eq } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { mailboxes, type MailboxRow, member } from '../db/schema/index.js';
+import { type DomainRow, mailboxes, type MailboxRow, member } from '../db/schema/index.js';
+import { type DomainUsage, lockDomain } from '../domains/domain-limits.js';
 import type { OrgRole, TenantContext } from '../tenancy/tenant-context.js';
 
 export interface NewMailbox {
@@ -14,6 +15,9 @@ export interface NewMailbox {
   quotaBytes: number | null;
   kind?: MailboxRow['kind'];
 }
+
+/** Runs with the mailbox's domain locked; throws to refuse the change. */
+export type DomainCheck = (domain: DomainRow, usage: DomainUsage) => void | Promise<void>;
 
 /** Tenant-scoped data access for mailboxes. */
 @Injectable()
@@ -55,9 +59,15 @@ export class MailboxesRepository {
     return row;
   }
 
-  /** Inserts the mailbox and makes its user a member of the organization, atomically. */
-  async create(ctx: TenantContext, input: NewMailbox): Promise<MailboxRow> {
+  /**
+   * Inserts the mailbox and makes its user a member of the organization,
+   * atomically, once `check` has accepted the domain's current usage.
+   */
+  async create(ctx: TenantContext, input: NewMailbox, check: DomainCheck): Promise<MailboxRow> {
     return this.db.transaction(async (tx) => {
+      const locked = await lockDomain(tx, ctx, input.domainId);
+      if (!locked) throw new Error('Domain not found');
+      await check(locked.domain, locked.usage);
       const [row] = await tx
         .insert(mailboxes)
         .values({ ...input, organizationId: ctx.organizationId })
@@ -81,13 +91,32 @@ export class MailboxesRepository {
     ctx: TenantContext,
     id: string,
     changes: Partial<Pick<MailboxRow, 'displayName' | 'quotaBytes' | 'status' | 'kind'>>,
+    check?: DomainCheck,
   ): Promise<MailboxRow | undefined> {
-    const [row] = await this.db
-      .update(mailboxes)
-      .set(changes)
-      .where(and(this.scope(ctx), eq(mailboxes.id, id)))
-      .returning();
-    return row;
+    if (!check) {
+      const [row] = await this.db
+        .update(mailboxes)
+        .set(changes)
+        .where(and(this.scope(ctx), eq(mailboxes.id, id)))
+        .returning();
+      return row;
+    }
+    return this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ domainId: mailboxes.domainId })
+        .from(mailboxes)
+        .where(and(this.scope(ctx), eq(mailboxes.id, id)));
+      if (!current) return undefined;
+      const locked = await lockDomain(tx, ctx, current.domainId);
+      if (!locked) return undefined;
+      await check(locked.domain, locked.usage);
+      const [row] = await tx
+        .update(mailboxes)
+        .set(changes)
+        .where(and(this.scope(ctx), eq(mailboxes.id, id)))
+        .returning();
+      return row;
+    });
   }
 
   async delete(ctx: TenantContext, id: string): Promise<boolean> {

@@ -86,7 +86,8 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
         localPart: String(data.get('localPart')),
         displayName: String(data.get('displayName')),
         password,
-        quotaBytes: quotaFromGiB(String(data.get('quota'))),
+        // Empty: the domain's default quota.
+        ...(String(data.get('quota')).trim() ? { quotaBytes: quotaFromGiB(String(data.get('quota'))) } : {}),
         kind: String(data.get('kind') ?? 'person'),
       });
       refresh();
@@ -118,7 +119,7 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           <FormField label="Password" hint="At least 12 characters.">
             {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
           </FormField>
-          <FormField label="Quota (GB)" hint="Leave empty for unlimited.">
+          <FormField label="Quota (GB)" hint="Leave empty for the domain's default quota.">
             {(props) => <Input {...props} name="quota" inputMode="decimal" placeholder="5" />}
           </FormField>
           <DialogFooter>
