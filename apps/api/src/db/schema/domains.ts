@@ -1,10 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { bigint, check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, bigint, check, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { organization } from './auth.js';
 
 export const domainStatuses = ['pending', 'active', 'disabled'] as const;
 export type DomainStatus = (typeof domainStatuses)[number];
+
+/** Periods of a sending rate limit, in seconds. */
+export const ratePeriods = { second: 1, minute: 60, hour: 3600, day: 86400 } as const;
+export type RatePeriod = keyof typeof ratePeriods;
+const ratePeriodNames = Object.keys(ratePeriods) as [RatePeriod, ...RatePeriod[]];
 
 /**
  * Mail domains. Tenant-scoped: every row belongs to exactly one organization.
@@ -28,6 +33,12 @@ export const domains = pgTable(
       .notNull()
       .$defaultFn(() => randomBytes(24).toString('base64url')),
     verifiedAt: timestamp({ withTimezone: true }),
+    /**
+     * An alias domain: every address of the target domain also exists here
+     * (x@alias reaches x@target, and whoever may send as x@target may send
+     * as x@alias). It has no mailboxes or aliases of its own.
+     */
+    aliasOfDomainId: uuid().references((): AnyPgColumn => domains.id, { onDelete: 'restrict' }),
     /** Free text for administrators. */
     description: text().notNull().default(''),
     /** Quota given to new mailboxes when none is chosen (null: unlimited). */
@@ -39,6 +50,9 @@ export const domains = pgTable(
     maxMailboxQuotaBytes: bigint({ mode: 'number' }),
     /** Sum of the quotas of all the domain's mailboxes; with it set, no mailbox is unlimited. */
     totalQuotaBytes: bigint({ mode: 'number' }),
+    /** Messages each of its mailboxes may send per period, unless the mailbox has its own limit. */
+    rateLimit: integer(),
+    ratePeriod: text({ enum: ratePeriodNames }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
       .notNull()
@@ -47,6 +61,7 @@ export const domains = pgTable(
   },
   (table) => [
     index('domains_organization_id_idx').on(table.organizationId),
+    index('domains_alias_of_domain_id_idx').on(table.aliasOfDomainId),
     uniqueIndex('domains_organization_id_name_unique').on(table.organizationId, table.name),
     uniqueIndex('domains_name_verified_unique')
       .on(table.name)
@@ -58,6 +73,10 @@ export const domains = pgTable(
         AND (${table.defaultMailboxQuotaBytes} IS NULL OR ${table.defaultMailboxQuotaBytes} > 0)
         AND (${table.maxMailboxQuotaBytes} IS NULL OR ${table.maxMailboxQuotaBytes} > 0)
         AND (${table.totalQuotaBytes} IS NULL OR ${table.totalQuotaBytes} > 0)`,
+    ),
+    check(
+      'domains_rate_limit_valid',
+      sql`(${table.rateLimit} IS NULL) = (${table.ratePeriod} IS NULL) AND (${table.rateLimit} IS NULL OR ${table.rateLimit} > 0)`,
     ),
   ],
 );

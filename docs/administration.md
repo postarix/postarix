@@ -17,10 +17,21 @@ The gear button of a domain opens its settings.
 | Mailboxes, aliases | instance admins | How many the domain may have. |
 | Largest quota per mailbox | instance admins | No mailbox may get more; with it set, no mailbox can be unlimited. |
 | Total quota | instance admins | The quotas of all the domain's mailboxes together. |
+| Sending limit per mailbox | organization admins | Messages each of its mailboxes may send per second, minute, hour or day, unless the mailbox has its own limit. |
 
 Limits cannot be set below what the domain already has (lower a mailbox's
 quota, or delete mailboxes, first). The domain card shows the usage against
 the limits.
+
+### Alias domains
+
+When you add a domain you can make it an **alias of** another domain of the
+organization: every address of that domain then exists on the alias domain
+too. Mail to `ann@example.org` reaches `ann@example.com`, and Ann may send as
+`ann@example.org` (and as the aliases she may use, on both domains). An alias
+domain is verified like any other (it gets its own DKIM key and DNS records)
+and has no mailboxes or aliases of its own. Disabling it stops only the alias
+domain.
 
 ## Mailboxes
 
@@ -39,6 +50,10 @@ Besides the name, quota and password, a mailbox has:
 - **Send outgoing mail only over TLS.** Its mail is only handed to servers
   that accept TLS; if a server does not, the message waits and is eventually
   returned to the sender.
+- **Sending limit:** messages it may send per second, minute, hour or day,
+  from mail apps and the webmail together. Over the limit, mail apps get a
+  temporary error (they try again later) and the webmail says so. Without
+  one, the domain's limit applies.
 - **Can also send as:** further addresses it may use as sender, one per line,
   or `@example.com` for every address of a domain. Only the organization's
   own domains. A mailbox can always send as itself and as the aliases that

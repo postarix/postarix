@@ -21,6 +21,7 @@ import { stripBccHeader } from './raw-message.js';
 import { SendLimiter } from './send-limiter.js';
 import { createSubmissionTransport } from './submission-transport.js';
 import type { CounterStore } from '../core/counter-store.js';
+import { RateLimitsService } from '../rate-limits/rate-limits.js';
 
 export const sendSchema = z.strictObject({
   emailId: z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/),
@@ -63,6 +64,7 @@ export class SendService {
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(ENV) private readonly env: Env,
     @Inject(COUNTER_STORE) counters: CounterStore,
+    @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
   ) {
     this.messages = new SendLimiter(counters, 'messages', 200, 60 * 60 * 1000);
     this.recipients = new SendLimiter(counters, 'recipients', 2_000, 60 * 60 * 1000);
@@ -108,6 +110,8 @@ export class SendService {
     if (!(await this.messages.tryTake(userId, 1)) || !(await this.recipients.tryTake(userId, recipients.length))) {
       throw new HttpException('Sending limit reached; try again later', 429);
     }
+    // The limit the organization set (Rspamd applies the same one to mail apps).
+    await this.rateLimits.take(address);
 
     let raw: Buffer;
     try {
@@ -151,6 +155,7 @@ export class SendService {
     if (!(await this.messages.tryTake(userId, 1)) || !(await this.recipients.tryTake(userId, recipients.length))) {
       throw new HttpException('Sending limit reached; try again later', 429);
     }
+    await this.rateLimits.take(message.from);
     try {
       await this.transport.sendMail({
         envelope: { from: message.from, to: recipients },

@@ -7,3 +7,4 @@ export const DNS_RESOLVER = Symbol('DNS_RESOLVER');
 export const DKIM_PUBLISHER = Symbol('DKIM_PUBLISHER');
 export const COUNTER_STORE = Symbol('COUNTER_STORE');
 export const SYSTEM_MAILER = Symbol('SYSTEM_MAILER');
+export const RATE_LIMIT_STORE = Symbol('RATE_LIMIT_STORE');

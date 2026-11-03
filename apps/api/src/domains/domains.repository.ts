@@ -44,7 +44,20 @@ export class DomainsRepository {
   async update(
     ctx: TenantContext,
     id: string,
-    changes: Partial<Pick<DomainRow, 'description' | 'status' | 'defaultMailboxQuotaBytes' | 'maxMailboxes' | 'maxAliases' | 'maxMailboxQuotaBytes' | 'totalQuotaBytes'>>,
+    changes: Partial<
+      Pick<
+        DomainRow,
+        | 'description'
+        | 'status'
+        | 'defaultMailboxQuotaBytes'
+        | 'maxMailboxes'
+        | 'maxAliases'
+        | 'maxMailboxQuotaBytes'
+        | 'totalQuotaBytes'
+        | 'rateLimit'
+        | 'ratePeriod'
+      >
+    >,
     check: (domain: DomainRow, usage: DomainUsage, largestQuota: number | null) => void,
   ): Promise<DomainRow | undefined> {
     return this.db.transaction(async (tx) => {
@@ -73,10 +86,10 @@ export class DomainsRepository {
     await this.db.delete(session).where(inArray(session.userId, owners));
   }
 
-  async create(ctx: TenantContext, name: string): Promise<DomainRow> {
+  async create(ctx: TenantContext, name: string, aliasOfDomainId: string | null = null): Promise<DomainRow> {
     const [row] = await this.db
       .insert(domains)
-      .values({ organizationId: ctx.organizationId, name })
+      .values({ organizationId: ctx.organizationId, name, aliasOfDomainId })
       .returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
