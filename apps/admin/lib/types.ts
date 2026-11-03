@@ -76,6 +76,8 @@ export interface Mailbox {
   rateLimit: RateLimit | null;
   relayHostId: string | null;
   spamScores: SpamScores;
+  /** How often its people hear about quarantined mail. */
+  quarantineNotify: 'never' | 'hourly' | 'daily' | 'weekly';
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
   createdAt: string;

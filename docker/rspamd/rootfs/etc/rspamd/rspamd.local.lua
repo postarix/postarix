@@ -545,3 +545,78 @@ rspamd_config:set_metric_symbol({ name = 'POSTARIX_SPAM_SCORES', score = 0.0, de
 rspamd_config:set_metric_symbol({ name = 'POSTARIX_SPAM_LIST', score = 0.0, description = 'Allow and block lists checked' })
 rspamd_config:set_metric_symbol({ name = 'POSTARIX_ALLOWLIST', score = -100.0, description = 'Sender allowed by the recipient' })
 rspamd_config:set_metric_symbol({ name = 'POSTARIX_BLOCKLIST', score = 100.0, description = 'Sender blocked by the recipient' })
+
+-- Postarix: quarantine. Incoming mail refused as spam (not viruses, not
+-- blocked senders) is kept for its recipients: the message waits in Valkey
+-- for a day, its summary in POSTARIX_QUARANTINE_NEW, until the API files it
+-- under the recipients' mailboxes. The sender is still refused.
+-- QUARANTINE_MAX_BYTES (10 MB by default; 0 turns quarantine off) caps the size.
+local ucl = require 'ucl'
+local QUARANTINE_LIST = 'POSTARIX_QUARANTINE_NEW'
+local QUARANTINE_MAX = tonumber(os.getenv('QUARANTINE_MAX_BYTES') or '') or 10485760
+
+rspamd_config:register_symbol({
+  name = 'POSTARIX_QUARANTINE',
+  type = 'postfilter',
+  priority = 5,
+  callback = function(task)
+    if QUARANTINE_MAX <= 0 or not redis_params or task:get_user() or is_cyrus(task) then
+      return
+    end
+    if task:get_metric_action('default') ~= 'reject' then
+      return
+    end
+    if task:has_symbol('CLAM_VIRUS') or task:has_symbol('POSTARIX_BLOCKLIST') then
+      return
+    end
+    local size = task:get_size()
+    if not size or size > QUARANTINE_MAX then
+      return
+    end
+    local recipients = {}
+    for _, rcpt in ipairs(task:get_recipients('smtp') or {}) do
+      if rcpt.addr and rcpt.addr ~= '' then
+        table.insert(recipients, string.lower(rcpt.addr))
+      end
+    end
+    if #recipients == 0 then
+      return
+    end
+    -- The rules that scored most, as the reason shown to the recipient.
+    local names, scores = task:get_symbols()
+    local ranked = {}
+    for i, name in ipairs(names or {}) do
+      local score = scores and scores[i] or 0
+      if score > 0.5 then
+        table.insert(ranked, { name = name, score = score })
+      end
+    end
+    table.sort(ranked, function(a, b) return a.score > b.score end)
+    local symbols = {}
+    for i = 1, math.min(#ranked, 10) do
+      symbols[i] = ranked[i].name
+    end
+    local envelope = task:get_from('smtp')
+    local mime = task:get_from('mime')
+    local score = task:get_metric_score('default')
+    local key = 'POSTARIX_QUARANTINE:' .. task:get_uid()
+    local meta = ucl.to_format({
+      key = key,
+      envelopeFrom = envelope and envelope[1] and envelope[1].addr or '',
+      fromHeader = mime and mime[1] and mime[1].addr or '',
+      subject = task:get_subject() or '',
+      score = score and score[1] or 0,
+      symbols = symbols,
+      recipients = recipients,
+    }, 'json-compact')
+    lua_redis.redis_make_request(task, redis_params, key, true, function(err)
+      if err then
+        return
+      end
+      lua_redis.redis_make_request(task, redis_params, QUARANTINE_LIST, true, function() end,
+        'RPUSH', { QUARANTINE_LIST, meta })
+    end, 'SETEX', { key, '86400', task:get_content() })
+    task:insert_result('POSTARIX_QUARANTINE', 1.0)
+  end,
+})
+rspamd_config:set_metric_symbol({ name = 'POSTARIX_QUARANTINE', score = 0.0, description = 'Refused mail kept in quarantine' })

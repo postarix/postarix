@@ -183,6 +183,13 @@
       "when": 1793703989939,
       "tag": "0025_lonely_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793705242448,
+      "tag": "0026_free_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

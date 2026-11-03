@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  customType,
   boolean,
   check,
   index,
@@ -24,6 +25,14 @@ export type MailboxStatus = (typeof mailboxStatuses)[number];
 /** People's mailboxes, or bookable resources: their calendar answers invitations by itself. */
 export const mailboxKinds = ['person', 'room', 'equipment'] as const;
 export type MailboxKind = (typeof mailboxKinds)[number];
+
+/** How often a mailbox's people hear about new quarantined mail. */
+export const quarantineNotifyIntervals = ['never', 'hourly', 'daily', 'weekly'] as const;
+export type QuarantineNotify = (typeof quarantineNotifyIntervals)[number];
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => 'bytea',
+});
 
 /** Mail protocols a mailbox may sign in with (the webmail is always allowed). */
 export const mailProtocols = ['imap', 'pop3', 'smtp', 'sieve', 'dav'] as const;
@@ -65,6 +74,7 @@ export const mailboxes = pgTable(
     /** Spam score from which its mail is filed as junk, and refused (null: its domain's). */
     spamJunkScore: real(),
     spamRejectScore: real(),
+    quarantineNotify: text({ enum: quarantineNotifyIntervals }).notNull().default('daily'),
     /** Send its mail through this smart host instead of its domain's (set by instance administrators). */
     relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
@@ -200,6 +210,42 @@ export const spamListEntries = pgTable(
 );
 
 export type SpamListEntryRow = typeof spamListEntries.$inferSelect;
+
+/**
+ * Mail the spam filter refused, kept for a while for its recipient: they (or
+ * their organization's admins) can release it to the inbox or delete it. One
+ * row per hosted recipient mailbox.
+ */
+export const quarantineItems = pgTable(
+  'quarantine_items',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    mailboxId: uuid()
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: 'cascade' }),
+    envelopeFrom: text().notNull().default(''),
+    fromHeader: text().notNull().default(''),
+    subject: text().notNull().default(''),
+    score: real().notNull(),
+    /** The rules that scored most. */
+    symbols: jsonb().$type<string[]>().notNull().default([]),
+    sizeBytes: integer().notNull(),
+    message: bytea().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** When the recipient was told about it. */
+    notifiedAt: timestamp({ withTimezone: true }),
+  },
+  (table) => [
+    index('quarantine_items_mailbox_created_idx').on(table.mailboxId, table.createdAt),
+    index('quarantine_items_organization_id_idx').on(table.organizationId),
+    index('quarantine_items_created_at_idx').on(table.createdAt),
+  ],
+);
+
+export type QuarantineItemRow = typeof quarantineItems.$inferSelect;
 
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type AliasRow = typeof aliases.$inferSelect;

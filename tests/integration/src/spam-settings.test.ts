@@ -51,4 +51,21 @@ describe('Spam settings per mailbox and domain', () => {
     await smtp(config.smtpPort).sendMail({ from: 'anyone@fine.example', to: mailboxes.plain!.address, subject, text: 'Hello' });
     await waitForMessage(mailboxes.plain!.address, PASSWORD, subject);
   });
+
+  it('keeps refused spam in quarantine, and releases it to the inbox', async () => {
+    const subject = unique('quarantined');
+    await smtp(config.smtpPort)
+      .sendMail({ from: 'promo@outside.example', to: mailboxes.strict!.address, subject, text: `Offer\n${SPAM_MARKER}\n` })
+      .catch(() => undefined);
+    let item: { id: string; subject: string; recipient: string } | undefined;
+    const deadline = Date.now() + 60_000;
+    while (!item && Date.now() < deadline) {
+      const list = await admin.ok<{ data: { id: string; subject: string; recipient: string }[] }>('GET', `/api/orgs/${orgId}/quarantine`);
+      item = list.data.find((i) => i.subject === subject);
+      if (!item) await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    expect(item?.recipient).toBe(mailboxes.strict!.address);
+    await admin.ok('POST', `/api/orgs/${orgId}/quarantine/${item!.id}/release`);
+    await waitForMessage(mailboxes.strict!.address, PASSWORD, subject);
+  });
 });

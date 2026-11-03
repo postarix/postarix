@@ -38,6 +38,7 @@ export default function OrganizationLayout({ children }: { children: ReactNode }
           { href: `${base}/members`, label: 'Members' },
           { href: `${base}/sso`, label: 'Sign-in' },
           { href: `${base}/mail-log`, label: 'Mail log' },
+          { href: `${base}/quarantine`, label: 'Quarantine' },
           { href: `${base}/activity`, label: 'Activity' },
         ]
       : []),

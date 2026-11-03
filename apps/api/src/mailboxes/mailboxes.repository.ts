@@ -31,6 +31,7 @@ export type MailboxChanges = Partial<
     | 'relayHostId'
     | 'spamJunkScore'
     | 'spamRejectScore'
+    | 'quarantineNotify'
   >
 >;
 

@@ -9,7 +9,7 @@ import {
 } from '@postarix/ui/components/dropdown-menu';
 import { Postmark } from '@postarix/ui/components/postmark';
 import { cn } from '@postarix/ui/lib/utils';
-import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, MailCheck, Menu, Settings, ShieldAlert, UsersRound, X } from 'lucide-react';
+import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, MailCheck, Menu, Settings, ShieldAlert, ShieldX, UsersRound, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { useRoute } from '@/lib/router';
@@ -17,6 +17,7 @@ import { Avatar } from './avatar';
 import { FiltersDialog } from './filters-dialog';
 import { MailImportDialog } from './mail-import-dialog';
 import { MailSettingsDialog } from './mail-settings-dialog';
+import { QuarantineDialog } from './quarantine-dialog';
 import { SpamDialog } from './spam-dialog';
 
 const APPS = [
@@ -37,6 +38,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
   const [importOpen, setImportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [spamOpen, setSpamOpen] = useState(false);
+  const [quarantineOpen, setQuarantineOpen] = useState(false);
   const routeKey = JSON.stringify(route);
   useEffect(() => setOpen(false), [routeKey]);
   useEffect(() => {
@@ -111,6 +113,10 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
             <ShieldAlert aria-hidden />
             Spam filter
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setQuarantineOpen(true)}>
+            <ShieldX aria-hidden />
+            Quarantine
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setImportOpen(true)}>
             <Download aria-hidden />
             Import mail from another account
@@ -153,6 +159,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         {filtersOpen ? <FiltersDialog onClose={() => setFiltersOpen(false)} /> : null}
         {importOpen ? <MailImportDialog onClose={() => setImportOpen(false)} /> : null}
         {spamOpen ? <SpamDialog onClose={() => setSpamOpen(false)} /> : null}
+        {quarantineOpen ? <QuarantineDialog onClose={() => setQuarantineOpen(false)} /> : null}
         <main className="min-h-0 flex-1 overflow-hidden bg-card md:my-2 md:mr-2 md:rounded-xl md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
           {children}
         </main>
