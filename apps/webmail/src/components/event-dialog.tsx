@@ -3,7 +3,7 @@ import { Checkbox } from '@postarix/ui/components/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Textarea } from '@postarix/ui/components/textarea';
 import { Trash2 } from 'lucide-react';
@@ -227,18 +227,18 @@ export function EventDialog({
             <div className="grid grid-cols-2 gap-3">
               <Field>
                 <FieldLabel htmlFor="event-repeat">{t('Repeats')}</FieldLabel>
-                <NativeSelect id="event-repeat" value={input.repeat} disabled={Boolean(seriesId)} onChange={(e) => set({ repeat: e.target.value as EventInput['repeat'] })}>
-                  <NativeSelectOption value="none">{t('Does not repeat')}</NativeSelectOption>
-                  <NativeSelectOption value="daily">{t('Every day')}</NativeSelectOption>
-                  <NativeSelectOption value="weekly">{t('Every week')}</NativeSelectOption>
-                  <NativeSelectOption value="monthly">{t('Every month')}</NativeSelectOption>
-                  <NativeSelectOption value="yearly">{t('Every year')}</NativeSelectOption>
-                </NativeSelect>
+                <FormSelect id="event-repeat" value={input.repeat} disabled={Boolean(seriesId)} onChange={(e) => set({ repeat: e.target.value as EventInput['repeat'] })}>
+                  <FormSelectOption value="none">{t('Does not repeat')}</FormSelectOption>
+                  <FormSelectOption value="daily">{t('Every day')}</FormSelectOption>
+                  <FormSelectOption value="weekly">{t('Every week')}</FormSelectOption>
+                  <FormSelectOption value="monthly">{t('Every month')}</FormSelectOption>
+                  <FormSelectOption value="yearly">{t('Every year')}</FormSelectOption>
+                </FormSelect>
               </Field>
               {writable.length > 1 && !readOnly ? (
                 <Field>
                   <FieldLabel htmlFor="event-calendar">{t('Calendar')}</FieldLabel>
-                  <NativeSelect
+                  <FormSelect
                     id="event-calendar"
                     value={`${accountId}::${input.calendarId}`}
                     // Events stay in their account: moving them to someone else's calendar is not possible.
@@ -251,11 +251,11 @@ export function EventDialog({
                     }}
                   >
                     {writable.map((c) => (
-                      <NativeSelectOption key={calendarKey(c)} value={calendarKey(c)}>
+                      <FormSelectOption key={calendarKey(c)} value={calendarKey(c)}>
                         {c.sharedBy ? `${c.name} (${c.sharedBy})` : c.name}
-                      </NativeSelectOption>
+                      </FormSelectOption>
                     ))}
-                  </NativeSelect>
+                  </FormSelect>
                 </Field>
               ) : null}
             </div>

@@ -78,4 +78,4 @@ else
 fi
 
 install -d -o _rspamd -g _rspamd /var/lib/rspamd /run/rspamd
-exec rspamd -f -u _rspamd -g _rspamd
+exec postarix-logged rspamd /var/lib/rspamd "$(rspamd --version 2>/dev/null | head -n 1)" -- rspamd -f -u _rspamd -g _rspamd

@@ -5,7 +5,7 @@ import { Button } from '@postarix/ui/components/button';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQueryClient } from '@tanstack/react-query';
@@ -57,10 +57,10 @@ function NewRuleDialog({ orgId, open, onClose }: { orgId: string; open: boolean;
           {error ? <Notice>{error}</Notice> : null}
           <FormField label={t('Copy mail')}>
             {(props) => (
-              <NativeSelect {...props} name="direction" defaultValue="recipient" className="w-full">
-                <NativeSelectOption value="recipient">{t('received by')}</NativeSelectOption>
-                <NativeSelectOption value="sender">{t('sent by')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} name="direction" defaultValue="recipient" className="w-full">
+                <FormSelectOption value="recipient">{t('received by')}</FormSelectOption>
+                <FormSelectOption value="sender">{t('sent by')}</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           <FormField label={t('Address')} hint={t('An address of one of your domains, or @domain for all of its addresses.')}>

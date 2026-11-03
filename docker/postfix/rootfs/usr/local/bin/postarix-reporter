@@ -3,10 +3,11 @@
 # container's log, with its version, host name and disk use, and (Postfix only)
 # the mail queue. The API answers the queue report with the queue actions
 # instance administrators chose, which are run here. The API never reaches
-# into this container: it only answers. (The same script is in the postfix and
-# cyrus images.)
+# into this container: it only answers. (The same script is in the postfix,
+# cyrus, rspamd, unbound, clamav, crowdsec and certs images; the last five
+# start it through postarix-logged.)
 #
-# Usage: postarix-reporter <postfix|cyrus> <log file> <disk path> <CA file> <version>
+# Usage: postarix-reporter <service> <log file> <disk path> <CA file> <version>
 # /etc/postarix/reports.env sets POSTARIX_API_INTERNAL (host:port of the API's
 # internal HTTPS listener) and MAIL_HOSTNAME (the name on its certificate);
 # /etc/postarix/reports.headers holds the secret header.
@@ -43,6 +44,10 @@ while sleep 15; do
   if api --header "x-postarix-version: $version" --header "x-postarix-host: $host" --header "x-postarix-disk: $disk" \
     --data-binary "@$work/log" --output /dev/null "$base/$service"; then
     offset=$size
+    # Files written by postarix-logged are ours to keep small (appends continue at 0).
+    case "$log_file" in
+      /var/log/postarix-report/*) [ "$size" -gt 8388608 ] && : > "$log_file" && offset=0 ;;
+    esac
   fi
 
   [ "$service" = postfix ] || continue

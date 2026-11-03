@@ -2,10 +2,11 @@
 
 import { Badge } from '@postarix/ui/components/badge';
 import { Button } from '@postarix/ui/components/button';
+import { Checkbox } from '@postarix/ui/components/checkbox';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { Textarea } from '@postarix/ui/components/textarea';
@@ -22,12 +23,14 @@ import { Notice } from '@/components/notice';
 import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { t } from '@/lib/i18n';
+import { useAllOrganizations } from '@/lib/queries';
 
 interface ApiKey {
   id: string;
   name: string;
   access: 'read' | 'write';
   allowedIps: string[];
+  organizations: { id: string; name: string | null }[];
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -43,6 +46,8 @@ export function ApiKeysTab() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['system', 'api-keys'] });
+  const orgs = useAllOrganizations(true);
+  const [scope, setScope] = useState<Set<string>>(new Set());
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +63,7 @@ export function ApiKeysTab() {
           .split(/[\s,]+/)
           .filter(Boolean),
         ...(days ? { expiresInDays: Number(days) } : {}),
+        organizationIds: [...scope],
       });
       setCreated(res.key);
       refresh();
@@ -79,6 +85,7 @@ export function ApiKeysTab() {
           onClick={() => {
             setCreated(null);
             setError(null);
+            setScope(new Set());
             setCreating(true);
           }}
         >
@@ -96,6 +103,7 @@ export function ApiKeysTab() {
             <TableRow>
               <TableHead className="pl-4">{t('Name')}</TableHead>
               <TableHead>{t('Access')}</TableHead>
+              <TableHead>{t('Organizations')}</TableHead>
               <TableHead>{t('Allowed from')}</TableHead>
               <TableHead>{t('Last used')}</TableHead>
               <TableHead>{t('Expires')}</TableHead>
@@ -110,6 +118,19 @@ export function ApiKeysTab() {
                 <TableCell className="pl-4 font-medium">{key.name}</TableCell>
                 <TableCell>
                   <Badge variant={key.access === 'write' ? 'warning' : 'secondary'}>{key.access === 'write' ? t('Read and write') : t('Read only')}</Badge>
+                </TableCell>
+                <TableCell className="text-sm whitespace-normal">
+                  {key.organizations.length ? (
+                    <span className="flex flex-wrap gap-1">
+                      {key.organizations.map((o) => (
+                        <Badge key={o.id} variant="outline">
+                          {o.name ?? t('(deleted)')}
+                        </Badge>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">{t('All (instance)')}</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-sm">{key.allowedIps.length ? key.allowedIps.join(', ') : t('Anywhere')}</TableCell>
                 <TableCell className="text-sm">{formatDate(key.lastUsedAt)}</TableCell>
@@ -148,12 +169,41 @@ export function ApiKeysTab() {
                 </FormField>
                 <FormField label={t('Access')}>
                   {(props) => (
-                    <NativeSelect {...props} name="access" defaultValue="read" className="w-full">
-                      <NativeSelectOption value="read">{t('Read only')}</NativeSelectOption>
-                      <NativeSelectOption value="write">{t('Read and write')}</NativeSelectOption>
-                    </NativeSelect>
+                    <FormSelect {...props} name="access" defaultValue="read" className="w-full">
+                      <FormSelectOption value="read">{t('Read only')}</FormSelectOption>
+                      <FormSelectOption value="write">{t('Read and write')}</FormSelectOption>
+                    </FormSelect>
                   )}
                 </FormField>
+                <div>
+                  <p className="text-sm font-medium">{t('Organizations')}</p>
+                  <p className="mb-2 text-sm text-muted-foreground">
+                    {t('None chosen: the whole instance, as an instance administrator. Chosen: only those organizations, as their owner (/api/orgs/<id>/…).')}
+                  </p>
+                  <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-2">
+                    {orgs.data?.length ? (
+                      orgs.data.map((o) => (
+                        <label key={o.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={scope.has(o.id)}
+                            onCheckedChange={(v) =>
+                              setScope((current) => {
+                                const next = new Set(current);
+                                if (v === true) next.add(o.id);
+                                else next.delete(o.id);
+                                return next;
+                              })
+                            }
+                          />
+                          <span className="truncate">{o.name}</span>
+                          <span className="ml-auto font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</span>
+                        </label>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t('No organizations yet')}</p>
+                    )}
+                  </div>
+                </div>
                 <FormField label={t('Allowed from')} hint={t('IP addresses or networks (203.0.113.0/24), one per line. Empty: anywhere.')}>
                   {(props) => <Textarea {...props} name="allowedIps" rows={3} className="font-mono text-xs" />}
                 </FormField>

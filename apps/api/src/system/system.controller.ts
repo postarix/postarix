@@ -6,17 +6,26 @@ import { type AuthSession, CurrentSession, Public } from '../auth/session.js';
 import { SuperAdminGuard } from '../auth/super-admin.guard.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { ReportsTokenGuard } from '../mail-auth/mail-auth.controller.js';
-import { type ReportingService, reportingServices } from './system-store.js';
+import type { LogEntry } from './log-parse.js';
+import { type RspamdStatsDto, RspamdService, type ScanDto, type TrafficDto } from './rspamd.js';
+import { type LogService, logServices, type ReportingService, reportingServices } from './system-store.js';
 import {
   heartbeatSchema,
   type QueueActionInput,
   queueActionSchema,
+  type OverviewDto,
   type QueueItemDto,
   type ServiceStatusDto,
   SystemService,
 } from './system.service.js';
 
 const servicePipe = new ZodValidationPipe(z.enum(reportingServices));
+const logServicePipe = new ZodValidationPipe(z.enum(logServices));
+const logQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(5000).default(300),
+  filter: z.string().max(200).optional(),
+  level: z.enum(['debug', 'info', 'warning', 'error']).optional(),
+});
 
 function header(req: Request, name: string): string | null {
   const value = req.headers[name];
@@ -67,17 +76,52 @@ export class SystemReportsController {
 export class SystemController {
   constructor(
     @Inject(SystemService) private readonly system: SystemService,
+    @Inject(RspamdService) private readonly rspamd: RspamdService,
     @Inject(AuditService) private readonly audit: AuditService,
   ) {}
+
+  @Get('overview')
+  overview(): Promise<OverviewDto> {
+    return this.system.overview();
+  }
+
+  /** The whole filtering history (newest first). */
+  @Get('rspamd/history')
+  async rspamdHistory(
+    @Query(new ZodValidationPipe(z.object({ limit: z.coerce.number().int().min(1).max(5000).default(500), filter: z.string().max(200).optional() })))
+    query: { limit: number; filter?: string },
+  ): Promise<{ data: ScanDto[] }> {
+    return { data: await this.rspamd.history(query.limit, query.filter) };
+  }
+
+  @Get('rspamd/stats')
+  rspamdStats(): Promise<RspamdStatsDto> {
+    return this.rspamd.stats();
+  }
+
+  /** Messages per hour over the last day, by outcome. */
+  @Get('rspamd/traffic')
+  rspamdTraffic(): Promise<TrafficDto> {
+    return this.rspamd.traffic();
+  }
 
   @Get('status')
   async status(): Promise<{ data: ServiceStatusDto[] }> {
     return { data: await this.system.status() };
   }
 
+  /** Parsed entries: time, level, source and message. */
+  @Get('log-entries/:service')
+  async logEntries(
+    @Param('service', logServicePipe) service: LogService,
+    @Query(new ZodValidationPipe(logQuerySchema)) query: z.infer<typeof logQuerySchema>,
+  ): Promise<{ data: LogEntry[] }> {
+    return { data: await this.system.logEntries(service, query.limit, query.filter, query.level) };
+  }
+
   @Get('logs/:service')
   async logs(
-    @Param('service', servicePipe) service: ReportingService,
+    @Param('service', logServicePipe) service: LogService,
     @Query(new ZodValidationPipe(z.object({ limit: z.coerce.number().int().min(1).max(5000).default(300), filter: z.string().max(200).optional() })))
     query: { limit: number; filter?: string },
   ): Promise<{ data: string[] }> {

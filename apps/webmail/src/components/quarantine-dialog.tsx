@@ -1,6 +1,6 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -85,7 +85,7 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
         )}
         <label className="flex items-center gap-3 text-sm">
           <span>{t('Tell me about new items')}</span>
-          <NativeSelect
+          <FormSelect
             value={notify}
             onChange={async (e) => {
               const every = e.target.value as Notify;
@@ -97,11 +97,11 @@ export function QuarantineDialog({ onClose }: { onClose: () => void }) {
               }
             }}
           >
-            <NativeSelectOption value="never">{t('Never')}</NativeSelectOption>
-            <NativeSelectOption value="hourly">{t('Hourly')}</NativeSelectOption>
-            <NativeSelectOption value="daily">{t('Daily')}</NativeSelectOption>
-            <NativeSelectOption value="weekly">{t('Weekly')}</NativeSelectOption>
-          </NativeSelect>
+            <FormSelectOption value="never">{t('Never')}</FormSelectOption>
+            <FormSelectOption value="hourly">{t('Hourly')}</FormSelectOption>
+            <FormSelectOption value="daily">{t('Daily')}</FormSelectOption>
+            <FormSelectOption value="weekly">{t('Weekly')}</FormSelectOption>
+          </FormSelect>
         </label>
         <DialogFooter>
           <Button onClick={onClose}>{t('Done')}</Button>

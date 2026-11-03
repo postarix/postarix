@@ -174,14 +174,35 @@ settings). Organization admins see their mailboxes' items in the
 
 ## System (instance administrators)
 
-**System**, in the sidebar, shows the server itself:
+The sidebar has the organization in view (switch with the box at the top),
+its sections, the **Server** sections for instance administrators and the
+**Apps**: the webmail and Rspamd's own web interface. The **Dashboard** (the
+first entry) sums the server up: organizations, domains, mailboxes, aliases,
+quarantine and queue, the mail of the last 24 hours per hour, the services'
+state and disk use, and the largest organizations.
 
-- **Services:** whether the API, PostgreSQL, Valkey, Rspamd, Postfix and
-  Cyrus are running, their versions and the disk use of the mail store and
-  the mail queue.
-- **Logs:** the last few thousand lines of Postfix' and Cyrus' logs, with a
-  filter (an address, a queue ID, an IP address…). The spam filter's
-  decisions are in each organization's **Mail log**.
+The **Server** sections:
+
+- **Services:** whether the API, PostgreSQL, Valkey, Rspamd, Postfix, Cyrus,
+  Unbound (and ClamAV, CrowdSec when they run) answer, their versions and
+  disk use, with a link to each one's log.
+- **Logs:** the latest lines of every service: the API, Postfix, Cyrus,
+  Rspamd, Unbound, ClamAV, CrowdSec and the certificates. Each line shows its
+  time, level (errors and warnings stand out), process and message. Search
+  as you type (an address, a queue ID, an IP address…) across a service's
+  last 5000 lines, keep only warnings or errors, follow it live, or download
+  it. The containers send their logs to the API's internal listener every 15
+  seconds with the reports secret (`POSTARIX_SECRET_REPORTS`, set by
+  `derive-secrets.sh`); their own output (`docker compose logs`) is
+  unchanged.
+- **Spam filter history:** every message Rspamd checked on the server: what
+  it decided (delivered, junk, greylisted, refused), its score and the rules
+  behind it, with a chart of the last 24 hours and Rspamd's statistics.
+  Organizations see their own part in their **Mail log**.
+- **Rspamd web interface** (under Apps): Rspamd's own interface, opened with
+  your administrator session (no separate password). It can only read unless
+  `RSPAMD_CONTROLLER_ENABLE_PASSWORD` is set; with it, it can also learn
+  spam and ham and change Rspamd's settings.
 - **Mail queue:** the messages waiting to be delivered and why. Select
   messages to deliver them now, hold them, release them or delete them, or
   retry or delete the whole queue.
@@ -211,7 +232,9 @@ settings). Organization admins see their mailboxes' items in the
   They call the same API as the admin panel with
   `Authorization: Bearer px_…`, as the administrator who created the key:
   read-only keys can only read, and a key can be limited to some addresses
-  or networks and given an expiry. The key is shown once; it stops working
+  or networks and given an expiry. A key can also be limited to some
+  organizations: it then only reaches `/api/orgs/<id>/…` of those, as their
+  owner (not as an instance administrator: no limits or smart hosts). The key is shown once; it stops working
   when deleted, when it expires, or when its creator is no longer an
   instance administrator.
 - **Settings:**

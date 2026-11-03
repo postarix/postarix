@@ -8,7 +8,7 @@ import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Textarea } from '@postarix/ui/components/textarea';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -189,12 +189,12 @@ function DomainSettingsDialog({
           />
           <FormField label={t('MTA-STS policy')} hint={t('Tells other servers to deliver to this domain over verified TLS only (enforce), to report failures without refusing (testing), or that the policy is withdrawn (none).')}>
             {(props) => (
-              <NativeSelect {...props} name="mtaStsMode" defaultValue={domain.mtaStsMode ?? ''} className="w-full">
-                <NativeSelectOption value="">{t('The server\'s default')}</NativeSelectOption>
-                <NativeSelectOption value="enforce">enforce</NativeSelectOption>
-                <NativeSelectOption value="testing">testing</NativeSelectOption>
-                <NativeSelectOption value="none">none</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} name="mtaStsMode" defaultValue={domain.mtaStsMode ?? ''} className="w-full">
+                <FormSelectOption value="">{t('The server\'s default')}</FormSelectOption>
+                <FormSelectOption value="enforce">enforce</FormSelectOption>
+                <FormSelectOption value="testing">testing</FormSelectOption>
+                <FormSelectOption value="none">none</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           {domain.status !== 'pending' ? (
@@ -229,15 +229,15 @@ function DomainSettingsDialog({
               {relayHosts.data ? (
                 <FormField label={t('Send through')} hint={t('A smart host from System → Outgoing routing, for every mailbox without its own.')}>
                   {(props) => (
-                    <NativeSelect {...props} name="relayHostId" defaultValue={domain.relayHostId ?? ''} className="w-full">
-                      <NativeSelectOption value="">{t('Direct delivery')}</NativeSelectOption>
+                    <FormSelect {...props} name="relayHostId" defaultValue={domain.relayHostId ?? ''} className="w-full">
+                      <FormSelectOption value="">{t('Direct delivery')}</FormSelectOption>
                       {relayHosts.data.map((r) => (
-                        <NativeSelectOption key={r.id} value={r.id}>
+                        <FormSelectOption key={r.id} value={r.id}>
                           {r.host}
                           {r.enabled ? '' : ' (disabled)'}
-                        </NativeSelectOption>
+                        </FormSelectOption>
                       ))}
-                    </NativeSelect>
+                    </FormSelect>
                   )}
                 </FormField>
               ) : null}
@@ -340,21 +340,21 @@ function DkimDialog({ orgId, domain, onClose }: { orgId: string; domain: Domain;
             </FormField>
             <FormField label={t('Key')}>
               {(props) => (
-                <NativeSelect {...props} value={mode} onChange={(e) => setMode(e.target.value as 'generate' | 'import')} className="w-full">
-                  <NativeSelectOption value="generate">{t('Generate a new key')}</NativeSelectOption>
-                  <NativeSelectOption value="import">{t('Import a private key (PEM)')}</NativeSelectOption>
-                </NativeSelect>
+                <FormSelect {...props} value={mode} onChange={(e) => setMode(e.target.value as 'generate' | 'import')} className="w-full">
+                  <FormSelectOption value="generate">{t('Generate a new key')}</FormSelectOption>
+                  <FormSelectOption value="import">{t('Import a private key (PEM)')}</FormSelectOption>
+                </FormSelect>
               )}
             </FormField>
             {mode === 'generate' ? (
               <FormField label={t('Size')} hint={t('2048 bits works everywhere; some DNS providers cannot store larger records.')}>
                 {(props) => (
-                  <NativeSelect {...props} name="keyBits" defaultValue="2048" className="w-full">
-                    <NativeSelectOption value="1024">{t('1024 bits')}</NativeSelectOption>
-                    <NativeSelectOption value="2048">{t('2048 bits')}</NativeSelectOption>
-                    <NativeSelectOption value="3072">{t('3072 bits')}</NativeSelectOption>
-                    <NativeSelectOption value="4096">{t('4096 bits')}</NativeSelectOption>
-                  </NativeSelect>
+                  <FormSelect {...props} name="keyBits" defaultValue="2048" className="w-full">
+                    <FormSelectOption value="1024">{t('1024 bits')}</FormSelectOption>
+                    <FormSelectOption value="2048">{t('2048 bits')}</FormSelectOption>
+                    <FormSelectOption value="3072">{t('3072 bits')}</FormSelectOption>
+                    <FormSelectOption value="4096">{t('4096 bits')}</FormSelectOption>
+                  </FormSelect>
                 )}
               </FormField>
             ) : (
@@ -560,28 +560,28 @@ function AddDomainDialog({
               hint={t('An alias domain has every address of the chosen domain: mail to ann@alias.example reaches ann@example.com.')}
             >
               {(props) => (
-                <NativeSelect {...props} name="aliasOf" defaultValue="" className="w-full">
-                  <NativeSelectOption value="">{t('None: a domain of its own')}</NativeSelectOption>
+                <FormSelect {...props} name="aliasOf" defaultValue="" className="w-full">
+                  <FormSelectOption value="">{t('None: a domain of its own')}</FormSelectOption>
                   {domains.map((d) => (
-                    <NativeSelectOption key={d.id} value={d.id}>
+                    <FormSelectOption key={d.id} value={d.id}>
                       {d.name}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               )}
             </FormField>
           ) : null}
           {templates.data?.length ? (
             <FormField label={t('Template')} hint={t('Settings and limits the new domain starts with.')}>
               {(props) => (
-                <NativeSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
-                  <NativeSelectOption value="">{t('None')}</NativeSelectOption>
+                <FormSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
+                  <FormSelectOption value="">{t('None')}</FormSelectOption>
                   {templates.data.map((tpl) => (
-                    <NativeSelectOption key={tpl.id} value={tpl.id}>
+                    <FormSelectOption key={tpl.id} value={tpl.id}>
                       {tpl.name}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               )}
             </FormField>
           ) : null}

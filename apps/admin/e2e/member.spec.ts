@@ -37,9 +37,11 @@ test.beforeAll(async ({ request }) => {
 test('sees only the overview of their organization', async ({ page }) => {
   await signIn(page, address, MAILBOX_PASSWORD);
   await page.goto(`/admin/o/${orgId}`);
-  await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
-  const tabs = page.getByRole('navigation', { name: 'Organization sections' });
-  await expect(tabs.getByRole('link')).toHaveText(['Overview']);
+  await expect(page.getByRole('heading', { name: 'Members', exact: true })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await expect(nav.getByRole('link', { name: 'Overview' })).toBeVisible();
+  for (const section of ['Mailboxes', 'Domains', 'Aliases', 'Members']) await expect(nav.getByRole('link', { name: section })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: 'Services' })).toHaveCount(0);
 
   await page.goto(`/admin/o/${orgId}/mailboxes`);
   await expect(page.getByText(/forbidden/i)).toBeVisible();

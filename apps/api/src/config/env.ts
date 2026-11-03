@@ -142,6 +142,8 @@ const envSchema = z
     /** Rspamd's controller (e.g. http://rspamd:11334), for the filtering history. Unset hides it. */
     RSPAMD_CONTROLLER_URL: z.url({ protocol: /^https?$/ }).optional(),
     RSPAMD_CONTROLLER_PASSWORD: z.string().optional(),
+    /** Rspamd's write password: with it, Rspamd's web interface (System → Rspamd) can also learn and change settings. */
+    RSPAMD_CONTROLLER_ENABLE_PASSWORD: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
     /** Public name of the mail server, used in the DNS records shown to admins (MX target). */
     MAIL_HOSTNAME: z.string().min(1).default('localhost'),
     /** Sender of the server's own notices (e.g. "you were added to an organization"). Default no-reply@MAIL_HOSTNAME. */

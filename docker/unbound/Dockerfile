@@ -6,7 +6,7 @@ FROM ${BASE_IMAGE}
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends unbound unbound-anchor ca-certificates dns-root-data; \
+    apt-get install -y --no-install-recommends unbound unbound-anchor ca-certificates dns-root-data curl openssl; \
     rm -rf /var/lib/apt/lists/*; \
     rm -f /etc/unbound/unbound.conf.d/*
 

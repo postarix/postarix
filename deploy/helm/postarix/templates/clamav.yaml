@@ -21,6 +21,8 @@ spec:
           image: {{ include "postarix.image" (list . "clamav") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
+          env:
+            {{- include "postarix.reportsEnv" . | nindent 12 }}
           ports:
             - { name: clamd, containerPort: 3310 }
           readinessProbe:
@@ -29,7 +31,10 @@ spec:
             periodSeconds: 15
           volumeMounts:
             - { name: signatures, mountPath: /var/lib/clamav }
+            - { name: certs, mountPath: /certs, readOnly: true }
           resources: {{- toYaml .Values.clamav.resources | nindent 12 }}
+      volumes:
+        {{- include "postarix.certsVolume" . | nindent 8 }}
   volumeClaimTemplates:
     - metadata:
         name: signatures

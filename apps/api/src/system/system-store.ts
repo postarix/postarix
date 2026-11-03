@@ -1,8 +1,11 @@
 import { Redis } from 'ioredis';
 
 /** Services that send their logs (and, for Postfix, the mail queue) to the API. */
-export const reportingServices = ['postfix', 'cyrus'] as const;
+export const reportingServices = ['postfix', 'cyrus', 'rspamd', 'unbound', 'clamav', 'crowdsec', 'certs'] as const;
 export type ReportingService = (typeof reportingServices)[number];
+/** Everything whose log the admin panel shows: the reporting services and the API itself. */
+export const logServices = ['api', ...reportingServices] as const;
+export type LogService = (typeof logServices)[number];
 
 /** What a mail container says about itself with each report. */
 export interface Heartbeat {
@@ -22,8 +25,8 @@ export interface QueueSnapshot {
  * Postfix, shared by every API instance (Valkey; memory in tests).
  */
 export interface SystemStore {
-  appendLog(service: ReportingService, lines: string[]): Promise<void>;
-  readLog(service: ReportingService, limit: number): Promise<string[]>;
+  appendLog(service: LogService, lines: string[]): Promise<void>;
+  readLog(service: LogService, limit: number): Promise<string[]>;
   setHeartbeat(service: ReportingService, heartbeat: Heartbeat): Promise<void>;
   heartbeat(service: ReportingService): Promise<Heartbeat | null>;
   setQueue(snapshot: QueueSnapshot): Promise<void>;
@@ -48,12 +51,12 @@ export class ValkeySystemStore implements SystemStore {
     this.client = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 3, keyPrefix: 'postarix:system:' });
   }
 
-  async appendLog(service: ReportingService, lines: string[]): Promise<void> {
+  async appendLog(service: LogService, lines: string[]): Promise<void> {
     if (lines.length === 0) return;
     await this.client.multi().rpush(`logs:${service}`, ...lines).ltrim(`logs:${service}`, -LOG_LINES_KEPT, -1).exec();
   }
 
-  readLog(service: ReportingService, limit: number): Promise<string[]> {
+  readLog(service: LogService, limit: number): Promise<string[]> {
     return this.client.lrange(`logs:${service}`, -limit, -1);
   }
 
@@ -98,17 +101,17 @@ export class ValkeySystemStore implements SystemStore {
 }
 
 export class MemorySystemStore implements SystemStore {
-  readonly logs = new Map<ReportingService, string[]>();
+  readonly logs = new Map<LogService, string[]>();
   readonly heartbeats = new Map<ReportingService, Heartbeat>();
   snapshot: QueueSnapshot | null = null;
   actions: string[] = [];
 
-  async appendLog(service: ReportingService, lines: string[]): Promise<void> {
+  async appendLog(service: LogService, lines: string[]): Promise<void> {
     const log = [...(this.logs.get(service) ?? []), ...lines];
     this.logs.set(service, log.slice(-LOG_LINES_KEPT));
   }
 
-  async readLog(service: ReportingService, limit: number): Promise<string[]> {
+  async readLog(service: LogService, limit: number): Promise<string[]> {
     return (this.logs.get(service) ?? []).slice(-limit);
   }
 

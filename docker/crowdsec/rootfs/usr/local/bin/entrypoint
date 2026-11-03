@@ -25,4 +25,6 @@ fi
 unset CROWDSEC_BOUNCER_KEY
 
 mkdir -p /var/log/postarix
-exec crowdsec -c /etc/crowdsec/config.yaml
+# Its log goes to the container's output (and the admin panel), not a file.
+sed -i 's|^\(\s*log_media:\).*|\1 stdout|' /etc/crowdsec/config.yaml
+exec postarix-logged crowdsec /var/lib/crowdsec/data "$(crowdsec -version 2>&1 | head -n 1)" -- crowdsec -c /etc/crowdsec/config.yaml

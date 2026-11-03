@@ -5,7 +5,7 @@ import { Button } from '@postarix/ui/components/button';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Separator } from '@postarix/ui/components/separator';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -112,21 +112,21 @@ export function SyncJobsDialog({ orgId, mailbox, onClose }: { orgId: string; mai
             <div className="grid grid-cols-2 gap-3">
               <FormField label={t('Security')}>
                 {(props) => (
-                  <NativeSelect {...props} name="security" defaultValue="tls" className="w-full">
-                    <NativeSelectOption value="tls">TLS</NativeSelectOption>
-                    <NativeSelectOption value="starttls">STARTTLS</NativeSelectOption>
-                  </NativeSelect>
+                  <FormSelect {...props} name="security" defaultValue="tls" className="w-full">
+                    <FormSelectOption value="tls">TLS</FormSelectOption>
+                    <FormSelectOption value="starttls">STARTTLS</FormSelectOption>
+                  </FormSelect>
                 )}
               </FormField>
               <FormField label={t('Repeat')}>
                 {(props) => (
-                  <NativeSelect {...props} name="interval" defaultValue="" className="w-full">
+                  <FormSelect {...props} name="interval" defaultValue="" className="w-full">
                     {INTERVALS.map((i) => (
-                      <NativeSelectOption key={i.label} value={i.minutes ?? ''}>
+                      <FormSelectOption key={i.label} value={i.minutes ?? ''}>
                         {i.label}
-                      </NativeSelectOption>
+                      </FormSelectOption>
                     ))}
-                  </NativeSelect>
+                  </FormSelect>
                 )}
               </FormField>
             </div>

@@ -1,10 +1,12 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { count, sql } from 'drizzle-orm';
+import { aliases, domains, mailboxes, organization, quarantineItems, user } from '../db/schema/index.js';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { DATABASE, ENV, SYSTEM_STORE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { type Heartbeat, type QueueSnapshot, type ReportingService, reportingServices, type SystemStore } from './system-store.js';
+import { type LogEntry, type LogLevel, parseLogLine } from './log-parse.js';
+import { type Heartbeat, type LogService, type QueueSnapshot, type ReportingService, type SystemStore } from './system-store.js';
 
 /** A report older than this means the container stopped reporting (it reports every 15 s). */
 const STALE_AFTER_MS = 2 * 60 * 1000;
@@ -40,6 +42,16 @@ export interface ServiceStatusDto {
   disk: { path: string; usedBytes: number; totalBytes: number } | null;
 }
 
+export interface OverviewDto {
+  hostname: string;
+  version: string | null;
+  uptimeSeconds: number;
+  counts: { organizations: number; domains: number; pendingDomains: number; mailboxes: number; aliases: number; users: number; quarantined: number };
+  queue: { at: string | null; messages: number; held: number; deferred: number };
+  services: { ok: number; down: number; unknown: number };
+  disks: { service: string; path: string; usedBytes: number; totalBytes: number }[];
+}
+
 export interface QueueItemDto {
   id: string;
   queue: string;
@@ -66,16 +78,76 @@ function cleanLine(line: string): string {
  * reaching into them: no container gets the Docker socket, and none exposes
  * anything new.
  */
+/** Services shown on the status page from their reports (Rspamd is asked directly). */
+const REPORTED: { name: ReportingService; optional: boolean }[] = [
+  { name: 'postfix', optional: false },
+  { name: 'cyrus', optional: false },
+  { name: 'unbound', optional: false },
+  { name: 'certs', optional: true },
+  { name: 'clamav', optional: true },
+  { name: 'crowdsec', optional: true },
+];
+
+const LEVEL_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warning: 2, error: 3 };
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;]*m/g;
+
 @Injectable()
-export class SystemService {
+export class SystemService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(SystemService.name);
   private readonly startedAt = new Date();
+  private apiLines: string[] = [];
+  private apiPartial = '';
+  private apiTimer: NodeJS.Timeout | undefined;
+  private restoreOutput: (() => void) | undefined;
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(ENV) private readonly env: Env,
     @Inject(SYSTEM_STORE) private readonly store: SystemStore,
   ) {}
+
+  /**
+   * The API's own log: whatever it prints is also kept (like the containers'
+   * reports), so the admin panel shows it next to the others.
+   */
+  onApplicationBootstrap(): void {
+    if (this.env.NODE_ENV === 'test') return;
+    const streams = [process.stdout, process.stderr];
+    const originals = streams.map((stream) => stream.write.bind(stream));
+    streams.forEach((stream, i) => {
+      stream.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+        this.captureApiOutput(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+        return (originals[i] as (...args: unknown[]) => boolean)(chunk, ...rest);
+      }) as typeof stream.write;
+    });
+    this.restoreOutput = () => streams.forEach((stream, i) => (stream.write = originals[i] as typeof stream.write));
+    this.apiTimer = setInterval(() => void this.flushApiLog(), 2000);
+    this.apiTimer.unref();
+  }
+
+  onApplicationShutdown(): void {
+    this.restoreOutput?.();
+    if (this.apiTimer) clearInterval(this.apiTimer);
+  }
+
+  /** Collects printed output into lines (kept until the next flush). */
+  captureApiOutput(text: string): void {
+    const parts = (this.apiPartial + text.replace(ANSI, '')).split('\n');
+    this.apiPartial = parts.pop() ?? '';
+    for (const line of parts) {
+      const clean = cleanLine(line.replace(/\r$/, ''));
+      if (clean.trim()) this.apiLines.push(clean);
+    }
+    if (this.apiLines.length > 2000) this.apiLines = this.apiLines.slice(-2000);
+  }
+
+  async flushApiLog(): Promise<void> {
+    if (this.apiLines.length === 0) return;
+    const lines = this.apiLines;
+    this.apiLines = [];
+    await this.store.appendLog('api', lines).catch(() => undefined);
+  }
 
   // --- Reports from the mail containers -----------------------------------
 
@@ -137,8 +209,10 @@ export class SystemService {
         return { version: stat.version ?? null, detail: stat.scanned !== undefined ? `${stat.scanned} messages scanned` : null };
       }),
     ];
-    for (const service of reportingServices) {
+    for (const { name: service, optional } of REPORTED) {
       const beat = (await this.store.heartbeat(service).catch(() => null)) as StoredHeartbeat | null;
+      // Optional services (virus scanning, CrowdSec…) only appear once they report.
+      if (!beat && optional) continue;
       const fresh = beat !== null && Date.now() - Date.parse(beat.at) < STALE_AFTER_MS;
       result.push({
         name: service,
@@ -166,12 +240,68 @@ export class SystemService {
     }
   }
 
+  /**
+   * The newest entries of a service's log (oldest first), parsed, optionally
+   * only those containing `filter` and at least as serious as `level`.
+   */
+  async logEntries(service: LogService, limit: number, filter: string | undefined, level: LogLevel | undefined): Promise<LogEntry[]> {
+    if (service === 'api') await this.flushApiLog();
+    const lines = await this.store.readLog(service, filter || level ? 5000 : limit);
+    const needle = filter?.toLowerCase();
+    const now = new Date();
+    const min = level ? LEVEL_RANK[level] : 0;
+    const out: LogEntry[] = [];
+    for (const line of lines) {
+      if (needle && !line.toLowerCase().includes(needle)) continue;
+      const entry = parseLogLine(line, now);
+      if (LEVEL_RANK[entry.level] < min) continue;
+      out.push(entry);
+    }
+    return out.slice(-limit);
+  }
+
   /** The newest lines of a service's log (oldest first), optionally only those containing `filter`. */
-  async logs(service: ReportingService, limit: number, filter: string | undefined): Promise<string[]> {
+  async logs(service: LogService, limit: number, filter: string | undefined): Promise<string[]> {
+    if (service === 'api') await this.flushApiLog();
     const lines = await this.store.readLog(service, filter ? 5000 : limit);
     if (!filter) return lines;
     const needle = filter.toLowerCase();
     return lines.filter((line) => line.toLowerCase().includes(needle)).slice(-limit);
+  }
+
+  /** The instance at a glance, for the dashboard. */
+  async overview(): Promise<OverviewDto> {
+    const one = async (query: Promise<{ n: number }[]>) => (await query)[0]?.n ?? 0;
+    const [organizations, allDomains, pendingDomains, mailboxCount, aliasCount, users, quarantined] = await Promise.all([
+      one(this.db.select({ n: count() }).from(organization)),
+      one(this.db.select({ n: count() }).from(domains)),
+      one(this.db.select({ n: count() }).from(domains).where(sql`${domains.status} = 'pending'`)),
+      one(this.db.select({ n: count() }).from(mailboxes)),
+      // Temporary addresses count too; the identity rows of mailboxes are not aliases.
+      one(this.db.select({ n: count() }).from(aliases)),
+      one(this.db.select({ n: count() }).from(user)),
+      one(this.db.select({ n: count() }).from(quarantineItems)),
+    ]);
+    const status = await this.status();
+    const queue = await this.queue();
+    return {
+      hostname: this.env.MAIL_HOSTNAME,
+      version: process.env.POSTARIX_VERSION ?? null,
+      uptimeSeconds: Math.round((Date.now() - this.startedAt.getTime()) / 1000),
+      counts: { organizations, domains: allDomains, pendingDomains, mailboxes: mailboxCount, aliases: aliasCount, users, quarantined },
+      queue: {
+        at: queue.at,
+        messages: queue.items.length,
+        held: queue.items.filter((i) => i.queue === 'hold').length,
+        deferred: queue.items.filter((i) => i.queue === 'deferred').length,
+      },
+      services: {
+        ok: status.filter((s) => s.state === 'ok').length,
+        down: status.filter((s) => s.state === 'down').length,
+        unknown: status.filter((s) => s.state === 'unknown').length,
+      },
+      disks: status.flatMap((s) => (s.disk ? [{ service: s.name, ...s.disk }] : [])),
+    };
   }
 
   async queue(): Promise<{ at: string | null; items: QueueItemDto[] }> {

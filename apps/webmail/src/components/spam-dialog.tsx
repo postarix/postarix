@@ -2,7 +2,7 @@ import { Badge } from '@postarix/ui/components/badge';
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -113,10 +113,10 @@ export function SpamDialog({ onClose }: { onClose: () => void }) {
               <p className="text-sm font-medium">{t('Senders')}</p>
               <p className="text-xs text-muted-foreground">{t('Blocked senders are refused. Allowed senders skip the spam filter, if their server proves who they are. Use an address or @domain.')}</p>
               <form onSubmit={add} className="flex flex-wrap gap-2">
-                <NativeSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
-                  <NativeSelectOption value="block">{t('Block')}</NativeSelectOption>
-                  <NativeSelectOption value="allow">{t('Allow')}</NativeSelectOption>
-                </NativeSelect>
+                <FormSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
+                  <FormSelectOption value="block">{t('Block')}</FormSelectOption>
+                  <FormSelectOption value="allow">{t('Allow')}</FormSelectOption>
+                </FormSelect>
                 <Input aria-label={t('Sender')} value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder={t('news@example.com')} className="min-w-48 flex-1" required />
                 <Button type="submit" variant="outline">{t('Add')}</Button>
               </form>

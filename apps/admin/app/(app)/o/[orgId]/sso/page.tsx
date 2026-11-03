@@ -6,7 +6,7 @@ import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Textarea } from '@postarix/ui/components/textarea';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Plus, ShieldCheck, Trash2 } from 'lucide-react';
@@ -76,21 +76,21 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
           {error ? <Notice>{error}</Notice> : null}
           <FormField label={t('Domain')} hint={t('People with a mailbox on this domain sign in through the provider.')}>
             {(props) => (
-              <NativeSelect {...props} name="domainId" required className="w-full">
+              <FormSelect {...props} name="domainId" required className="w-full">
                 {domains.map((d) => (
-                  <NativeSelectOption key={d.id} value={d.id}>
+                  <FormSelectOption key={d.id} value={d.id}>
                     {d.name}
-                  </NativeSelectOption>
+                  </FormSelectOption>
                 ))}
-              </NativeSelect>
+              </FormSelect>
             )}
           </FormField>
           <FormField label={t('Protocol')}>
             {(props) => (
-              <NativeSelect {...props} value={protocol} onChange={(e) => setProtocol(e.target.value as 'oidc' | 'saml')} className="w-full">
-                <NativeSelectOption value="oidc">{t('OpenID Connect')}</NativeSelectOption>
-                <NativeSelectOption value="saml">{t('SAML 2.0')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} value={protocol} onChange={(e) => setProtocol(e.target.value as 'oidc' | 'saml')} className="w-full">
+                <FormSelectOption value="oidc">{t('OpenID Connect')}</FormSelectOption>
+                <FormSelectOption value="saml">{t('SAML 2.0')}</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           {protocol === 'oidc' ? (

@@ -61,6 +61,13 @@ spec:
         - podSelector:
             matchLabels: {{- include "postarix.selector" (list . "cyrus-backend") | nindent 14 }}
         {{- end }}
+        # Their logs, for the admin panel.
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "rspamd") | nindent 14 }}
+        {{- if .Values.clamav.enabled }}
+        - podSelector:
+            matchLabels: {{- include "postarix.selector" (list . "clamav") | nindent 14 }}
+        {{- end }}
       ports:
         - { port: 3443 }
 ---

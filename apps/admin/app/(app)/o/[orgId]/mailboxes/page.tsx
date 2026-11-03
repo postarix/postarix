@@ -7,7 +7,7 @@ import { DialogFooter } from '@postarix/ui/components/dialog';
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
 import { Progress } from '@postarix/ui/components/progress';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { Textarea } from '@postarix/ui/components/textarea';
@@ -121,11 +121,11 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           <FormField label={t('Display name')}>{(props) => <Input {...props} name="displayName" placeholder={t('Jane Doe')} maxLength={128} />}</FormField>
           <FormField label={t('Type')} hint={t('Rooms and equipment are booked by inviting them to an event: they accept when free.')}>
             {(props) => (
-              <NativeSelect {...props} name="kind" defaultValue="person" className="w-full">
-                <NativeSelectOption value="person">{t('Person')}</NativeSelectOption>
-                <NativeSelectOption value="room">{t('Room')}</NativeSelectOption>
-                <NativeSelectOption value="equipment">{t('Equipment')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} name="kind" defaultValue="person" className="w-full">
+                <FormSelectOption value="person">{t('Person')}</FormSelectOption>
+                <FormSelectOption value="room">{t('Room')}</FormSelectOption>
+                <FormSelectOption value="equipment">{t('Equipment')}</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           <FormField label={t('Password')} hint={t('At least 12 characters.')}>
@@ -134,14 +134,14 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           {templates.data?.length ? (
             <FormField label={t('Template')} hint={t('Settings the new mailbox starts with.')}>
               {(props) => (
-                <NativeSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
-                  <NativeSelectOption value="">{t('None')}</NativeSelectOption>
+                <FormSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
+                  <FormSelectOption value="">{t('None')}</FormSelectOption>
                   {templates.data.map((tpl) => (
-                    <NativeSelectOption key={tpl.id} value={tpl.id}>
+                    <FormSelectOption key={tpl.id} value={tpl.id}>
                       {tpl.name}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               )}
             </FormField>
           ) : null}
@@ -248,34 +248,34 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
           {relayHosts.data ? (
             <FormField label={t('Send through')} hint={t('Instance administrators: a smart host for this mailbox\'s mail. Empty: its domain\'s choice.')}>
               {(props) => (
-                <NativeSelect {...props} name="relayHostId" defaultValue={mailbox.relayHostId ?? ''} className="w-full">
-                  <NativeSelectOption value="">{t('As its domain')}</NativeSelectOption>
+                <FormSelect {...props} name="relayHostId" defaultValue={mailbox.relayHostId ?? ''} className="w-full">
+                  <FormSelectOption value="">{t('As its domain')}</FormSelectOption>
                   {relayHosts.data.map((r) => (
-                    <NativeSelectOption key={r.id} value={r.id}>
+                    <FormSelectOption key={r.id} value={r.id}>
                       {r.host}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               )}
             </FormField>
           ) : null}
           <FormField label={t('Quarantine notices')} hint={t('How often its people are told about refused spam they can release.')}>
             {(props) => (
-              <NativeSelect {...props} name="quarantineNotify" defaultValue={mailbox.quarantineNotify} className="w-full">
-                <NativeSelectOption value="never">{t('Never')}</NativeSelectOption>
-                <NativeSelectOption value="hourly">{t('Hourly')}</NativeSelectOption>
-                <NativeSelectOption value="daily">{t('Daily')}</NativeSelectOption>
-                <NativeSelectOption value="weekly">{t('Weekly')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} name="quarantineNotify" defaultValue={mailbox.quarantineNotify} className="w-full">
+                <FormSelectOption value="never">{t('Never')}</FormSelectOption>
+                <FormSelectOption value="hourly">{t('Hourly')}</FormSelectOption>
+                <FormSelectOption value="daily">{t('Daily')}</FormSelectOption>
+                <FormSelectOption value="weekly">{t('Weekly')}</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           <FormField label={t('Status')}>
             {(props) => (
-              <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
-                <NativeSelectOption value="active">{t('Active')}</NativeSelectOption>
-                <NativeSelectOption value="no_login">{t('Receives mail, nobody can sign in')}</NativeSelectOption>
-                <NativeSelectOption value="disabled">{t('Disabled: no sign-in, no mail')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
+                <FormSelectOption value="active">{t('Active')}</FormSelectOption>
+                <FormSelectOption value="no_login">{t('Receives mail, nobody can sign in')}</FormSelectOption>
+                <FormSelectOption value="disabled">{t('Disabled: no sign-in, no mail')}</FormSelectOption>
+              </FormSelect>
             )}
           </FormField>
           <Field>
@@ -415,18 +415,18 @@ function ArchivingSection({ orgId, mailboxes }: { orgId: string; mailboxes: Mail
             <Skeleton className="h-5 w-64" />
           ) : (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <label className="flex items-center gap-2 text-sm">{t('Archive mailbox')}<NativeSelect
+              <label className="flex items-center gap-2 text-sm">{t('Archive mailbox')}<FormSelect
                   value={current.archiveMailboxId ?? ''}
                   disabled={pending}
                   onChange={(e) => void change({ ...current, archiveMailboxId: e.target.value || null })}
                 >
-                  <NativeSelectOption value="">{t('No archiving')}</NativeSelectOption>
+                  <FormSelectOption value="">{t('No archiving')}</FormSelectOption>
                   {mailboxes.map((m) => (
-                    <NativeSelectOption key={m.id} value={m.id}>
+                    <FormSelectOption key={m.id} value={m.id}>
                       {m.address}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               </label>
               <div className="flex items-center gap-2">
                 <Checkbox

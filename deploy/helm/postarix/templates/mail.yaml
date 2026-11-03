@@ -152,6 +152,9 @@ spec:
           env:
             - name: UNBOUND_FORWARD_ZONES
               value: "{{ .Values.clusterDomain }}={{ $clusterDns }}{{ range .Values.mail.dane.forwardZones }} {{ . }}{{ end }}"
+            {{- include "postarix.reportsEnv" . | nindent 12 }}
+          volumeMounts:
+            - { name: certs, mountPath: /certs, readOnly: true }
           readinessProbe:
             exec: { command: [/usr/local/bin/healthcheck] }
             periodSeconds: 15

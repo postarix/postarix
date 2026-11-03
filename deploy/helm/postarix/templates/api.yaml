@@ -58,6 +58,13 @@ spec:
               value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
+            # Optional: write access to Rspamd's web interface (learning, settings).
+            - name: RSPAMD_CONTROLLER_ENABLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: RSPAMD_CONTROLLER_ENABLE_PASSWORD
+                  optional: true
             - name: NODE_ENV
               value: {{ .Values.api.nodeEnv | quote }}
             - name: LOG_FORMAT

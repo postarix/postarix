@@ -21,4 +21,4 @@ rm -f /etc/unbound/local.d/*.conf
 } > /etc/unbound/local.d/postarix.conf
 unbound-checkconf /etc/unbound/unbound.conf >/dev/null
 
-exec unbound -d -c /etc/unbound/unbound.conf
+exec postarix-logged unbound /var/lib/unbound "$(unbound -V 2>/dev/null | head -n 1)" -- unbound -d -c /etc/unbound/unbound.conf

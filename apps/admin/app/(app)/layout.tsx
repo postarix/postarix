@@ -1,25 +1,43 @@
 'use client';
 
 import { Button } from '@postarix/ui/components/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@postarix/ui/components/dropdown-menu';
+import { Sheet, SheetContent, SheetTitle } from '@postarix/ui/components/sheet';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { cn } from '@postarix/ui/lib/utils';
-import { Building2, Languages, LogOut, Menu, Server, UserRound } from 'lucide-react';
+import { ChevronRight, Info, Menu, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { type ReactNode, useEffect } from 'react';
-import { BrandMark } from '@/components/brand';
+import { type ReactNode, useEffect, useState } from 'react';
+import { AppSidebar, orgNav, systemNav } from '@/components/app-sidebar';
+import { CreateOrganizationDialog } from '@/components/create-organization';
 import { authClient, useSession } from '@/lib/auth-client';
+import { t } from '@/lib/i18n';
 import { isSuperAdmin, useAllOrganizations, useBranding, useMyOrganizations } from '@/lib/queries';
-import { Notice } from '@/components/notice';
-import { language, languages, setLanguage, t } from '@/lib/i18n';
+import type { OrganizationSummary } from '@/lib/types';
+
+/** "Organization › Mailboxes", "Server › Logs"… for the top bar. */
+function useBreadcrumbs(orgs: OrganizationSummary[]): { label: string; href?: string }[] {
+  const pathname = usePathname();
+  if (pathname === '/') return [{ label: t('Dashboard') }];
+  const org = /^\/o\/([^/]+)/.exec(pathname);
+  if (org) {
+    const found = orgs.find((o) => o.id === org[1]);
+    const crumbs: { label: string; href?: string }[] = [{ label: found?.name ?? t('Organization'), href: `/o/${org[1]}` }];
+    const section = orgNav(org[1]!, true)
+      .slice(1)
+      .find((item) => pathname.startsWith(item.href));
+    if (section) crumbs.push({ label: section.label });
+    else crumbs[0] = { label: crumbs[0]!.label };
+    return crumbs;
+  }
+  if (pathname.startsWith('/system')) {
+    const section = systemNav.find((item) => pathname.startsWith(item.href));
+    return [{ label: t('Server'), href: '/system/services' }, ...(section ? [{ label: section.label }] : [])];
+  }
+  if (pathname.startsWith('/organizations')) return [{ label: t('Organizations') }];
+  if (pathname.startsWith('/account')) return [{ label: t('Your account') }];
+  return [];
+}
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -29,10 +47,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const mine = useMyOrganizations();
   const all = useAllOrganizations(superAdmin);
   const branding = useBranding();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session) router.replace('/login');
   }, [isPending, session, router]);
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  const orgs = superAdmin ? (all.data ?? []) : (mine.data ?? []);
+  const crumbs = useBreadcrumbs(orgs);
 
   if (isPending || !session) {
     return (
@@ -42,7 +66,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  const orgs = superAdmin ? (all.data ?? []) : (mine.data ?? []);
   const signOut = async () => {
     await authClient.signOut();
     // A full page load drops every cached query, so nothing of this session
@@ -50,150 +73,73 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     window.location.assign('/admin/login');
   };
 
-  const brand = (
-    <Link href="/" className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
-      <BrandMark className="size-8" />
-      <span className="leading-tight">
-        <span className="block text-[0.95rem] font-semibold tracking-tight">{t('Postarix')}</span>
-        <span className="block text-xs text-sidebar-muted">{superAdmin ? 'Instance administration' : 'Administration'}</span>
-      </span>
-    </Link>
+  const sidebar = (onNavigate?: () => void) => (
+    <AppSidebar
+      orgs={orgs}
+      orgsLoading={superAdmin ? all.isLoading : mine.isLoading}
+      superAdmin={superAdmin}
+      email={session.user.email}
+      name={session.user.name}
+      productName={branding.data?.productName || t('Postarix')}
+      onCreateOrganization={() => setCreating(true)}
+      onSignOut={() => void signOut()}
+      {...(onNavigate ? { onNavigate } : {})}
+    />
   );
+  const announcement = branding.data?.announcement;
 
   return (
     <div className="flex h-screen bg-sidebar">
-      <aside className="hidden h-screen w-60 shrink-0 flex-col text-sidebar-foreground md:flex">
-        <div className="px-5 pt-5 pb-4 text-white">{brand}</div>
+      <aside className="hidden h-screen w-64 shrink-0 md:block">{sidebar()}</aside>
 
-        <nav aria-label={t('Organizations')} className="flex-1 overflow-y-auto px-3">
-          <p className="px-2 pt-2 pb-1.5 text-xs font-medium text-sidebar-muted">{t('Organizations')}</p>
-          <ul className="space-y-0.5">
-            {orgs.map((org) => {
-              const active = pathname.startsWith(`/o/${org.id}`);
-              return (
-                <li key={org.id}>
-                  <Link
-                    href={`/o/${org.id}`}
-                    aria-current={active ? 'page' : undefined}
-                    className={cn(
-                      'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
-                      'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                      active
-                        ? 'bg-sidebar-accent font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.07),0_1px_2px_rgb(0_0_0/0.35)]'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-white',
-                    )}
-                  >
-                    <Building2 className={cn('size-4 shrink-0', active ? 'text-stamp' : 'text-sidebar-muted')} aria-hidden />
-                    <span className="truncate">{org.name}</span>
-                  </Link>
-                </li>
-              );
-            })}
-            {orgs.length === 0 && !mine.isLoading ? (
-              <li className="px-2 py-1.5 text-sm text-sidebar-muted">{t('No organizations yet')}</li>
-            ) : null}
-          </ul>
-        </nav>
-
-        <div className="p-3">
-          <label className="mb-1 flex h-8 items-center gap-2.5 px-2.5 text-sm text-sidebar-foreground/85">
-            <Languages className="size-4 text-sidebar-muted" aria-hidden />
-            <span className="sr-only">{t('Language')}</span>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as (typeof languages)[number]['code'])}
-              className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm focus-visible:outline-none"
-            >
-              {languages.map((l) => (
-                <option key={l.code} value={l.code} className="text-foreground">
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {superAdmin ? (
-            <Link
-              href="/system"
-              aria-current={pathname === '/system' ? 'page' : undefined}
-              className={cn(
-                'mb-1 flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 hover:text-white',
-                pathname === '/system' && 'bg-sidebar-accent font-medium text-white',
-              )}
-            >
-              <Server className="size-4 text-sidebar-muted" aria-hidden />{t('System')}</Link>
-          ) : null}
-          <Link
-            href="/account"
-            aria-current={pathname === '/account' ? 'page' : undefined}
-            className={cn(
-              'flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors hover:bg-sidebar-accent/60 hover:text-white',
-              pathname === '/account' && 'bg-sidebar-accent font-medium text-white',
-            )}
-          >
-            <UserRound className="size-4 text-sidebar-muted" aria-hidden />
-            <span className="truncate">{session.user.email}</span>
-          </Link>
-          <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white" onClick={signOut}>
-            <LogOut aria-hidden />{t('Sign out')}</Button>
-        </div>
-      </aside>
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="left" showClose={false} className="w-72 border-sidebar-border bg-sidebar p-0">
+          <SheetTitle className="sr-only">{t('Menu')}</SheetTitle>
+          {sidebar(() => setMenuOpen(false))}
+        </SheetContent>
+      </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col md:py-2 md:pr-2">
-        {/* Small screens: the sidebar becomes a menu. */}
-        <header className="sticky top-0 z-10 flex items-center justify-between bg-sidebar px-4 py-3 text-white md:hidden">
-          {brand}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label={t('Open menu')}>
-                <Menu aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel>{t('Organizations')}</DropdownMenuLabel>
-              {orgs.map((org) => (
-                <DropdownMenuItem key={org.id} asChild>
-                  <Link href={`/o/${org.id}`}>
-                    <Building2 aria-hidden />
-                    <span className="truncate">{org.name}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-              {languages
-                .filter((l) => l.code !== language)
-                .map((l) => (
-                  <DropdownMenuItem key={l.code} onSelect={() => setLanguage(l.code)}>
-                    <Languages aria-hidden />
-                    {l.label}
-                  </DropdownMenuItem>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background md:rounded-xl md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
+          <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/60 px-4 backdrop-blur md:px-8">
+            <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label={t('Open menu')} onClick={() => setMenuOpen(true)}>
+              <Menu aria-hidden />
+            </Button>
+            <nav aria-label={t('Breadcrumb')} className="min-w-0 flex-1">
+              <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+                {crumbs.map((crumb, i) => (
+                  <li key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
+                    {i > 0 ? <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : null}
+                    {crumb.href && i < crumbs.length - 1 ? (
+                      <Link href={crumb.href} className="truncate text-muted-foreground transition-colors hover:text-foreground">
+                        {crumb.label}
+                      </Link>
+                    ) : (
+                      <span className={cn('truncate', i === crumbs.length - 1 ? 'font-medium text-foreground' : 'text-muted-foreground')} aria-current={i === crumbs.length - 1 ? 'page' : undefined}>
+                        {crumb.label}
+                      </span>
+                    )}
+                  </li>
                 ))}
-              <DropdownMenuSeparator />
-              {superAdmin ? (
-                <DropdownMenuItem asChild>
-                  <Link href="/system">
-                    <Server aria-hidden />{t('System')}</Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem asChild>
-                <Link href="/account">
-                  <UserRound aria-hidden />{t('Your account')}</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={signOut}>
-                <LogOut aria-hidden />{t('Sign out')}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-
-        <main className="min-w-0 flex-1 overflow-y-auto bg-background px-4 py-8 md:rounded-xl md:px-10 md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
-          <div className="mx-auto max-w-6xl">
-            {branding.data?.announcement ? (
-              <div className="mb-6">
-                <Notice tone="warning">{branding.data.announcement}</Notice>
-              </div>
-            ) : null}
-            {children}
-          </div>
-        </main>
+              </ol>
+            </nav>
+          </header>
+          {announcement ? (
+            <div role="status" className="flex items-start gap-2 border-b bg-stamp-soft px-4 py-2.5 text-sm md:px-8">
+              {branding.data?.announcementLevel === 'info' ? (
+                <Info className="mt-0.5 size-4 shrink-0 text-ink" aria-hidden />
+              ) : (
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+              )}
+              <span>{announcement}</span>
+            </div>
+          ) : null}
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
+            <div className="mx-auto max-w-7xl">{children}</div>
+          </main>
+        </div>
       </div>
+      <CreateOrganizationDialog open={creating} onClose={() => setCreating(false)} />
     </div>
   );
 }

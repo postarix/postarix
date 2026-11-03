@@ -1,7 +1,7 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send, X } from 'lucide-react';
@@ -128,13 +128,13 @@ export function Composer({
           {identities.length > 1 ? (
             <div className={ROW}>
               <label htmlFor={`${id}-from`} className={LABEL}>{t('From')}</label>
-              <NativeSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)} className={`${BARE} w-full pr-8`}>
+              <FormSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)} className={`${BARE} w-full pr-8`}>
                 {identities.map((address) => (
-                  <NativeSelectOption key={address} value={address}>
+                  <FormSelectOption key={address} value={address}>
                     {address}
-                  </NativeSelectOption>
+                  </FormSelectOption>
                 ))}
-              </NativeSelect>
+              </FormSelect>
             </div>
           ) : null}
           <div className={ROW}>

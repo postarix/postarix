@@ -1,7 +1,7 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Copy, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -64,13 +64,13 @@ export function TemporaryAddressesDialog({ onClose }: { onClose: () => void }) {
         </DialogHeader>
         <form onSubmit={create} className="flex flex-wrap gap-2">
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('What for (optional)')} className="min-w-40 flex-1" maxLength={100} />
-          <NativeSelect aria-label={t('Works for')} value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+          <FormSelect aria-label={t('Works for')} value={String(hours)} onChange={(e) => setHours(Number(e.target.value))}>
             {LIFETIMES.map((l) => (
-              <NativeSelectOption key={l.hours} value={l.hours}>
+              <FormSelectOption key={l.hours} value={l.hours}>
                 {t(l.label)}
-              </NativeSelectOption>
+              </FormSelectOption>
             ))}
-          </NativeSelect>
+          </FormSelect>
           <Button type="submit">{t('Create')}</Button>
         </form>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}

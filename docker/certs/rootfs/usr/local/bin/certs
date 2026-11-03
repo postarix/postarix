@@ -2,6 +2,12 @@
 # Keeps /certs/{fullchain,privkey}.pem current for the mail services.
 set -eu
 
+# Report this log to the admin panel (System → Logs), then run as usual.
+if [ -z "${POSTARIX_LOGGED:-}" ]; then
+  export POSTARIX_LOGGED=1
+  exec postarix-logged certs /certs "$(lego --version 2>/dev/null | head -n 1)" -- "$0" "$@"
+fi
+
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required}"
 MODE="${CERTS_MODE:-selfsigned}"
 OUT=/certs

@@ -57,6 +57,13 @@ services:
       context: ../unbound
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    environment:
+      # Logs for the admin panel (System → Logs); unset, nothing is reported.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_API_INTERNAL: api:3443
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+    volumes:
+      - certs:/certs:ro
     networks:
       default:
         # Fixed address so Postfix can use it as its (DNSSEC-validating) resolver.
@@ -80,8 +87,13 @@ services:
       DNS_RESOLVER: unbound
       # "clamav:3310" with the clamav profile (virus scanning).
       CLAMAV_SERVERS: ${CLAMAV_SERVERS:-}
+      # Logs for the admin panel (System → Logs); unset, nothing is reported.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_API_INTERNAL: api:3443
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     volumes:
       - rspamd-data:/var/lib/rspamd
+      - certs:/certs:ro
     depends_on:
       unbound:
         condition: service_started
@@ -159,6 +171,7 @@ services:
       # Filtering history shown to organization admins.
       RSPAMD_CONTROLLER_URL: http://rspamd:11334
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
+      RSPAMD_CONTROLLER_ENABLE_PASSWORD: ${RSPAMD_CONTROLLER_ENABLE_PASSWORD:-}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
       POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_SECRET_SUBMISSION: ${POSTARIX_SECRET_SUBMISSION:?run deploy/scripts/derive-secrets.sh}
@@ -308,11 +321,16 @@ services:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
     environment:
       CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY:-}
+      # Logs for the admin panel (System → Logs); unset, nothing is reported.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_API_INTERNAL: api:3443
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     ports:
       - "127.0.0.1:${CROWDSEC_LAPI_PORT:-8081}:8080"
     volumes:
       - mail-logs:/var/log/postarix:ro
       - crowdsec-data:/var/lib/crowdsec/data
+      - certs:/certs:ro
 
   # Optional virus scanning (about 1.5 GB of memory). Start with
   # --profile clamav and set CLAMAV_SERVERS=clamav:3310.
@@ -324,8 +342,14 @@ services:
       context: ../clamav
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
+    environment:
+      # Logs for the admin panel (System → Logs); unset, nothing is reported.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_API_INTERNAL: api:3443
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     volumes:
       - clamav-data:/var/lib/clamav
+      - certs:/certs:ro
 
 networks:
   default:

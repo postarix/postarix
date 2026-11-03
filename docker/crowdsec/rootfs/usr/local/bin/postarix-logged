@@ -1,0 +1,48 @@
+#!/bin/sh
+# Runs a service and sends its output to the Postarix API, for the admin
+# panel's logs (System → Logs), like the postfix and cyrus containers do. The
+# output still goes to the container's own log too.
+#
+# Usage: postarix-logged <service> <disk path> <version> -- <command> [args…]
+#
+# Reporting is on when the container has the reports secret
+# (POSTARIX_SECRET_REPORTS, or INTERNAL_API_TOKEN to derive it from),
+# MAIL_HOSTNAME and the certificates (/certs, for the API's internal HTTPS
+# listener). Without them the command simply runs. The command replaces this
+# script (it gets the signals); a pipe and the reporter run beside it.
+# (The same script is in the rspamd, unbound, clamav, crowdsec and certs images.)
+set -eu
+service=$1
+disk_path=$2
+version=$3
+shift 3
+[ "${1:-}" = "--" ] && shift
+
+secret=""
+if [ -n "${POSTARIX_SECRET_REPORTS:-}" ]; then
+  secret=$POSTARIX_SECRET_REPORTS
+elif [ -n "${INTERNAL_API_TOKEN:-}" ] && command -v openssl >/dev/null; then
+  secret=$(printf 'postarix:reports' | openssl dgst -sha256 -hmac "$INTERNAL_API_TOKEN" -r | cut -d' ' -f1)
+fi
+unset POSTARIX_SECRET_REPORTS INTERNAL_API_TOKEN
+ca_file=${POSTARIX_REPORTS_CA:-/certs/fullchain.pem}
+
+if [ -z "$secret" ] || [ -z "${MAIL_HOSTNAME:-}" ] || ! command -v curl >/dev/null; then
+  exec "$@"
+fi
+
+dir=/var/log/postarix-report
+install -d -m 0750 "$dir" /etc/postarix
+log_file=$dir/$service.log
+fifo=$dir/$service.pipe
+rm -f "$fifo"
+mkfifo -m 0600 "$fifo"
+printf 'POSTARIX_API_INTERNAL=%s\nMAIL_HOSTNAME=%s\n' "${POSTARIX_API_INTERNAL:-api:3443}" "$MAIL_HOSTNAME" > /etc/postarix/reports.env
+( umask 077; printf 'x-postarix-internal-token: %s\n' "$secret" > /etc/postarix/reports.headers )
+unset secret
+
+# The service writes into the pipe; tee copies it to the container's output
+# and to the file the reporter reads (kept under 8 MB).
+tee -a "$log_file" < "$fifo" &
+postarix-reporter "$service" "$log_file" "$disk_path" "$ca_file" "$version" &
+exec "$@" > "$fifo" 2>&1

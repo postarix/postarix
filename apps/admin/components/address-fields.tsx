@@ -1,5 +1,5 @@
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import type { Domain } from '@/lib/types';
 import { FormField } from './form-field';
 import { t } from '@/lib/i18n';
@@ -29,13 +29,13 @@ export function AddressFields({
       <span className="pb-2 text-muted-foreground">@</span>
       <FormField label={t('Domain')}>
         {(props) => (
-          <NativeSelect {...props} name="domainId" required>
+          <FormSelect {...props} name="domainId" required>
             {domains.map((d) => (
-              <NativeSelectOption key={d.id} value={d.id}>
+              <FormSelectOption key={d.id} value={d.id}>
                 {d.name}
-              </NativeSelectOption>
+              </FormSelectOption>
             ))}
-          </NativeSelect>
+          </FormSelect>
         )}
       </FormField>
     </div>
