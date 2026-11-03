@@ -90,4 +90,34 @@ describe('API keys', () => {
     await asKey(demoted.body.key).get('/api/system/status').expect(401);
     await db.execute(sql`UPDATE "user" SET role = 'admin' WHERE id = ${rootId}`);
   });
+
+  it('limits a key to some organizations, as their owner and not as an instance administrator', async () => {
+    const other = await mailboxInNewOrg(app, 'keys-other');
+    await root.post('/api/system/api-keys').send({ name: 'Bad', access: 'write', organizationIds: ['no-such-org'] }).expect(422);
+    const { body } = await root.post('/api/system/api-keys').send({ name: 'Acme only', access: 'write', organizationIds: [org.orgId] }).expect(201);
+    expect(body.organizations).toEqual([{ id: org.orgId, name: expect.any(String) }]);
+    const list = await root.get('/api/system/api-keys').expect(200);
+    expect(list.body.data.find((k: { id: string }) => k.id === body.id).organizations).toHaveLength(1);
+    const key = asKey(body.key);
+    const patch = (path: string) => request(app.getHttpServer()).patch(path).set('Authorization', `Bearer ${body.key}`);
+
+    // Its own organization, as an owner.
+    const mailboxes = await key.get(`/api/orgs/${org.orgId}/mailboxes`).expect(200);
+    expect(mailboxes.body.data.map((m: { address: string }) => m.address)).toContain(org.address);
+    await key.post(`/api/orgs/${org.orgId}/aliases`).send({ domainId: org.domainId, localPart: 'from-key', destinations: [org.address] }).expect(201);
+    // Not the instance's limits (those are for instance administrators).
+    await patch(`/api/orgs/${org.orgId}/domains/${org.domainId}`).send({ maxMailboxes: 1000 }).expect(403);
+
+    // Nothing of other organizations, and nothing of the instance.
+    await key.get(`/api/orgs/${other.orgId}/mailboxes`).expect(401);
+    await key.get(`/api/orgs/${other.orgId}/overview`).expect(401);
+    await key.get('/api/system/status').expect(401);
+    await key.get('/api/system/api-keys').expect(401);
+    await key.get('/api/admin/organizations').expect(401);
+    await key.get('/api/me/organizations').expect(401);
+    await key.get(`/api/orgs/${org.orgId}x/mailboxes`).expect(401);
+    // An unlimited key still reaches everything.
+    const all = await root.post('/api/system/api-keys').send({ name: 'Everything', access: 'read' }).expect(201);
+    await asKey(all.body.key).get(`/api/orgs/${other.orgId}/mailboxes`).expect(200);
+  });
 });

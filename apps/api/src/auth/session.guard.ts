@@ -39,7 +39,12 @@ export class SessionGuard implements CanActivate {
     // Software with an API key (instance-administrator access; no second factor).
     const authorization = request.headers.authorization;
     if (typeof authorization === 'string' && /^Bearer\s+px_/i.test(authorization)) {
-      const keySession = await this.apiKeys.authenticate(authorization.replace(/^Bearer\s+/i, '').trim(), request.ip, request.method);
+      const keySession = await this.apiKeys.authenticate(
+        authorization.replace(/^Bearer\s+/i, '').trim(),
+        request.ip,
+        request.method,
+        (request.originalUrl ?? request.url ?? '').split('?')[0],
+      );
       if (!keySession) throw new UnauthorizedException('Invalid API key, or not allowed for this request');
       request.auth = keySession;
       return true;
