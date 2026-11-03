@@ -12,7 +12,14 @@ describe('Prometheus metrics', () => {
 
   beforeAll(async () => {
     app = await startApp();
-    server = (await startMetricsServer({ port: 30_000 + Math.floor(Math.random() * 20_000) }))!;
+    // A random port, retried if another test process holds it.
+    for (let attempt = 0; !server; attempt++) {
+      try {
+        server = (await startMetricsServer({ port: 30_000 + Math.floor(Math.random() * 20_000) }))!;
+      } catch (error) {
+        if (attempt >= 10 || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+      }
+    }
   });
 
   afterAll(async () => {
