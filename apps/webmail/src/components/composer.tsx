@@ -119,7 +119,7 @@ export function Composer({
           <DialogDescription className="sr-only">{t('Write and send an email')}</DialogDescription>
         </DialogHeader>
         <form
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+          className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
           onSubmit={(e) => {
             e.preventDefault();
             void run('send');

@@ -137,6 +137,34 @@
   body {
     @apply bg-background font-sans text-foreground antialiased;
     font-feature-settings: "ss01", "cv11";
+    /* The apps scroll inside their panes: no rubber band around the whole page. */
+    overscroll-behavior: none;
+  }
+  /*
+   * Scrollbars: thin, rounded and quiet everywhere (Firefox and Chromium read
+   * scrollbar-width/-color; older WebKit the pseudo-elements). On the dark
+   * sidebar they are light; see .scrollbar-sidebar.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+    background-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--muted-foreground) 65%, transparent);
   }
   h1,
   h2,
@@ -208,4 +236,18 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* A scroll pane on the dark sidebar: its bar shows only while hovered. */
+@utility scrollbar-sidebar {
+  scrollbar-color: transparent transparent;
+  &:hover,
+  &:focus-within {
+    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+  }
+}
+
+/* A pane whose content changes height: keeps room for the bar, so nothing shifts sideways. */
+@utility scrollbar-stable {
+  scrollbar-gutter: stable;
 }

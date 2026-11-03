@@ -30,7 +30,7 @@ export function Sidebar({
     <div className="flex h-full flex-col gap-4">
       <Button variant="stamp" onClick={onCompose} className="h-9 w-full justify-start">
         <PenLine aria-hidden />{t('Compose')}</Button>
-      <nav aria-label={t('Folders')} className="-mx-1 flex-1 overflow-y-auto px-1">
+      <nav aria-label={t('Folders')} className="scrollbar-sidebar relative -mx-1 flex-1 overflow-y-auto px-1">
         {loading ? (
           <div className="space-y-1.5" aria-hidden>
             {[0, 1, 2, 3, 4].map((i) => (

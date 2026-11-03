@@ -91,8 +91,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const announcement = branding.data?.announcement;
 
   return (
-    <div className="flex h-screen bg-sidebar">
-      <aside className="hidden h-screen w-64 shrink-0 md:block">{sidebar()}</aside>
+    <div className="flex h-dvh overflow-hidden bg-sidebar">
+      <aside className="hidden h-full w-64 shrink-0 md:block">{sidebar()}</aside>
 
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" showClose={false} className="w-72 border-sidebar-border bg-sidebar p-0">
@@ -136,7 +136,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <span>{announcement}</span>
             </div>
           ) : null}
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
+          <main className="scrollbar-stable relative min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
             <div className="mx-auto max-w-7xl">{children}</div>
           </main>
         </div>

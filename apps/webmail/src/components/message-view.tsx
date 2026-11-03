@@ -276,7 +276,7 @@ export function MessageView({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-6 pb-8 md:px-8">
+      <div className="scrollbar-stable relative flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-6 pb-8 md:px-8">
         <header className="space-y-5">
           <h2 className="text-xl leading-snug font-semibold break-words md:text-2xl">{data.subject || '(no subject)'}</h2>
           <div className="flex items-start gap-3">

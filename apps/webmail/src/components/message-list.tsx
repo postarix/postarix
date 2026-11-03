@@ -94,7 +94,7 @@ export function MessageList({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="scrollbar-stable relative min-h-0 flex-1 overflow-y-auto">
         {emails.isLoading || !ready ? (
           <div className="space-y-px">
             {[0, 1, 2, 3, 4, 5].map((i) => (

@@ -149,7 +149,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+          <div className="relative min-h-0 flex-1 overflow-y-auto pb-3">
             {contacts.isLoading ? (
               <div className="space-y-2 px-4">
                 {[0, 1, 2, 3].map((i) => (
@@ -197,7 +197,7 @@ export function ContactsPage({ contactId, search, email, name }: { contactId: st
             )}
           </div>
         </section>
-        <section className={cn('min-h-0 min-w-0 flex-1 overflow-y-auto', !selected && 'max-lg:hidden')} aria-label={t('Contact')}>
+        <section className={cn('scrollbar-stable relative min-h-0 min-w-0 flex-1 overflow-y-auto', !selected && 'max-lg:hidden')} aria-label={t('Contact')}>
           {selected ? (
             <ContactDetail contact={selected} onEdit={() => setEditing(selected)} onWrite={write} onDeleted={() => navigate(contactPath(null, query))} />
           ) : (
