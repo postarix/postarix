@@ -4,6 +4,7 @@ import { cn } from '@postarix/ui/lib/utils';
 import { Archive, File, Folder, Inbox, PenLine, Send, ShieldAlert, Tag, Trash2, X } from 'lucide-react';
 import type { Label } from '@/lib/mail';
 import { labelPath, mailboxPath } from '@/lib/router';
+import { t } from '@/lib/i18n';
 
 const ICONS = { inbox: Inbox, drafts: File, sent: Send, archive: Archive, junk: ShieldAlert, trash: Trash2 } as const;
 
@@ -28,10 +29,8 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col gap-4">
       <Button variant="stamp" onClick={onCompose} className="h-9 w-full justify-start">
-        <PenLine aria-hidden />
-        Compose
-      </Button>
-      <nav aria-label="Folders" className="-mx-1 flex-1 overflow-y-auto px-1">
+        <PenLine aria-hidden />{t('Compose')}</Button>
+      <nav aria-label={t('Folders')} className="-mx-1 flex-1 overflow-y-auto px-1">
         {loading ? (
           <div className="space-y-1.5" aria-hidden>
             {[0, 1, 2, 3, 4].map((i) => (
@@ -47,7 +46,7 @@ export function Sidebar({
               const firstCustom = !mailbox.role && (index === 0 || Boolean(mailboxes[index - 1]!.role));
               return (
                 <li key={mailbox.id}>
-                  {firstCustom ? <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">Folders</p> : null}
+                  {firstCustom ? <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">{t('Folders')}</p> : null}
                   <a
                     data-nav
                     href={mailboxPath(mailbox.id)}
@@ -79,8 +78,8 @@ export function Sidebar({
         )}
         {labels.length ? (
           <>
-            <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">Labels</p>
-            <ul className="space-y-0.5" aria-label="Labels">
+            <p className="px-2.5 pt-4 pb-1.5 text-xs font-medium text-sidebar-muted">{t('Labels')}</p>
+            <ul className="space-y-0.5" aria-label={t('Labels')}>
               {labels.map((label) => {
                 const active = label.keyword === currentLabel;
                 return (

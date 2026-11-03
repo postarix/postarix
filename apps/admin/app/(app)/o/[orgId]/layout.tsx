@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { Notice } from '@/components/notice';
 import { errorMessage } from '@/lib/api';
 import { useOrganization } from '@/lib/queries';
+import { t } from '@/lib/i18n';
 
 export default function OrganizationLayout({ children }: { children: ReactNode }) {
   const { orgId } = useParams<{ orgId: string }>();
@@ -29,30 +30,30 @@ export default function OrganizationLayout({ children }: { children: ReactNode }
   const isAdmin = org.data.role === 'owner' || org.data.role === 'admin';
   const base = `/o/${orgId}`;
   const tabs = [
-    { href: base, label: 'Overview' },
+    { href: base, label: t('Overview') },
     ...(isAdmin
       ? [
-          { href: `${base}/domains`, label: 'Domains' },
-          { href: `${base}/mailboxes`, label: 'Mailboxes' },
-          { href: `${base}/aliases`, label: 'Aliases' },
-          { href: `${base}/members`, label: 'Members' },
-          { href: `${base}/sso`, label: 'Sign-in' },
-          { href: `${base}/mail-log`, label: 'Mail log' },
-          { href: `${base}/quarantine`, label: 'Quarantine' },
-          { href: `${base}/activity`, label: 'Activity' },
+          { href: `${base}/domains`, label: t('Domains') },
+          { href: `${base}/mailboxes`, label: t('Mailboxes') },
+          { href: `${base}/aliases`, label: t('Aliases') },
+          { href: `${base}/members`, label: t('Members') },
+          { href: `${base}/sso`, label: t('Sign-in') },
+          { href: `${base}/mail-log`, label: t('Mail log') },
+          { href: `${base}/quarantine`, label: t('Quarantine') },
+          { href: `${base}/activity`, label: t('Activity') },
         ]
       : []),
   ];
 
   return (
     <div>
-      <p className="text-sm text-muted-foreground">Organization</p>
+      <p className="text-sm text-muted-foreground">{t('Organization')}</p>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-semibold">{org.data.name}</h1>
-        {org.data.viaSuperAdmin ? <Badge variant="warning">Instance administrator access</Badge> : null}
+        {org.data.viaSuperAdmin ? <Badge variant="warning">{t('Instance administrator access')}</Badge> : null}
       </div>
       {/* Each section is its own page; the active one is underlined. */}
-      <nav aria-label="Organization sections" className="mt-5 mb-8 flex max-w-full gap-6 overflow-x-auto border-b">
+      <nav aria-label={t('Organization sections')} className="mt-5 mb-8 flex max-w-full gap-6 overflow-x-auto border-b">
         {tabs.map((tab) => {
           const active = tab.href === base ? pathname === base : pathname.startsWith(tab.href);
           return (

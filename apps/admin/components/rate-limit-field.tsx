@@ -2,6 +2,7 @@ import { Input } from '@postarix/ui/components/input';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import type { RateLimit } from '@/lib/types';
 import { FormField } from './form-field';
+import { t } from '@/lib/i18n';
 
 const periods: { value: RateLimit['per']; label: string }[] = [
   { value: 'second', label: 'per second' },
@@ -16,7 +17,7 @@ export function RateLimitField({ label, hint, value }: { label: string; hint: st
     <FormField label={label} hint={hint}>
       {(props) => (
         <div className="flex gap-2">
-          <Input {...props} name="rateMessages" inputMode="numeric" placeholder="No limit" defaultValue={value?.messages ?? ''} />
+          <Input {...props} name="rateMessages" inputMode="numeric" placeholder={t('No limit')} defaultValue={value?.messages ?? ''} />
           <NativeSelect name="ratePer" defaultValue={value?.per ?? 'hour'} aria-label={`${label}: period`}>
             {periods.map((p) => (
               <NativeSelectOption key={p.value} value={p.value}>

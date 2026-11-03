@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { formatBytes, formatDate } from '@/lib/format';
 import { keys } from '@/lib/queries';
+import { t } from '@/lib/i18n';
 
 interface QuarantineItem {
   id: string;
@@ -46,8 +47,8 @@ export default function QuarantinePage() {
   return (
     <>
       <PageHeader
-        title="Quarantine"
-        description="Mail the spam filter refused for this organization's mailboxes, kept for a while. Release a message to deliver it to its recipient's inbox."
+        title={t('Quarantine')}
+        description={t('Mail the spam filter refused for this organization\'s mailboxes, kept for a while. Release a message to deliver it to its recipient\'s inbox.')}
       />
       {error ? <Notice>{error}</Notice> : null}
       {items.isLoading ? (
@@ -58,12 +59,12 @@ export default function QuarantinePage() {
         <ListTable>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Received</TableHead>
-              <TableHead>Recipient</TableHead>
-              <TableHead>Sender and subject</TableHead>
-              <TableHead>Score</TableHead>
+              <TableHead className="pl-4">{t('Received')}</TableHead>
+              <TableHead>{t('Recipient')}</TableHead>
+              <TableHead>{t('Sender and subject')}</TableHead>
+              <TableHead>{t('Score')}</TableHead>
               <TableHead className="pr-4 text-right">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('Actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -102,9 +103,7 @@ export default function QuarantinePage() {
                         }
                       }}
                     >
-                      <ShieldCheck aria-hidden />
-                      Release
-                    </LoadingButton>
+                      <ShieldCheck aria-hidden />{t('Release')}</LoadingButton>
                     <Button size="icon-sm" variant="ghost" asChild>
                       <a href={`/api/orgs/${orgId}/quarantine/${item.id}/message`} aria-label={`Download ${item.subject}`}>
                         <Download aria-hidden />
@@ -120,13 +119,13 @@ export default function QuarantinePage() {
           </TableBody>
         </ListTable>
       ) : (
-        <EmptyState icon={Inbox} title="Nothing in quarantine" description="Refused spam appears here, for each recipient." />
+        <EmptyState icon={Inbox} title={t('Nothing in quarantine')} description={t('Refused spam appears here, for each recipient.')} />
       )}
       <ConfirmDialog
         open={deleting !== null}
         onClose={() => setDeleting(null)}
-        title="Delete this message?"
-        description="It is removed from quarantine for good."
+        title={t('Delete this message?')}
+        description={t('It is removed from quarantine for good.')}
         onConfirm={async () => {
           if (!deleting) return;
           await api.delete(`/orgs/${orgId}/quarantine/${deleting.id}`);

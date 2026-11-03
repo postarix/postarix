@@ -10,6 +10,7 @@ import { errorMessage } from '@/lib/api';
 import { dayGroup, displayName, shortDate } from '@/lib/format';
 import { type Label, useEmails } from '@/lib/mail';
 import { labelPath, mailboxPath, navigate } from '@/lib/router';
+import { t } from '@/lib/i18n';
 
 export function MessageList({
   mailbox,
@@ -49,10 +50,10 @@ export function MessageList({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <h1 className="flex-1 truncate text-lg font-semibold">{title}</h1>
-        <div role="group" aria-label="Show" className="depth-sunken inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
+        <div role="group" aria-label={t('Show')} className="depth-sunken inline-flex rounded-lg bg-muted p-0.5 text-xs font-medium">
           {[
-            { label: 'All', value: false },
-            { label: 'Unread', value: true },
+            { label: t('All'), value: false },
+            { label: t('Unread'), value: true },
           ].map((option) => (
             <button
               key={option.label}
@@ -80,7 +81,7 @@ export function MessageList({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={`Search ${title}`}
-            aria-label="Search mail"
+            aria-label={t('Search mail')}
             className="h-9 bg-background pl-9"
           />
         </form>
@@ -111,7 +112,7 @@ export function MessageList({
             <p className="mt-1 text-sm text-muted-foreground">{search ? 'Try other words, or search another folder.' : 'Mail that lands in this folder shows up here.'}</p>
           </div>
         ) : (
-          <ul aria-label="Messages" className="space-y-2 px-3 pb-3">
+          <ul aria-label={t('Messages')} className="space-y-2 px-3 pb-3">
             {list.map((email, index) => {
               const unread = !email.keywords.$seen;
               const selected = email.id === selectedId;
@@ -136,16 +137,16 @@ export function MessageList({
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      {unread ? <span className="size-2 shrink-0 rounded-full bg-ink" aria-label="Unread" /> : null}
+                      {unread ? <span className="size-2 shrink-0 rounded-full bg-ink" aria-label={t('Unread')} /> : null}
                       <span className={cn('flex-1 truncate text-sm', unread ? 'font-semibold' : 'font-medium text-foreground/85')}>
                         {people || '(no sender)'}
                       </span>
                       {(threadSizes[email.threadId] ?? 1) > 1 ? (
-                        <span className="shrink-0 rounded-md bg-muted px-1.5 text-[0.6875rem] font-medium text-muted-foreground tabular-nums" aria-label="Messages in this conversation">
+                        <span className="shrink-0 rounded-md bg-muted px-1.5 text-[0.6875rem] font-medium text-muted-foreground tabular-nums" aria-label={t('Messages in this conversation')}>
                           {threadSizes[email.threadId]}
                         </span>
                       ) : null}
-                      {email.keywords.$flagged ? <Flag className="size-3.5 shrink-0 fill-current text-destructive" aria-label="Flagged" /> : null}
+                      {email.keywords.$flagged ? <Flag className="size-3.5 shrink-0 fill-current text-destructive" aria-label={t('Flagged')} /> : null}
                       <time className={cn('shrink-0 text-xs tabular-nums', unread ? 'font-medium text-foreground' : 'text-muted-foreground')} dateTime={email.receivedAt}>
                         {shortDate(email.receivedAt)}
                       </time>
@@ -167,9 +168,7 @@ export function MessageList({
                     ) : null}
                     {email.hasAttachment ? (
                       <span className="mt-2 inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted-foreground">
-                        <Paperclip className="size-3" aria-label="Has attachments" />
-                        Attachment
-                      </span>
+                        <Paperclip className="size-3" aria-label={t('Has attachments')} />{t('Attachment')}</span>
                     ) : null}
                   </a>
                 </li>
@@ -180,9 +179,7 @@ export function MessageList({
         {emails.hasNextPage ? (
           <div className="p-3 text-center">
             <Button variant="outline" size="sm" disabled={emails.isFetchingNextPage} onClick={() => void emails.fetchNextPage()}>
-              {emails.isFetchingNextPage ? <Spinner /> : null}
-              Load more
-            </Button>
+              {emails.isFetchingNextPage ? <Spinner /> : null}{t('Load more')}</Button>
           </div>
         ) : null}
       </div>

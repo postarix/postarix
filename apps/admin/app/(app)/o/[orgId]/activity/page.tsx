@@ -14,6 +14,7 @@ import { api, errorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { keys } from '@/lib/queries';
 import type { AuditEvent } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 const PAGE = 50;
 
@@ -38,7 +39,7 @@ export default function ActivityPage() {
 
   return (
     <>
-      <PageHeader title="Activity" description="Every change made in this organization, newest first." />
+      <PageHeader title={t('Activity')} description={t('Every change made in this organization, newest first.')} />
       {events.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : events.error ? (
@@ -48,11 +49,11 @@ export default function ActivityPage() {
           <ListTable>
             <TableHeader>
               <TableRow>
-                <TableHead className="pl-4">When</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>By</TableHead>
-                <TableHead className="pr-4">IP</TableHead>
+                <TableHead className="pl-4">{t('When')}</TableHead>
+                <TableHead>{t('Action')}</TableHead>
+                <TableHead>{t('Target')}</TableHead>
+                <TableHead>{t('By')}</TableHead>
+                <TableHead className="pr-4">{t('IP')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,7 +64,7 @@ export default function ActivityPage() {
                   <TableCell className="font-medium">{event.targetLabel ?? '—'}</TableCell>
                   <TableCell>
                     {event.actorEmail ?? 'System'}
-                    {event.details?.viaSuperAdmin ? <span className="ml-1 text-xs text-muted-foreground">(instance admin)</span> : null}
+                    {event.details?.viaSuperAdmin ? <span className="ml-1 text-xs text-muted-foreground">{t('(instance admin)')}</span> : null}
                   </TableCell>
                   <TableCell className="pr-4 font-mono text-xs text-muted-foreground">{event.ipAddress ?? '—'}</TableCell>
                 </TableRow>
@@ -73,13 +74,13 @@ export default function ActivityPage() {
           {events.hasNextPage ? (
             <div className="mt-4 flex justify-center">
               <LoadingButton variant="outline" loading={events.isFetchingNextPage} onClick={() => void events.fetchNextPage()}>
-                Load more
+                {t('Load more')}
               </LoadingButton>
             </div>
           ) : null}
         </>
       ) : (
-        <EmptyState icon={History} title="Nothing has happened yet" />
+        <EmptyState icon={History} title={t('Nothing has happened yet')} />
       )}
     </>
   );

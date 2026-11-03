@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { DeleteOrganization } from '@/components/delete-organization';
 import { useSession } from '@/lib/auth-client';
 import { isSuperAdmin, useOrganization } from '@/lib/queries';
+import { t } from '@/lib/i18n';
 
 export default function OverviewPage() {
   const { orgId } = useParams<{ orgId: string }>();
@@ -14,10 +15,10 @@ export default function OverviewPage() {
   if (!org) return null;
   const isAdmin = org.role === 'owner' || org.role === 'admin';
   const stats = [
-    { key: 'domains', label: 'Domains', icon: Globe },
-    { key: 'mailboxes', label: 'Mailboxes', icon: Inbox },
-    { key: 'aliases', label: 'Aliases', icon: AtSign },
-    { key: 'members', label: 'Members', icon: Users },
+    { key: 'domains', label: t('Domains'), icon: Globe },
+    { key: 'mailboxes', label: t('Mailboxes'), icon: Inbox },
+    { key: 'aliases', label: t('Aliases'), icon: AtSign },
+    { key: 'members', label: t('Members'), icon: Users },
   ] as const;
 
   return (

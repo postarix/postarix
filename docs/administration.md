@@ -5,6 +5,10 @@ their own domains, mailboxes and aliases; a few limits are reserved for
 **instance administrators** (the people who run the server and host the
 organizations).
 
+The admin panel and the webmail are in English and Spanish: each person
+chooses in the sidebar (admin panel) or their menu (webmail); the first visit
+follows the browser's language.
+
 ## Domains
 
 The gear button of a domain opens its settings.

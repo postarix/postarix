@@ -7,6 +7,7 @@ import { Spinner } from '@postarix/ui/components/spinner';
 import { type FormEvent, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { knownServer, type MailImport, type MailImportInput, useCancelMailImport, useMailImports, useStartMailImport } from '@/lib/mail-import';
+import { t } from '@/lib/i18n';
 
 const STATUS: Record<MailImport['status'], string> = {
   queued: 'Waiting to start',
@@ -48,13 +49,11 @@ export function MailImportDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-xl">Import mail</DialogTitle>
-          <DialogDescription>
-            Copies the mail of another account into this one, folders included. Your old account is not changed, and the copy carries on while the webmail is closed.
-          </DialogDescription>
+          <DialogTitle className="text-xl">{t('Import mail')}</DialogTitle>
+          <DialogDescription>{t('Copies the mail of another account into this one, folders included. Your old account is not changed, and the copy carries on while the webmail is closed.')}</DialogDescription>
         </DialogHeader>
         {imports.data?.length ? (
-          <ul className="space-y-2" aria-label="Imports">
+          <ul className="space-y-2" aria-label={t('Imports')}>
             {imports.data.slice(0, 5).map((item) => (
               <li key={item.id} className="flex items-start gap-3 rounded-md bg-muted px-3 py-2 text-sm">
                 <span className="min-w-0 flex-1">
@@ -63,9 +62,7 @@ export function MailImportDialog({ onClose }: { onClose: () => void }) {
                   {item.error ? <span className="block text-destructive">{item.error}</span> : null}
                 </span>
                 {item.status === 'queued' || item.status === 'running' ? (
-                  <Button type="button" variant="outline" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(item.id)}>
-                    Cancel
-                  </Button>
+                  <Button type="button" variant="outline" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(item.id)}>{t('Cancel')}</Button>
                 ) : null}
               </li>
             ))}
@@ -75,52 +72,46 @@ export function MailImportDialog({ onClose }: { onClose: () => void }) {
           <form onSubmit={submit}>
             <FieldGroup className="gap-5">
               <FieldSet>
-                <FieldLegend>The other account</FieldLegend>
+                <FieldLegend>{t('The other account')}</FieldLegend>
                 <Field>
-                  <FieldLabel htmlFor="import-user">Email address or user name</FieldLabel>
+                  <FieldLabel htmlFor="import-user">{t('Email address or user name')}</FieldLabel>
                   <Input id="import-user" autoComplete="off" required maxLength={320} value={form.username} onChange={(e) => set({ username: e.target.value })} />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="import-password">Password</FieldLabel>
+                  <FieldLabel htmlFor="import-password">{t('Password')}</FieldLabel>
                   <Input id="import-password" type="password" autoComplete="off" required maxLength={1024} value={form.password} onChange={(e) => set({ password: e.target.value })} />
                   {known?.note ? <FieldDescription>{known.note}</FieldDescription> : null}
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="import-host">IMAP server</FieldLabel>
+                  <FieldLabel htmlFor="import-host">{t('IMAP server')}</FieldLabel>
                   <Input id="import-host" placeholder={known?.host ?? 'imap.example.com'} maxLength={253} value={form.host} onChange={(e) => set({ host: e.target.value })} />
                   <FieldDescription>{known ? 'Filled in for you; change it only if your provider says so.' : 'Your old provider’s help pages give it.'}</FieldDescription>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="import-security">Connection</FieldLabel>
+                  <FieldLabel htmlFor="import-security">{t('Connection')}</FieldLabel>
                   <NativeSelect id="import-security" value={form.security} onChange={(e) => set({ security: e.target.value as MailImportInput['security'] })}>
-                    <NativeSelectOption value="tls">TLS (port 993)</NativeSelectOption>
-                    <NativeSelectOption value="starttls">STARTTLS (port 143)</NativeSelectOption>
+                    <NativeSelectOption value="tls">{t('TLS (port 993)')}</NativeSelectOption>
+                    <NativeSelectOption value="starttls">{t('STARTTLS (port 143)')}</NativeSelectOption>
                   </NativeSelect>
                 </Field>
               </FieldSet>
-              <p className="text-sm text-muted-foreground">Microsoft 365 and Outlook.com accounts cannot be imported this way: they no longer accept passwords from other apps.</p>
+              <p className="text-sm text-muted-foreground">{t('Microsoft 365 and Outlook.com accounts cannot be imported this way: they no longer accept passwords from other apps.')}</p>
               {error ? (
                 <p role="alert" className="text-sm text-destructive">
                   {error}
                 </p>
               ) : null}
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Close
-                </Button>
+                <Button type="button" variant="outline" onClick={onClose}>{t('Close')}</Button>
                 <Button type="submit" disabled={start.isPending || (!form.host.trim() && !known)}>
-                  {start.isPending ? <Spinner /> : null}
-                  Start import
-                </Button>
+                  {start.isPending ? <Spinner /> : null}{t('Start import')}</Button>
               </DialogFooter>
             </FieldGroup>
           </form>
         )}
         {active ? (
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Close
-            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Close')}</Button>
           </DialogFooter>
         ) : null}
       </DialogContent>

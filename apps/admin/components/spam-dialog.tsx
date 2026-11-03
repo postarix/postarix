@@ -13,6 +13,7 @@ import { FormField } from './form-field';
 import { LoadingButton } from './loading-button';
 import { Notice } from './notice';
 import { SpamLists } from './spam-lists';
+import { t } from '@/lib/i18n';
 
 function scoreFrom(value: FormDataEntryValue | null): number | null {
   const text = String(value ?? '').trim();
@@ -60,23 +61,23 @@ export function SpamDialog({
   }
 
   return (
-    <AppDialog open onClose={onClose} title={title} description="Every message gets a spam score: the higher, the more likely spam.">
+    <AppDialog open onClose={onClose} title={title} description={t('Every message gets a spam score: the higher, the more likely spam.')}>
       <div className="space-y-5">
         <form onSubmit={submit}>
           <FieldGroup>
             {error ? <Notice>{error}</Notice> : null}
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Junk from score" hint={`Empty: ${inherited} (6 by default).`}>
+              <FormField label={t('Junk from score')} hint={`Empty: ${inherited} (6 by default).`}>
                 {(props) => <Input {...props} name="junkScore" inputMode="decimal" defaultValue={scores.junkScore ?? ''} />}
               </FormField>
-              <FormField label="Refuse from score" hint={`Empty: ${inherited} (15 by default).`}>
+              <FormField label={t('Refuse from score')} hint={`Empty: ${inherited} (15 by default).`}>
                 {(props) => <Input {...props} name="rejectScore" inputMode="decimal" defaultValue={scores.rejectScore ?? ''} />}
               </FormField>
             </div>
             <DialogFooter>
-              {saved ? <span className="mr-auto self-center text-sm text-muted-foreground">Saved.</span> : null}
+              {saved ? <span className="mr-auto self-center text-sm text-muted-foreground">{t('Saved.')}</span> : null}
               <LoadingButton type="submit" variant="outline" loading={pending}>
-                Save scores
+                {t('Save scores')}
               </LoadingButton>
             </DialogFooter>
           </FieldGroup>
@@ -85,7 +86,7 @@ export function SpamDialog({
         <SpamLists {...lists} />
         <DialogFooter>
           <Button type="button" onClick={onClose}>
-            Done
+            {t('Done')}
           </Button>
         </DialogFooter>
       </div>

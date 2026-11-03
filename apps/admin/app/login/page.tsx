@@ -15,6 +15,7 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { authClient } from '@/lib/auth-client';
 import { ssoErrorMessage, startSso } from '@/lib/sso';
+import { t } from '@/lib/i18n';
 
 function LoginForm() {
   const branding = useBranding();
@@ -85,7 +86,7 @@ function LoginForm() {
           <form onSubmit={signIn}>
             <FieldGroup>
               {error ? <Notice>{error}</Notice> : null}
-              <FormField label="Email">
+              <FormField label={t('Email')}>
                 {(props) => (
                   <Input
                     {...props}
@@ -99,33 +100,25 @@ function LoginForm() {
                   />
                 )}
               </FormField>
-              <FormField label="Password">
+              <FormField label={t('Password')}>
                 {(props) => <Input {...props} name="password" type="password" autoComplete="current-password" required />}
               </FormField>
-              <LoadingButton type="submit" className="w-full" loading={pending}>
-                Sign in
-              </LoadingButton>
+              <LoadingButton type="submit" className="w-full" loading={pending}>{t('Sign in')}</LoadingButton>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <Separator className="flex-1" />
-                or
-                <Separator className="flex-1" />
+                <Separator className="flex-1" />{t('or')}<Separator className="flex-1" />
               </div>
               <Button type="button" variant="outline" className="w-full" onClick={signInWithPasskey}>
-                <KeyRound aria-hidden />
-                Sign in with a passkey
-              </Button>
+                <KeyRound aria-hidden />{t('Sign in with a passkey')}</Button>
               <LoadingButton type="button" variant="outline" className="w-full" loading={ssoPending} onClick={signInWithSso}>
-                <Building2 aria-hidden />
-                Sign in with your company account
-              </LoadingButton>
+                <Building2 aria-hidden />{t('Sign in with your company account')}</LoadingButton>
             </FieldGroup>
           </form>
         ) : (
           <form onSubmit={verifyCode}>
             <FieldGroup>
               {error ? <Notice>{error}</Notice> : null}
-              <p className="text-sm text-muted-foreground">Enter the 6-digit code from your authenticator app.</p>
-              <FormField label="Authentication code">
+              <p className="text-sm text-muted-foreground">{t('Enter the 6-digit code from your authenticator app.')}</p>
+              <FormField label={t('Authentication code')}>
                 {(props) => (
                   <Input
                     {...props}
@@ -138,9 +131,7 @@ function LoginForm() {
                   />
                 )}
               </FormField>
-              <LoadingButton type="submit" className="w-full" loading={pending}>
-                Verify
-              </LoadingButton>
+              <LoadingButton type="submit" className="w-full" loading={pending}>{t('Verify')}</LoadingButton>
             </FieldGroup>
           </form>
         )}

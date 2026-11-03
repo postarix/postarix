@@ -11,6 +11,7 @@ import { ShareDialog } from '@/components/share-dialog';
 import { TimeGrid } from '@/components/time-grid';
 import { type AccountEvent, type CalendarView, calendarKeys, dayKey, eventSpan, monthGrid, overlapsDay, shiftDate, useCalendars, useEvents, weekDays } from '@/lib/calendar';
 import { navigate } from '@/lib/router';
+import { t } from '@/lib/i18n';
 
 const time = (d: Date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
 
@@ -47,15 +48,15 @@ function EventChip({ event, onOpen }: { event: AccountEvent; onOpen: () => void 
       {span.allDay ? null : <span className="size-1.5 shrink-0 rounded-full bg-ink" aria-hidden />}
       {span.allDay ? null : <span className="shrink-0 text-muted-foreground tabular-nums">{time(span.start)}</span>}
       <span className="truncate">{event.title}</span>
-      {event.participants ? <Users className="ml-auto size-3 shrink-0 text-muted-foreground" aria-label="With guests" /> : null}
+      {event.participants ? <Users className="ml-auto size-3 shrink-0 text-muted-foreground" aria-label={t('With guests')} /> : null}
     </button>
   );
 }
 
 const VIEWS: { view: CalendarView; label: string }[] = [
-  { view: 'month', label: 'Month' },
-  { view: 'week', label: 'Week' },
-  { view: 'day', label: 'Day' },
+  { view: 'month', label: t('Month') },
+  { view: 'week', label: t('Week') },
+  { view: 'day', label: t('Day') },
 ];
 
 export function CalendarPage({ date, view, email, name }: { date: string | null; view: CalendarView; email: string; name: string }) {
@@ -113,11 +114,9 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
   const nav = (
     <div className="flex flex-col gap-4">
       <Button variant="stamp" className="h-9 w-full justify-start" onClick={() => newAt(focus)}>
-        <CalendarPlus aria-hidden />
-        New event
-      </Button>
+        <CalendarPlus aria-hidden />{t('New event')}</Button>
       <div className="px-1">
-        <p className="mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">Calendars</p>
+        <p className="mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">{t('Calendars')}</p>
         <ul className="space-y-1">
           {own.map((c) => (
             <li key={`${c.accountId}-${c.id}`} className="group/cal flex items-center gap-2.5 px-1.5 py-1 text-sm">
@@ -136,8 +135,8 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
         </ul>
         {shared.length ? (
           <>
-            <p className="mt-4 mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">Shared with you</p>
-            <ul className="space-y-1" aria-label="Shared with you">
+            <p className="mt-4 mb-1.5 px-1.5 text-xs font-medium text-sidebar-muted">{t('Shared with you')}</p>
+            <ul className="space-y-1" aria-label={t('Shared with you')}>
               {shared.map((c) => (
                 <li key={`${c.accountId}-${c.id}`} className="flex items-center gap-2.5 px-1.5 py-1 text-sm">
                   <span className="size-2.5 rounded-[3px] ring-1 ring-sidebar-muted" aria-hidden />
@@ -160,16 +159,14 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:px-5">
           <h1 className="mr-auto truncate text-lg font-semibold capitalize">{title}</h1>
-          <div className="hidden items-center rounded-md border p-0.5 shadow-xs sm:flex" role="group" aria-label="View">
+          <div className="hidden items-center rounded-md border p-0.5 shadow-xs sm:flex" role="group" aria-label={t('View')}>
             {VIEWS.map(({ view: v, label }) => (
               <Button key={v} variant={v === view ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2.5" aria-pressed={v === view} onClick={() => go(focus, v)}>
                 {label}
               </Button>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => go(new Date())}>
-            Today
-          </Button>
+          <Button variant="outline" size="sm" onClick={() => go(new Date())}>{t('Today')}</Button>
           <div className="flex items-center rounded-md border shadow-xs">
             <Button variant="ghost" size="icon-sm" className="rounded-r-none" aria-label={`Previous ${unit}`} onClick={() => go(shiftDate(focus, view, -1))}>
               <ChevronLeft aria-hidden />
@@ -250,8 +247,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
                           }}
                           className="rounded-md px-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                         >
-                          {list.length - 3} more
-                        </button>
+                          {list.length - 3}{' '}{t('more')}</button>
                       ) : null}
                     </div>
                   );
@@ -264,7 +260,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
         {/* Agenda (small screens, month and week) */}
         <div className={cn('min-h-0 flex-1 overflow-y-auto p-4 md:hidden', view === 'day' && 'hidden')}>
           {agendaDays.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">Nothing planned this {unit}.</p>
+            <p className="py-16 text-center text-sm text-muted-foreground">{t('Nothing planned this')}{' '}{unit}.</p>
           ) : (
             <ol className="space-y-4">
               {agendaDays.map((day) => (
@@ -288,7 +284,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
                                 </span>
                               ) : null}
                             </span>
-                            {event.baseEventId || event.recurrenceRules?.length ? <Repeat className="ml-auto size-3.5 shrink-0 text-muted-foreground" aria-label="Repeats" /> : null}
+                            {event.baseEventId || event.recurrenceRules?.length ? <Repeat className="ml-auto size-3.5 shrink-0 text-muted-foreground" aria-label={t('Repeats')} /> : null}
                           </button>
                         </li>
                       );
@@ -306,7 +302,7 @@ export function CalendarPage({ date, view, email, name }: { date: string | null;
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{dayList ? new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(dayList) : ''}</DialogTitle>
-            <DialogDescription className="sr-only">Every event of the day</DialogDescription>
+            <DialogDescription className="sr-only">{t('Every event of the day')}</DialogDescription>
           </DialogHeader>
           <ul className="grid gap-1">
             {(dayList ? (byDay.get(dayKey(dayList)) ?? []) : []).map((event) => (

@@ -2,6 +2,7 @@ import { Input } from '@postarix/ui/components/input';
 import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
 import type { Domain } from '@/lib/types';
 import { FormField } from './form-field';
+import { t } from '@/lib/i18n';
 
 /** "local part @ domain" inputs, for new mailboxes and aliases. */
 export function AddressFields({
@@ -16,17 +17,17 @@ export function AddressFields({
 }) {
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
-      <FormField label="Address">
+      <FormField label={t('Address')}>
         {(props) =>
           anyAddress ? (
-            <Input {...props} name="localPart" value="" placeholder="any address" disabled />
+            <Input {...props} name="localPart" value="" placeholder={t('any address')} disabled />
           ) : (
             <Input {...props} name="localPart" placeholder={placeholder} required autoFocus />
           )
         }
       </FormField>
       <span className="pb-2 text-muted-foreground">@</span>
-      <FormField label="Domain">
+      <FormField label={t('Domain')}>
         {(props) => (
           <NativeSelect {...props} name="domainId" required>
             {domains.map((d) => (

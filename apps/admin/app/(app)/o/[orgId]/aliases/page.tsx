@@ -24,6 +24,7 @@ import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { keys, useOrgList } from '@/lib/queries';
 import type { Alias, Domain } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 function parseDestinations(value: string): string[] {
   return value
@@ -76,23 +77,28 @@ function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domain
   }
 
   return (
-    <AppDialog open onClose={onClose} title={alias ? `Edit ${alias.address}` : 'New alias'} description="Forwards mail to one or more addresses.">
+    <AppDialog
+      open
+      onClose={onClose}
+      title={alias ? `Edit ${alias.address}` : 'New alias'}
+      description={t('Forwards mail to one or more addresses.')}
+    >
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
           {alias ? null : (
             <>
-              <AddressFields domains={domains} placeholder="sales" anyAddress={catchAll} />
+              <AddressFields domains={domains} placeholder={t('sales')} anyAddress={catchAll} />
               <Field orientation="horizontal">
                 <Checkbox id="alias-catch-all" checked={catchAll} onCheckedChange={(v) => setCatchAll(v === true)} />
                 <FieldLabel htmlFor="alias-catch-all" className="font-normal">
-                  Catch-all: mail for the whole domain that no mailbox or other alias takes
+                  {t('Catch-all: mail for the whole domain that no mailbox or other alias takes')}
                 </FieldLabel>
               </Field>
             </>
           )}
           {discard ? null : (
-            <FormField label="Deliver to" hint="One address per line (up to 50). External addresses are allowed.">
+            <FormField label={t('Deliver to')} hint={t('One address per line (up to 50). External addresses are allowed.')}>
               {(props) => (
                 <Textarea {...props} name="destinations" required rows={4} defaultValue={alias?.destinations.join('\n')} className="font-mono" />
               )}
@@ -101,18 +107,18 @@ function AliasDialog({ orgId, domains, alias, onClose }: { orgId: string; domain
           <Field orientation="horizontal">
             <Checkbox id="alias-discard" checked={discard} onCheckedChange={(v) => setDiscard(v === true)} />
             <FieldLabel htmlFor="alias-discard" className="font-normal">
-              Accept mail and silently drop it
+              {t('Accept mail and silently drop it')}
             </FieldLabel>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="alias-enabled" name="enabled" defaultChecked={alias?.enabled ?? true} />
             <FieldLabel htmlFor="alias-enabled" className="font-normal">
-              Enabled
+              {t('Enabled')}
             </FieldLabel>
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <LoadingButton type="submit" loading={pending}>
               {alias ? 'Save' : 'Create alias'}
@@ -136,12 +142,12 @@ export default function AliasesPage() {
   return (
     <>
       <PageHeader
-        title="Aliases"
-        description="Addresses that forward mail elsewhere. A mailbox can also send as an alias of this organization that delivers to it."
+        title={t('Aliases')}
+        description={t('Addresses that forward mail elsewhere. A mailbox can also send as an alias of this organization that delivers to it.')}
         actions={
           <Button onClick={() => setEditing('new')} disabled={activeDomains.length === 0}>
             <Plus aria-hidden />
-            New alias
+            {t('New alias')}
           </Button>
         }
       />
@@ -153,11 +159,11 @@ export default function AliasesPage() {
         <ListTable>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Alias</TableHead>
-              <TableHead>Delivers to</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="pl-4">{t('Alias')}</TableHead>
+              <TableHead>{t('Delivers to')}</TableHead>
+              <TableHead>{t('Status')}</TableHead>
               <TableHead className="pr-4 text-right">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('Actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -168,13 +174,13 @@ export default function AliasesPage() {
                   {alias.address}
                   {alias.catchAll ? (
                     <Badge variant="secondary" className="ml-2">
-                      Catch-all
+                      {t('Catch-all')}
                     </Badge>
                   ) : null}
                 </TableCell>
                 <TableCell>
                   {alias.discard ? (
-                    <span className="text-sm text-muted-foreground">Dropped silently</span>
+                    <span className="text-sm text-muted-foreground">{t('Dropped silently')}</span>
                   ) : (
                     <ul className="space-y-0.5 text-sm">
                       {alias.destinations.map((d) => (
@@ -183,7 +189,9 @@ export default function AliasesPage() {
                     </ul>
                   )}
                 </TableCell>
-                <TableCell>{alias.enabled ? <Badge variant="success">Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>}</TableCell>
+                <TableCell>
+                  {alias.enabled ? <Badge variant="success">{t('Enabled')}</Badge> : <Badge variant="secondary">{t('Disabled')}</Badge>}
+                </TableCell>
                 <TableCell className="pr-4">
                   <div className="flex justify-end gap-1">
                     <Button size="icon-sm" variant="ghost" aria-label={`Edit ${alias.address}`} onClick={() => setEditing(alias)}>
@@ -199,7 +207,7 @@ export default function AliasesPage() {
           </TableBody>
         </ListTable>
       ) : (
-        <EmptyState icon={AtSign} title="No aliases yet" description="Forward an address such as sales@ to one or more people." />
+        <EmptyState icon={AtSign} title={t('No aliases yet')} description={t('Forward an address such as sales@ to one or more people.')} />
       )}
       {editing ? (
         <AliasDialog orgId={orgId} domains={activeDomains} alias={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
@@ -208,7 +216,7 @@ export default function AliasesPage() {
         open={deleting !== null}
         onClose={() => setDeleting(null)}
         title={`Delete ${deleting?.address ?? ''}?`}
-        description="Mail sent to this address will be rejected."
+        description={t('Mail sent to this address will be rejected.')}
         onConfirm={async () => {
           if (!deleting) return;
           await api.delete(`/orgs/${orgId}/aliases/${deleting.id}`);

@@ -32,6 +32,7 @@ import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
 import { useRelayHosts } from '../../../system/routing';
 import type { DnsRecord, DnsRecordCheck, Domain } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 const purposeLabel: Record<DnsRecord['purpose'], string> = {
   verification: 'Ownership',
@@ -45,10 +46,10 @@ const purposeLabel: Record<DnsRecord['purpose'], string> = {
 };
 
 const statusBadge: Record<DnsRecordCheck['status'], { label: string; variant: 'success' | 'warning' | 'destructive' | 'secondary' }> = {
-  ok: { label: 'Published', variant: 'success' },
-  missing: { label: 'Missing', variant: 'destructive' },
-  mismatch: { label: 'Different', variant: 'warning' },
-  unknown: { label: 'Could not check', variant: 'secondary' },
+  ok: { label: t('Published'), variant: 'success' },
+  missing: { label: t('Missing'), variant: 'destructive' },
+  mismatch: { label: t('Different'), variant: 'warning' },
+  unknown: { label: t('Could not check'), variant: 'secondary' },
 };
 
 function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
@@ -64,11 +65,11 @@ function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Purpose</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Value</TableHead>
+              <TableHead>{t('Purpose')}</TableHead>
+              <TableHead>{t('Status')}</TableHead>
+              <TableHead>{t('Type')}</TableHead>
+              <TableHead>{t('Name')}</TableHead>
+              <TableHead>{t('Value')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -86,7 +87,7 @@ function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
                     <CopyButton value={record.value} />
                   </div>
                   {record.found.length > 0 ? (
-                    <p className="mt-1 text-xs break-all text-muted-foreground">Published now: {record.found.join(' · ')}</p>
+                    <p className="mt-1 text-xs break-all text-muted-foreground">{t('Published now:')}{' '}{record.found.join(' · ')}</p>
                   ) : null}
                 </TableCell>
               </TableRow>
@@ -95,11 +96,9 @@ function DnsRecords({ orgId, domain }: { orgId: string; domain: Domain }) {
         </Table>
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>DNS changes can take a while to appear.</span>
+        <span>{t('DNS changes can take a while to appear.')}</span>
         <LoadingButton size="sm" variant="ghost" loading={records.isFetching} onClick={() => void records.refetch()}>
-          <RefreshCw aria-hidden />
-          Check again
-        </LoadingButton>
+          <RefreshCw aria-hidden />{t('Check again')}</LoadingButton>
       </div>
     </div>
   );
@@ -171,45 +170,39 @@ function DomainSettingsDialog({
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Description">
+          <FormField label={t('Description')}>
             {(props) => <Input {...props} name="description" defaultValue={domain.description} maxLength={500} />}
           </FormField>
-          <FormField label="Default mailbox quota (GB)" hint="Given to new mailboxes when none is chosen. Empty: unlimited.">
+          <FormField label={t('Default mailbox quota (GB)')} hint={t('Given to new mailboxes when none is chosen. Empty: unlimited.')}>
             {(props) => (
               <Input {...props} name="defaultQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.defaultMailboxQuotaBytes)} />
             )}
           </FormField>
           <RateLimitField
-            label="Sending limit per mailbox"
-            hint="Messages each mailbox may send, unless it has its own limit. Empty: no limit."
+            label={t('Sending limit per mailbox')}
+            hint={t('Messages each mailbox may send, unless it has its own limit. Empty: no limit.')}
             value={domain.rateLimit}
           />
           {domain.status !== 'pending' ? (
             <div className="flex items-start gap-2">
               <Checkbox id={`enabled-${domain.id}`} name="enabled" defaultChecked={domain.status === 'active'} />
-              <label htmlFor={`enabled-${domain.id}`} className="text-sm">
-                Enabled
-                <span className="block text-muted-foreground">
-                  A disabled domain receives and sends no mail, and its mailboxes cannot sign in to mail apps.
-                </span>
+              <label htmlFor={`enabled-${domain.id}`} className="text-sm">{t('Enabled')}<span className="block text-muted-foreground">{t('A disabled domain receives and sends no mail, and its mailboxes cannot sign in to mail apps.')}</span>
               </label>
             </div>
           ) : null}
           {instanceAdmin ? (
             <>
-              <p className="text-sm font-medium">Limits</p>
-              <p className="-mt-2 text-sm text-muted-foreground">
-                Only instance administrators can change these. Leave a field empty for no limit.
-              </p>
-              <FormField label="Mailboxes">
+              <p className="text-sm font-medium">{t('Limits')}</p>
+              <p className="-mt-2 text-sm text-muted-foreground">{t('Only instance administrators can change these. Leave a field empty for no limit.')}</p>
+              <FormField label={t('Mailboxes')}>
                 {(props) => (
                   <Input {...props} name="maxMailboxes" inputMode="numeric" defaultValue={domain.limits.maxMailboxes ?? ''} />
                 )}
               </FormField>
-              <FormField label="Aliases">
+              <FormField label={t('Aliases')}>
                 {(props) => <Input {...props} name="maxAliases" inputMode="numeric" defaultValue={domain.limits.maxAliases ?? ''} />}
               </FormField>
-              <FormField label="Largest quota per mailbox (GB)">
+              <FormField label={t('Largest quota per mailbox (GB)')}>
                 {(props) => (
                   <Input
                     {...props}
@@ -220,10 +213,10 @@ function DomainSettingsDialog({
                 )}
               </FormField>
               {relayHosts.data ? (
-                <FormField label="Send through" hint="A smart host from System → Outgoing routing, for every mailbox without its own.">
+                <FormField label={t('Send through')} hint={t('A smart host from System → Outgoing routing, for every mailbox without its own.')}>
                   {(props) => (
                     <NativeSelect {...props} name="relayHostId" defaultValue={domain.relayHostId ?? ''} className="w-full">
-                      <NativeSelectOption value="">Direct delivery</NativeSelectOption>
+                      <NativeSelectOption value="">{t('Direct delivery')}</NativeSelectOption>
                       {relayHosts.data.map((r) => (
                         <NativeSelectOption key={r.id} value={r.id}>
                           {r.host}
@@ -234,7 +227,7 @@ function DomainSettingsDialog({
                   )}
                 </FormField>
               ) : null}
-              <FormField label="Total quota of all mailboxes (GB)">
+              <FormField label={t('Total quota of all mailboxes (GB)')}>
                 {(props) => (
                   <Input {...props} name="totalQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.limits.totalQuotaBytes)} />
                 )}
@@ -242,12 +235,8 @@ function DomainSettingsDialog({
             </>
           ) : null}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Save settings
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Save settings')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -292,17 +281,16 @@ function DkimDialog({ orgId, domain, onClose }: { orgId: string; domain: Domain;
   }
 
   return (
-    <AppDialog open onClose={onClose} title={`DKIM key of ${domain.name}`} description="Outgoing mail is signed with this key.">
+    <AppDialog open onClose={onClose} title={`DKIM key of ${domain.name}`} description={t('Outgoing mail is signed with this key.')}>
       <div className="space-y-4">
         {key.isLoading ? (
           <Skeleton className="h-24 w-full" />
         ) : key.data ? (
           <div className="space-y-1 text-sm">
-            <p>
-              Selector <code className="font-mono">{key.data.selector}</code>
-              {key.data.bits ? `, ${key.data.bits}-bit RSA` : ''}, since {formatDate(key.data.createdAt)}.
+            <p>{t('Selector')}{' '}<code className="font-mono">{key.data.selector}</code>
+              {key.data.bits ? `, ${key.data.bits}-bit RSA` : ''}{t(', since')}{' '}{formatDate(key.data.createdAt)}.
             </p>
-            <p className="text-muted-foreground">Publish this TXT record:</p>
+            <p className="text-muted-foreground">{t('Publish this TXT record:')}</p>
             <code className="block font-mono text-xs break-all">{key.data.record.name}</code>
             <div className="flex items-start gap-2">
               <code className="block max-h-24 overflow-auto font-mono text-xs break-all">{key.data.record.value}</code>
@@ -310,52 +298,45 @@ function DkimDialog({ orgId, domain, onClose }: { orgId: string; domain: Domain;
             </div>
           </div>
         ) : (
-          <Notice>This domain has no signing key: its mail is not DKIM-signed.</Notice>
+          <Notice>{t('This domain has no signing key: its mail is not DKIM-signed.')}</Notice>
         )}
         <form onSubmit={submit}>
           <FieldGroup>
-            <p className="text-sm font-medium">Replace the key</p>
-            <p className="-mt-2 text-sm text-muted-foreground">
-              The new key signs mail at once. Publish its record before mail goes out, or receivers will fail the
-              signature until it appears in DNS. A new selector lets both records exist side by side.
-            </p>
+            <p className="text-sm font-medium">{t('Replace the key')}</p>
+            <p className="-mt-2 text-sm text-muted-foreground">{t('The new key signs mail at once. Publish its record before mail goes out, or receivers will fail the signature until it appears in DNS. A new selector lets both records exist side by side.')}</p>
             {error ? <Notice>{error}</Notice> : null}
-            <FormField label="Selector" hint="Empty: a new one based on today's date.">
-              {(props) => <Input {...props} name="selector" placeholder="e.g. mail2026" maxLength={63} />}
+            <FormField label={t('Selector')} hint={t('Empty: a new one based on today\'s date.')}>
+              {(props) => <Input {...props} name="selector" placeholder={t('e.g. mail2026')} maxLength={63} />}
             </FormField>
-            <FormField label="Key">
+            <FormField label={t('Key')}>
               {(props) => (
                 <NativeSelect {...props} value={mode} onChange={(e) => setMode(e.target.value as 'generate' | 'import')} className="w-full">
-                  <NativeSelectOption value="generate">Generate a new key</NativeSelectOption>
-                  <NativeSelectOption value="import">Import a private key (PEM)</NativeSelectOption>
+                  <NativeSelectOption value="generate">{t('Generate a new key')}</NativeSelectOption>
+                  <NativeSelectOption value="import">{t('Import a private key (PEM)')}</NativeSelectOption>
                 </NativeSelect>
               )}
             </FormField>
             {mode === 'generate' ? (
-              <FormField label="Size" hint="2048 bits works everywhere; some DNS providers cannot store larger records.">
+              <FormField label={t('Size')} hint={t('2048 bits works everywhere; some DNS providers cannot store larger records.')}>
                 {(props) => (
                   <NativeSelect {...props} name="keyBits" defaultValue="2048" className="w-full">
-                    <NativeSelectOption value="1024">1024 bits</NativeSelectOption>
-                    <NativeSelectOption value="2048">2048 bits</NativeSelectOption>
-                    <NativeSelectOption value="3072">3072 bits</NativeSelectOption>
-                    <NativeSelectOption value="4096">4096 bits</NativeSelectOption>
+                    <NativeSelectOption value="1024">{t('1024 bits')}</NativeSelectOption>
+                    <NativeSelectOption value="2048">{t('2048 bits')}</NativeSelectOption>
+                    <NativeSelectOption value="3072">{t('3072 bits')}</NativeSelectOption>
+                    <NativeSelectOption value="4096">{t('4096 bits')}</NativeSelectOption>
                   </NativeSelect>
                 )}
               </FormField>
             ) : (
-              <FormField label="Private key" hint="The RSA key the domain already publishes, e.g. from your previous server.">
+              <FormField label={t('Private key')} hint={t('The RSA key the domain already publishes, e.g. from your previous server.')}>
                 {(props) => (
-                  <Textarea {...props} name="privateKey" rows={6} required className="font-mono text-xs" placeholder="-----BEGIN PRIVATE KEY-----" />
+                  <Textarea {...props} name="privateKey" rows={6} required className="font-mono text-xs" placeholder={t('-----BEGIN PRIVATE KEY-----')} />
                 )}
               </FormField>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Close
-              </Button>
-              <LoadingButton type="submit" loading={pending}>
-                Replace key
-              </LoadingButton>
+              <Button type="button" variant="outline" onClick={onClose}>{t('Close')}</Button>
+              <LoadingButton type="submit" loading={pending}>{t('Replace key')}</LoadingButton>
             </DialogFooter>
           </FieldGroup>
         </form>
@@ -385,22 +366,20 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
         <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
           {domain.name}
           {domain.status === 'active' ? (
-            <Badge variant="success">Verified</Badge>
+            <Badge variant="success">{t('Verified')}</Badge>
           ) : domain.status === 'pending' ? (
-            <Badge variant="warning">Pending verification</Badge>
+            <Badge variant="warning">{t('Pending verification')}</Badge>
           ) : (
-            <Badge variant="secondary">Disabled</Badge>
+            <Badge variant="secondary">{t('Disabled')}</Badge>
           )}
-          {aliasOf ? <Badge variant="outline">Alias of {aliasOf}</Badge> : null}
+          {aliasOf ? <Badge variant="outline">{t('Alias of')}{' '}{aliasOf}</Badge> : null}
         </CardTitle>
         <CardDescription>
           {domain.description ? <span className="block">{domain.description}</span> : null}
           {domain.verifiedAt ? `Verified ${formatDate(domain.verifiedAt)}` : `Added ${formatDate(domain.createdAt)}`}
           {' · '}
-          {limitText(domain.usage.mailboxes, domain.limits.maxMailboxes)} mailboxes
-          {' · '}
-          {limitText(domain.usage.aliases, domain.limits.maxAliases)} aliases
-          {domain.limits.totalQuotaBytes !== null
+          {limitText(domain.usage.mailboxes, domain.limits.maxMailboxes)}{' '}{t('mailboxes')}{' · '}
+          {limitText(domain.usage.aliases, domain.limits.maxAliases)}{' '}{t('aliases')}{domain.limits.totalQuotaBytes !== null
             ? ` · ${limitText(domain.usage.quotaBytes, domain.limits.totalQuotaBytes, formatBytes)} quota`
             : null}
         </CardDescription>
@@ -422,9 +401,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
                 }
               }}
             >
-              <ShieldCheck aria-hidden />
-              Verify
-            </LoadingButton>
+              <ShieldCheck aria-hidden />{t('Verify')}</LoadingButton>
           ) : null}
           <Button size="sm" variant="outline" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
             {showDns ? 'Hide DNS records' : 'DNS records'}
@@ -449,10 +426,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
           {showDns ? (
             <>
               {domain.status === 'pending' ? (
-                <p className="text-sm text-muted-foreground">
-                  Publish the ownership record, then press Verify. The other records make mail delivery work and should
-                  be published too.
-                </p>
+                <p className="text-sm text-muted-foreground">{t('Publish the ownership record, then press Verify. The other records make mail delivery work and should be published too.')}</p>
               ) : null}
               <DnsRecords orgId={orgId} domain={domain} />
             </>
@@ -484,7 +458,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
         open={deleting}
         onClose={() => setDeleting(false)}
         title={`Delete ${domain.name}?`}
-        description="Mailboxes and aliases on this domain must be deleted first. Its DKIM key is destroyed."
+        description={t('Mailboxes and aliases on this domain must be deleted first. Its DKIM key is destroyed.')}
         onConfirm={async () => {
           await api.delete(`/orgs/${orgId}/domains/${domain.id}`);
           refresh();
@@ -529,21 +503,21 @@ function AddDomainDialog({
   }
 
   return (
-    <AppDialog open={open} onClose={onClose} title="Add domain" description="You will prove ownership with a DNS record.">
+    <AppDialog open={open} onClose={onClose} title={t('Add domain')} description={t('You will prove ownership with a DNS record.')}>
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Domain name">
+          <FormField label={t('Domain name')}>
             {(props) => <Input {...props} name="name" placeholder="example.com" required autoFocus />}
           </FormField>
           {domains.length > 0 ? (
             <FormField
-              label="Alias of"
-              hint="An alias domain has every address of the chosen domain: mail to ann@alias.example reaches ann@example.com."
+              label={t('Alias of')}
+              hint={t('An alias domain has every address of the chosen domain: mail to ann@alias.example reaches ann@example.com.')}
             >
               {(props) => (
                 <NativeSelect {...props} name="aliasOf" defaultValue="" className="w-full">
-                  <NativeSelectOption value="">None: a domain of its own</NativeSelectOption>
+                  <NativeSelectOption value="">{t('None: a domain of its own')}</NativeSelectOption>
                   {domains.map((d) => (
                     <NativeSelectOption key={d.id} value={d.id}>
                       {d.name}
@@ -554,12 +528,8 @@ function AddDomainDialog({
             </FormField>
           ) : null}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Add domain
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Add domain')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -575,13 +545,11 @@ export default function DomainsPage() {
   return (
     <>
       <PageHeader
-        title="Domains"
-        description="Domains this organization receives and sends mail for."
+        title={t('Domains')}
+        description={t('Domains this organization receives and sends mail for.')}
         actions={
           <Button onClick={() => setAdding(true)}>
-            <Plus aria-hidden />
-            Add domain
-          </Button>
+            <Plus aria-hidden />{t('Add domain')}</Button>
         }
       />
       {domains.isLoading ? (
@@ -600,7 +568,7 @@ export default function DomainsPage() {
           ))}
         </div>
       ) : (
-        <EmptyState icon={Globe} title="No domains yet" description="Add a domain to start creating mailboxes." />
+        <EmptyState icon={Globe} title={t('No domains yet')} description={t('Add a domain to start creating mailboxes.')} />
       )}
       <AddDomainDialog
         orgId={orgId}

@@ -23,6 +23,7 @@ import { PageHeader } from '@/components/page-header';
 import { api, errorMessage } from '@/lib/api';
 import { keys, useOrgList } from '@/lib/queries';
 import type { Domain, SsoProvider } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: Domain[]; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -67,13 +68,13 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
     <AppDialog
       open
       onClose={onClose}
-      title="Connect an identity provider"
-      description="OpenID Connect or SAML 2.0: Microsoft Entra ID, Google Workspace, Okta, Keycloak, Authentik, ADFS…"
+      title={t('Connect an identity provider')}
+      description={t('OpenID Connect or SAML 2.0: Microsoft Entra ID, Google Workspace, Okta, Keycloak, Authentik, ADFS…')}
     >
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Domain" hint="People with a mailbox on this domain sign in through the provider.">
+          <FormField label={t('Domain')} hint={t('People with a mailbox on this domain sign in through the provider.')}>
             {(props) => (
               <NativeSelect {...props} name="domainId" required className="w-full">
                 {domains.map((d) => (
@@ -84,44 +85,40 @@ function ProviderDialog({ orgId, domains, onClose }: { orgId: string; domains: D
               </NativeSelect>
             )}
           </FormField>
-          <FormField label="Protocol">
+          <FormField label={t('Protocol')}>
             {(props) => (
               <NativeSelect {...props} value={protocol} onChange={(e) => setProtocol(e.target.value as 'oidc' | 'saml')} className="w-full">
-                <NativeSelectOption value="oidc">OpenID Connect</NativeSelectOption>
-                <NativeSelectOption value="saml">SAML 2.0</NativeSelectOption>
+                <NativeSelectOption value="oidc">{t('OpenID Connect')}</NativeSelectOption>
+                <NativeSelectOption value="saml">{t('SAML 2.0')}</NativeSelectOption>
               </NativeSelect>
             )}
           </FormField>
           {protocol === 'oidc' ? (
             <>
-              <FormField label="Issuer URL" hint="Postarix reads the rest from its /.well-known/openid-configuration.">
+              <FormField label={t('Issuer URL')} hint={t('Postarix reads the rest from its /.well-known/openid-configuration.')}>
                 {(props) => <Input {...props} name="issuer" type="url" required placeholder="https://login.example.com/realms/acme" />}
               </FormField>
-              <FormField label="Client ID">{(props) => <Input {...props} name="clientId" required autoComplete="off" />}</FormField>
-              <FormField label="Client secret" hint="Stored on the server and never shown again.">
+              <FormField label={t('Client ID')}>{(props) => <Input {...props} name="clientId" required autoComplete="off" />}</FormField>
+              <FormField label={t('Client secret')} hint={t('Stored on the server and never shown again.')}>
                 {(props) => <Input {...props} name="clientSecret" type="password" required autoComplete="off" />}
               </FormField>
             </>
           ) : (
             <>
-              <FormField label="Identity provider identifier" hint="Its entity ID, also called Identifier or Issuer.">
+              <FormField label={t('Identity provider identifier')} hint={t('Its entity ID, also called Identifier or Issuer.')}>
                 {(props) => <Input {...props} name="entityId" required placeholder="https://sts.windows.net/…/" autoComplete="off" />}
               </FormField>
-              <FormField label="Sign-in URL" hint="Where people are sent to sign in (SAML single sign-on URL).">
+              <FormField label={t('Sign-in URL')} hint={t('Where people are sent to sign in (SAML single sign-on URL).')}>
                 {(props) => <Input {...props} name="ssoUrl" type="url" required placeholder="https://login.example.com/saml2" />}
               </FormField>
-              <FormField label="Signing certificate" hint="The certificate (Base64 or PEM) the provider signs its answers with.">
+              <FormField label={t('Signing certificate')} hint={t('The certificate (Base64 or PEM) the provider signs its answers with.')}>
                 {(props) => <Textarea {...props} name="certificate" required rows={5} className="font-mono text-xs" />}
               </FormField>
             </>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Connect provider
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Connect provider')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -155,13 +152,8 @@ function SecondFactorRule({ orgId }: { orgId: string }) {
         <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 space-y-3">
           <div>
-            <h2 id="second-factor-title" className="text-base font-semibold">
-              Two-step sign-in
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Ask everyone in the organization for an authenticator app or a passkey. Until they set one up they can only open their account
-              settings, and mail apps need app passwords.
-            </p>
+            <h2 id="second-factor-title" className="text-base font-semibold">{t('Two-step sign-in')}</h2>
+            <p className="text-sm text-muted-foreground">{t('Ask everyone in the organization for an authenticator app or a passkey. Until they set one up they can only open their account settings, and mail apps need app passwords.')}</p>
           </div>
           {error ? <Notice>{error}</Notice> : null}
           {security.isLoading ? (
@@ -174,9 +166,7 @@ function SecondFactorRule({ orgId }: { orgId: string }) {
                 disabled={pending || !security.data}
                 onCheckedChange={(v) => void change(v === true)}
               />
-              <label htmlFor="require-second-factor" className="text-sm">
-                Require two-step sign-in for everyone
-              </label>
+              <label htmlFor="require-second-factor" className="text-sm">{t('Require two-step sign-in for everyone')}</label>
             </div>
           )}
         </div>
@@ -198,13 +188,11 @@ export default function SsoPage() {
   return (
     <>
       <PageHeader
-        title="Sign-in"
-        description="How people sign in to webmail and this console: two-step sign-in, and single sign-on with your company account. Mail apps keep using app passwords."
+        title={t('Sign-in')}
+        description={t('How people sign in to webmail and this console: two-step sign-in, and single sign-on with your company account. Mail apps keep using app passwords.')}
         actions={
           <Button onClick={() => setAdding(true)} disabled={available.length === 0}>
-            <Plus aria-hidden />
-            Connect provider
-          </Button>
+            <Plus aria-hidden />{t('Connect provider')}</Button>
         }
       />
       <SecondFactorRule orgId={orgId} />
@@ -222,33 +210,31 @@ export default function SsoPage() {
                   <p className="truncate text-sm text-muted-foreground">{provider.issuer}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setRemoving(provider)}>
-                  <Trash2 aria-hidden />
-                  Disconnect
-                </Button>
+                  <Trash2 aria-hidden />{t('Disconnect')}</Button>
               </div>
               {provider.type === 'saml' ? (
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
-                  <dt className="text-muted-foreground">Identifier (entity ID)</dt>
+                  <dt className="text-muted-foreground">{t('Identifier (entity ID)')}</dt>
                   <dd className="flex min-w-0 items-center gap-1">
                     <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.entityId}</code>
                     <CopyButton value={provider.entityId ?? ''} />
                   </dd>
-                  <dt className="text-muted-foreground">Reply URL (ACS)</dt>
+                  <dt className="text-muted-foreground">{t('Reply URL (ACS)')}</dt>
                   <dd className="flex min-w-0 items-center gap-1">
                     <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.callbackUrl}</code>
                     <CopyButton value={provider.callbackUrl} />
                   </dd>
-                  <dt className="text-muted-foreground">Certificate expires</dt>
+                  <dt className="text-muted-foreground">{t('Certificate expires')}</dt>
                   <dd>{provider.certificateExpiresAt ? new Date(provider.certificateExpiresAt).toLocaleDateString() : 'Unknown'}</dd>
                 </dl>
               ) : (
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-[12rem_1fr]">
-                  <dt className="text-muted-foreground">Redirect URI</dt>
+                  <dt className="text-muted-foreground">{t('Redirect URI')}</dt>
                   <dd className="flex min-w-0 items-center gap-1">
                     <code className="truncate rounded bg-muted px-1.5 py-0.5 text-xs">{provider.callbackUrl}</code>
                     <CopyButton value={provider.callbackUrl} />
                   </dd>
-                  <dt className="text-muted-foreground">Client ID</dt>
+                  <dt className="text-muted-foreground">{t('Client ID')}</dt>
                   <dd className="truncate">{provider.clientId}</dd>
                 </dl>
               )}
@@ -258,7 +244,7 @@ export default function SsoPage() {
       ) : (
         <EmptyState
           icon={KeyRound}
-          title="No identity provider yet"
+          title={t('No identity provider yet')}
           description={
             domains.data?.some((d) => d.status === 'active')
               ? 'Connect your company’s identity provider so people sign in with the account they already have.'
@@ -271,8 +257,8 @@ export default function SsoPage() {
         open={removing !== null}
         onClose={() => setRemoving(null)}
         title={`Disconnect the provider for ${removing?.domain ?? ''}?`}
-        description="People on this domain sign in with their mailbox password again."
-        confirmLabel="Disconnect"
+        description={t('People on this domain sign in with their mailbox password again.')}
+        confirmLabel={t('Disconnect')}
         onConfirm={async () => {
           if (!removing) return;
           await api.delete(`/orgs/${orgId}/sso/${removing.id}`);

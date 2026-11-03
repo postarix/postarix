@@ -36,6 +36,7 @@ import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
 import { useSession } from '@/lib/auth-client';
 import { useRelayHosts } from '../../../system/routing';
 import type { Domain, Mailbox } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 function useRefresh(orgId: string) {
   const queryClient = useQueryClient();
@@ -66,7 +67,7 @@ function Usage({ orgId, mailbox }: { orgId: string; mailbox: Mailbox }) {
       {percent !== null ? (
         <Progress
           value={percent}
-          aria-label="Storage used"
+          aria-label={t('Storage used')}
           className={cn('h-1.5', percent >= 90 && '[&>[data-slot=progress-indicator]]:bg-destructive')}
         />
       ) : null}
@@ -106,34 +107,30 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
   }
 
   return (
-    <AppDialog open={open} onClose={onClose} title="New mailbox">
+    <AppDialog open={open} onClose={onClose} title={t('New mailbox')}>
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <AddressFields domains={domains} placeholder="jane" />
-          <FormField label="Display name">{(props) => <Input {...props} name="displayName" placeholder="Jane Doe" maxLength={128} />}</FormField>
-          <FormField label="Type" hint="Rooms and equipment are booked by inviting them to an event: they accept when free.">
+          <AddressFields domains={domains} placeholder={t('jane')} />
+          <FormField label={t('Display name')}>{(props) => <Input {...props} name="displayName" placeholder={t('Jane Doe')} maxLength={128} />}</FormField>
+          <FormField label={t('Type')} hint={t('Rooms and equipment are booked by inviting them to an event: they accept when free.')}>
             {(props) => (
               <NativeSelect {...props} name="kind" defaultValue="person" className="w-full">
-                <NativeSelectOption value="person">Person</NativeSelectOption>
-                <NativeSelectOption value="room">Room</NativeSelectOption>
-                <NativeSelectOption value="equipment">Equipment</NativeSelectOption>
+                <NativeSelectOption value="person">{t('Person')}</NativeSelectOption>
+                <NativeSelectOption value="room">{t('Room')}</NativeSelectOption>
+                <NativeSelectOption value="equipment">{t('Equipment')}</NativeSelectOption>
               </NativeSelect>
             )}
           </FormField>
-          <FormField label="Password" hint="At least 12 characters.">
+          <FormField label={t('Password')} hint={t('At least 12 characters.')}>
             {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
           </FormField>
-          <FormField label="Quota (GB)" hint="Leave empty for the domain's default quota.">
+          <FormField label={t('Quota (GB)')} hint={t('Leave empty for the domain\'s default quota.')}>
             {(props) => <Input {...props} name="quota" inputMode="decimal" placeholder="5" />}
           </FormField>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Create mailbox
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Create mailbox')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -142,11 +139,11 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
 }
 
 const protocolOptions: { value: Mailbox['allowedProtocols'][number]; label: string }[] = [
-  { value: 'imap', label: 'IMAP' },
-  { value: 'pop3', label: 'POP3' },
-  { value: 'smtp', label: 'SMTP (sending)' },
-  { value: 'sieve', label: 'Sieve filters' },
-  { value: 'dav', label: 'Calendars and contacts' },
+  { value: 'imap', label: t('IMAP') },
+  { value: 'pop3', label: t('POP3') },
+  { value: 'smtp', label: t('SMTP (sending)') },
+  { value: 'sieve', label: t('Sieve filters') },
+  { value: 'dav', label: t('Calendars and contacts') },
 ];
 
 function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox: Mailbox; onClose: () => void }) {
@@ -198,15 +195,15 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Display name">
+          <FormField label={t('Display name')}>
             {(props) => <Input {...props} name="displayName" defaultValue={mailbox.displayName} maxLength={128} />}
           </FormField>
-          <FormField label="Quota (GB)" hint="Leave empty for unlimited.">
+          <FormField label={t('Quota (GB)')} hint={t('Leave empty for unlimited.')}>
             {(props) => <Input {...props} name="quota" inputMode="decimal" defaultValue={quotaToGiB(mailbox.quotaBytes)} />}
           </FormField>
           <FormField
-            label="Can also send as"
-            hint="One per line: an address, or @domain for every address of a domain. Only this organization's domains. Aliases that deliver to the mailbox are allowed already."
+            label={t('Can also send as')}
+            hint={t('One per line: an address, or @domain for every address of a domain. Only this organization\'s domains. Aliases that deliver to the mailbox are allowed already.')}
           >
             {(props) =>
               sendAs.isLoading ? (
@@ -224,15 +221,15 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
             }
           </FormField>
           <RateLimitField
-            label="Sending limit"
-            hint="Messages it may send, from mail apps and the webmail. Empty: its domain's limit, if any."
+            label={t('Sending limit')}
+            hint={t('Messages it may send, from mail apps and the webmail. Empty: its domain\'s limit, if any.')}
             value={mailbox.rateLimit}
           />
           {relayHosts.data ? (
-            <FormField label="Send through" hint="Instance administrators: a smart host for this mailbox's mail. Empty: its domain's choice.">
+            <FormField label={t('Send through')} hint={t('Instance administrators: a smart host for this mailbox\'s mail. Empty: its domain\'s choice.')}>
               {(props) => (
                 <NativeSelect {...props} name="relayHostId" defaultValue={mailbox.relayHostId ?? ''} className="w-full">
-                  <NativeSelectOption value="">As its domain</NativeSelectOption>
+                  <NativeSelectOption value="">{t('As its domain')}</NativeSelectOption>
                   {relayHosts.data.map((r) => (
                     <NativeSelectOption key={r.id} value={r.id}>
                       {r.host}
@@ -242,27 +239,27 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
               )}
             </FormField>
           ) : null}
-          <FormField label="Quarantine notices" hint="How often its people are told about refused spam they can release.">
+          <FormField label={t('Quarantine notices')} hint={t('How often its people are told about refused spam they can release.')}>
             {(props) => (
               <NativeSelect {...props} name="quarantineNotify" defaultValue={mailbox.quarantineNotify} className="w-full">
-                <NativeSelectOption value="never">Never</NativeSelectOption>
-                <NativeSelectOption value="hourly">Hourly</NativeSelectOption>
-                <NativeSelectOption value="daily">Daily</NativeSelectOption>
-                <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                <NativeSelectOption value="never">{t('Never')}</NativeSelectOption>
+                <NativeSelectOption value="hourly">{t('Hourly')}</NativeSelectOption>
+                <NativeSelectOption value="daily">{t('Daily')}</NativeSelectOption>
+                <NativeSelectOption value="weekly">{t('Weekly')}</NativeSelectOption>
               </NativeSelect>
             )}
           </FormField>
-          <FormField label="Status">
+          <FormField label={t('Status')}>
             {(props) => (
               <NativeSelect {...props} name="status" defaultValue={mailbox.status} className="w-full">
-                <NativeSelectOption value="active">Active</NativeSelectOption>
-                <NativeSelectOption value="no_login">Receives mail, nobody can sign in</NativeSelectOption>
-                <NativeSelectOption value="disabled">Disabled: no sign-in, no mail</NativeSelectOption>
+                <NativeSelectOption value="active">{t('Active')}</NativeSelectOption>
+                <NativeSelectOption value="no_login">{t('Receives mail, nobody can sign in')}</NativeSelectOption>
+                <NativeSelectOption value="disabled">{t('Disabled: no sign-in, no mail')}</NativeSelectOption>
               </NativeSelect>
             )}
           </FormField>
           <Field>
-            <FieldLabel>Mail apps may use</FieldLabel>
+            <FieldLabel>{t('Mail apps may use')}</FieldLabel>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
               {protocolOptions.map((option) => (
                 <Field key={option.value} orientation="horizontal" className="w-auto">
@@ -277,27 +274,19 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
                 </Field>
               ))}
             </div>
-            <p className="text-sm text-muted-foreground">The webmail always works.</p>
+            <p className="text-sm text-muted-foreground">{t('The webmail always works.')}</p>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="mailbox-tls-in" name="tlsRequiredIn" defaultChecked={mailbox.tlsRequiredIn} />
-            <FieldLabel htmlFor="mailbox-tls-in" className="font-normal">
-              Refuse incoming mail from servers that do not use TLS
-            </FieldLabel>
+            <FieldLabel htmlFor="mailbox-tls-in" className="font-normal">{t('Refuse incoming mail from servers that do not use TLS')}</FieldLabel>
           </Field>
           <Field orientation="horizontal">
             <Checkbox id="mailbox-tls-out" name="tlsRequiredOut" defaultChecked={mailbox.tlsRequiredOut} />
-            <FieldLabel htmlFor="mailbox-tls-out" className="font-normal">
-              Send outgoing mail only over TLS (otherwise it is returned)
-            </FieldLabel>
+            <FieldLabel htmlFor="mailbox-tls-out" className="font-normal">{t('Send outgoing mail only over TLS (otherwise it is returned)')}</FieldLabel>
           </Field>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <LoadingButton type="submit" loading={pending}>
-              Save
-            </LoadingButton>
+            <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+            <LoadingButton type="submit" loading={pending}>{t('Save')}</LoadingButton>
           </DialogFooter>
         </FieldGroup>
       </form>
@@ -329,25 +318,21 @@ function ResetPasswordDialog({ orgId, mailbox, onClose }: { orgId: string; mailb
     <AppDialog open onClose={onClose} title={`Reset password for ${mailbox.address}`}>
       {done ? (
         <FieldGroup>
-          <Notice tone="success">Password changed. Share it with the user over a secure channel.</Notice>
+          <Notice tone="success">{t('Password changed. Share it with the user over a secure channel.')}</Notice>
           <DialogFooter>
-            <Button onClick={onClose}>Done</Button>
+            <Button onClick={onClose}>{t('Done')}</Button>
           </DialogFooter>
         </FieldGroup>
       ) : (
         <form onSubmit={submit}>
           <FieldGroup>
             {error ? <Notice>{error}</Notice> : null}
-            <FormField label="New password" hint="At least 12 characters.">
+            <FormField label={t('New password')} hint={t('At least 12 characters.')}>
               {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required autoFocus />}
             </FormField>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <LoadingButton type="submit" loading={pending}>
-                Set password
-              </LoadingButton>
+              <Button type="button" variant="outline" onClick={onClose}>{t('Cancel')}</Button>
+              <LoadingButton type="submit" loading={pending}>{t('Set password')}</LoadingButton>
             </DialogFooter>
           </FieldGroup>
         </form>
@@ -402,27 +387,20 @@ function ArchivingSection({ orgId, mailboxes }: { orgId: string; mailboxes: Mail
         <Archive className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1 space-y-3">
           <div>
-            <h2 id="archiving-title" className="text-base font-semibold">
-              Archiving and legal hold
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Keep a copy of every message the organization receives or sends in one mailbox. Under legal hold, no mailbox can be deleted or
-              disabled. Keep the archive mailbox&apos;s password with whoever answers for compliance.
-            </p>
+            <h2 id="archiving-title" className="text-base font-semibold">{t('Archiving and legal hold')}</h2>
+            <p className="text-sm text-muted-foreground">{t('Keep a copy of every message the organization receives or sends in one mailbox. Under legal hold, no mailbox can be deleted or disabled. Keep the archive mailbox\'s password with whoever answers for compliance.')}</p>
           </div>
           {error ? <Notice>{error}</Notice> : null}
           {archiving.isLoading || !current ? (
             <Skeleton className="h-5 w-64" />
           ) : (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <label className="flex items-center gap-2 text-sm">
-                Archive mailbox
-                <NativeSelect
+              <label className="flex items-center gap-2 text-sm">{t('Archive mailbox')}<NativeSelect
                   value={current.archiveMailboxId ?? ''}
                   disabled={pending}
                   onChange={(e) => void change({ ...current, archiveMailboxId: e.target.value || null })}
                 >
-                  <NativeSelectOption value="">No archiving</NativeSelectOption>
+                  <NativeSelectOption value="">{t('No archiving')}</NativeSelectOption>
                   {mailboxes.map((m) => (
                     <NativeSelectOption key={m.id} value={m.id}>
                       {m.address}
@@ -437,9 +415,7 @@ function ArchivingSection({ orgId, mailboxes }: { orgId: string; mailboxes: Mail
                   disabled={pending}
                   onCheckedChange={(v) => void change({ ...current, legalHold: v === true })}
                 />
-                <label htmlFor="legal-hold" className="text-sm">
-                  Legal hold
-                </label>
+                <label htmlFor="legal-hold" className="text-sm">{t('Legal hold')}</label>
               </div>
             </div>
           )}
@@ -464,22 +440,17 @@ export default function MailboxesPage() {
   return (
     <>
       <PageHeader
-        title="Mailboxes"
-        description="Accounts that sign in and store mail."
+        title={t('Mailboxes')}
+        description={t('Accounts that sign in and store mail.')}
         actions={
           <Button onClick={() => setCreating(true)} disabled={activeDomains.length === 0}>
-            <Plus aria-hidden />
-            New mailbox
-          </Button>
+            <Plus aria-hidden />{t('New mailbox')}</Button>
         }
       />
       {domains.data && activeDomains.length === 0 ? (
         <div className="mb-4">
-          <Notice tone="warning">
-            Verify a domain before creating mailboxes.{' '}
-            <Link href={`/o/${orgId}/domains`} className="font-medium underline underline-offset-4">
-              Go to domains
-            </Link>
+          <Notice tone="warning">{t('Verify a domain before creating mailboxes.')}{' '}
+            <Link href={`/o/${orgId}/domains`} className="font-medium underline underline-offset-4">{t('Go to domains')}</Link>
           </Notice>
         </div>
       ) : null}
@@ -492,12 +463,12 @@ export default function MailboxesPage() {
         <ListTable>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Address</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Storage</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="pl-4">{t('Address')}</TableHead>
+              <TableHead>{t('Name')}</TableHead>
+              <TableHead>{t('Storage')}</TableHead>
+              <TableHead>{t('Status')}</TableHead>
               <TableHead className="pr-4 text-right">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('Actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -508,13 +479,9 @@ export default function MailboxesPage() {
                 <TableCell>
                   {mailbox.displayName || <span className="text-muted-foreground">—</span>}
                   {mailbox.kind === 'room' ? (
-                    <Badge variant="secondary" className="ml-2">
-                      Room
-                    </Badge>
+                    <Badge variant="secondary" className="ml-2">{t('Room')}</Badge>
                   ) : mailbox.kind === 'equipment' ? (
-                    <Badge variant="secondary" className="ml-2">
-                      Equipment
-                    </Badge>
+                    <Badge variant="secondary" className="ml-2">{t('Equipment')}</Badge>
                   ) : null}
                 </TableCell>
                 <TableCell>
@@ -522,11 +489,11 @@ export default function MailboxesPage() {
                 </TableCell>
                 <TableCell>
                   {mailbox.status === 'active' ? (
-                    <Badge variant="success">Active</Badge>
+                    <Badge variant="success">{t('Active')}</Badge>
                   ) : mailbox.status === 'no_login' ? (
-                    <Badge variant="warning">No sign-in</Badge>
+                    <Badge variant="warning">{t('No sign-in')}</Badge>
                   ) : (
-                    <Badge variant="secondary">Disabled</Badge>
+                    <Badge variant="secondary">{t('Disabled')}</Badge>
                   )}
                 </TableCell>
                 <TableCell className="pr-4">
@@ -555,7 +522,7 @@ export default function MailboxesPage() {
           </TableBody>
         </ListTable>
       ) : (
-        <EmptyState icon={Inbox} title="No mailboxes yet" description="Each mailbox is an account with its own storage." />
+        <EmptyState icon={Inbox} title={t('No mailboxes yet')} description={t('Each mailbox is an account with its own storage.')} />
       )}
       <CreateMailboxDialog orgId={orgId} domains={activeDomains} open={creating} onClose={() => setCreating(false)} />
       {editing ? <EditMailboxDialog orgId={orgId} mailbox={editing} onClose={() => setEditing(null)} /> : null}
@@ -583,8 +550,8 @@ export default function MailboxesPage() {
         open={deleting !== null}
         onClose={() => setDeleting(null)}
         title={`Delete ${deleting?.address ?? ''}?`}
-        description="All mail in this mailbox is permanently deleted. This cannot be undone."
-        confirmLabel="Delete mailbox"
+        description={t('All mail in this mailbox is permanently deleted. This cannot be undone.')}
+        confirmLabel={t('Delete mailbox')}
         onConfirm={async () => {
           if (!deleting) return;
           await api.delete(`/orgs/${orgId}/mailboxes/${deleting.id}`);

@@ -11,6 +11,7 @@ import { type FormEvent, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
 import { LoadingButton } from './loading-button';
 import { Notice } from './notice';
+import { t } from '@/lib/i18n';
 
 export interface SpamListEntry {
   id: string;
@@ -63,26 +64,21 @@ export function SpamLists({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Blocked senders are refused. Allowed senders skip the spam filter, if they prove who they are (SPF or DMARC). Use
-        an address, <code>@domain</code>, or <code>@.domain</code> for its subdomains.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('Blocked senders are refused. Allowed senders skip the spam filter, if they prove who they are (SPF or DMARC). Use an address,')}{' '}<code>@domain</code>{t(', or')}{' '}<code>@.domain</code>{' '}{t('for its subdomains.')}</p>
       <form onSubmit={add} className="flex flex-wrap gap-2">
-        <NativeSelect aria-label="List" value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
-          <NativeSelectOption value="block">Block</NativeSelectOption>
-          <NativeSelectOption value="allow">Allow</NativeSelectOption>
+        <NativeSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
+          <NativeSelectOption value="block">{t('Block')}</NativeSelectOption>
+          <NativeSelectOption value="allow">{t('Allow')}</NativeSelectOption>
         </NativeSelect>
         <Input
-          aria-label="Sender"
+          aria-label={t('Sender')}
           value={pattern}
           onChange={(e) => setPattern(e.target.value)}
-          placeholder="news@example.com or @example.com"
+          placeholder={t('news@example.com or @example.com')}
           className="min-w-56 flex-1"
           required
         />
-        <LoadingButton type="submit" variant="outline" loading={pending}>
-          Add
-        </LoadingButton>
+        <LoadingButton type="submit" variant="outline" loading={pending}>{t('Add')}</LoadingButton>
       </form>
       {error ? <Notice>{error}</Notice> : null}
       {entries.isLoading ? (
@@ -116,7 +112,7 @@ export function SpamLists({
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">No senders listed.</p>
+        <p className="text-sm text-muted-foreground">{t('No senders listed.')}</p>
       )}
     </div>
   );

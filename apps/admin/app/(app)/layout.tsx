@@ -11,7 +11,7 @@ import {
 } from '@postarix/ui/components/dropdown-menu';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { cn } from '@postarix/ui/lib/utils';
-import { Building2, LogOut, Menu, Server, UserRound } from 'lucide-react';
+import { Building2, Languages, LogOut, Menu, Server, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
@@ -19,6 +19,7 @@ import { BrandMark } from '@/components/brand';
 import { authClient, useSession } from '@/lib/auth-client';
 import { isSuperAdmin, useAllOrganizations, useBranding, useMyOrganizations } from '@/lib/queries';
 import { Notice } from '@/components/notice';
+import { language, languages, setLanguage, t } from '@/lib/i18n';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -53,7 +54,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <Link href="/" className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
       <BrandMark className="size-8" />
       <span className="leading-tight">
-        <span className="block text-[0.95rem] font-semibold tracking-tight">Postarix</span>
+        <span className="block text-[0.95rem] font-semibold tracking-tight">{t('Postarix')}</span>
         <span className="block text-xs text-sidebar-muted">{superAdmin ? 'Instance administration' : 'Administration'}</span>
       </span>
     </Link>
@@ -64,8 +65,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <aside className="hidden h-screen w-60 shrink-0 flex-col text-sidebar-foreground md:flex">
         <div className="px-5 pt-5 pb-4 text-white">{brand}</div>
 
-        <nav aria-label="Organizations" className="flex-1 overflow-y-auto px-3">
-          <p className="px-2 pt-2 pb-1.5 text-xs font-medium text-sidebar-muted">Organizations</p>
+        <nav aria-label={t('Organizations')} className="flex-1 overflow-y-auto px-3">
+          <p className="px-2 pt-2 pb-1.5 text-xs font-medium text-sidebar-muted">{t('Organizations')}</p>
           <ul className="space-y-0.5">
             {orgs.map((org) => {
               const active = pathname.startsWith(`/o/${org.id}`);
@@ -89,12 +90,27 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               );
             })}
             {orgs.length === 0 && !mine.isLoading ? (
-              <li className="px-2 py-1.5 text-sm text-sidebar-muted">No organizations yet</li>
+              <li className="px-2 py-1.5 text-sm text-sidebar-muted">{t('No organizations yet')}</li>
             ) : null}
           </ul>
         </nav>
 
         <div className="p-3">
+          <label className="mb-1 flex h-8 items-center gap-2.5 px-2.5 text-sm text-sidebar-foreground/85">
+            <Languages className="size-4 text-sidebar-muted" aria-hidden />
+            <span className="sr-only">{t('Language')}</span>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as (typeof languages)[number]['code'])}
+              className="min-w-0 flex-1 cursor-pointer bg-transparent text-sm focus-visible:outline-none"
+            >
+              {languages.map((l) => (
+                <option key={l.code} value={l.code} className="text-foreground">
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {superAdmin ? (
             <Link
               href="/system"
@@ -104,9 +120,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 pathname === '/system' && 'bg-sidebar-accent font-medium text-white',
               )}
             >
-              <Server className="size-4 text-sidebar-muted" aria-hidden />
-              System
-            </Link>
+              <Server className="size-4 text-sidebar-muted" aria-hidden />{t('System')}</Link>
           ) : null}
           <Link
             href="/account"
@@ -120,9 +134,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="truncate">{session.user.email}</span>
           </Link>
           <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-sidebar-foreground/85 hover:bg-sidebar-accent/50 hover:text-white" onClick={signOut}>
-            <LogOut aria-hidden />
-            Sign out
-          </Button>
+            <LogOut aria-hidden />{t('Sign out')}</Button>
         </div>
       </aside>
 
@@ -132,12 +144,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {brand}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu">
+              <Button variant="ghost" size="icon" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label={t('Open menu')}>
                 <Menu aria-hidden />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('Organizations')}</DropdownMenuLabel>
               {orgs.map((org) => (
                 <DropdownMenuItem key={org.id} asChild>
                   <Link href={`/o/${org.id}`}>
@@ -146,25 +158,27 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 </DropdownMenuItem>
               ))}
+              {languages
+                .filter((l) => l.code !== language)
+                .map((l) => (
+                  <DropdownMenuItem key={l.code} onSelect={() => setLanguage(l.code)}>
+                    <Languages aria-hidden />
+                    {l.label}
+                  </DropdownMenuItem>
+                ))}
               <DropdownMenuSeparator />
               {superAdmin ? (
                 <DropdownMenuItem asChild>
                   <Link href="/system">
-                    <Server aria-hidden />
-                    System
-                  </Link>
+                    <Server aria-hidden />{t('System')}</Link>
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuItem asChild>
                 <Link href="/account">
-                  <UserRound aria-hidden />
-                  Your account
-                </Link>
+                  <UserRound aria-hidden />{t('Your account')}</Link>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={signOut}>
-                <LogOut aria-hidden />
-                Sign out
-              </DropdownMenuItem>
+                <LogOut aria-hidden />{t('Sign out')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>

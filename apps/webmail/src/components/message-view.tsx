@@ -25,6 +25,7 @@ import { mailboxPath, navigate } from '@/lib/router';
 import { Avatar } from './avatar';
 import { InvitationCard } from './invitation-card';
 import { MessageFrame } from './message-frame';
+import { t } from '@/lib/i18n';
 
 /** An icon-only toolbar button with a tooltip carrying its name. */
 function IconAction({ label, children, ...props }: { label: string } & ComponentProps<typeof Button>) {
@@ -69,8 +70,8 @@ function Conversation({ threadId, currentId, pathFor }: { threadId: string; curr
   const list = thread.data ?? [];
   if (list.length < 2) return null;
   return (
-    <section aria-label="Conversation" className="rounded-lg border bg-muted/30">
-      <p className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{list.length} messages in this conversation</p>
+    <section aria-label={t('Conversation')} className="rounded-lg border bg-muted/30">
+      <p className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">{list.length}{' '}{t('messages in this conversation')}</p>
       <ol>
         {list.map((m) => {
           const current = m.id === currentId;
@@ -108,15 +109,15 @@ function LabelMenu({ message, labels, onToggle }: { message: RenderedMessage; la
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Labels">
+            <Button variant="ghost" size="icon-sm" aria-label={t('Labels')}>
               <Tag aria-hidden />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>Labels</TooltipContent>
+        <TooltipContent>{t('Labels')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel>Labels</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('Labels')}</DropdownMenuLabel>
         {labels.map((l) => (
           <DropdownMenuCheckboxItem key={l.id} checked={Boolean(message.keywords[l.keyword])} onCheckedChange={(on) => onToggle(l.keyword, on === true)}>
             {l.name}
@@ -134,10 +135,8 @@ function LabelMenu({ message, labels, onToggle }: { message: RenderedMessage; la
             });
           }}
         >
-          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} placeholder="New label" aria-label="New label" className="h-8" maxLength={40} />
-          <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>
-            Add
-          </Button>
+          <Input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.stopPropagation()} placeholder={t('New label')} aria-label={t('New label')} className="h-8" maxLength={40} />
+          <Button type="submit" size="sm" variant="outline" disabled={create.isPending}>{t('Add')}</Button>
         </form>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -209,11 +208,11 @@ export function MessageView({
   return (
     <article className="flex h-full min-h-0 flex-col" aria-label={data.subject || 'Message'}>
       <div className="flex h-14 shrink-0 items-center gap-1 border-b px-3 md:px-4">
-        <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Back to the list" onClick={back}>
+        <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t('Back to the list')} onClick={back}>
           <ArrowLeft aria-hidden />
         </Button>
         {archive && mailbox.role !== 'archive' ? (
-          <IconAction label="Archive" onClick={() => moveTo(archive)}>
+          <IconAction label={t('Archive')} onClick={() => moveTo(archive)}>
             <Archive aria-hidden />
           </IconAction>
         ) : null}
@@ -221,15 +220,15 @@ export function MessageView({
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Move to folder">
+                <Button variant="ghost" size="icon-sm" aria-label={t('Move to folder')}>
                   <FolderInput aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>Move to folder</TooltipContent>
+            <TooltipContent>{t('Move to folder')}</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Move to</DropdownMenuLabel>
+            <DropdownMenuLabel>{t('Move to')}</DropdownMenuLabel>
             {mailboxes
               .filter((m) => m.id !== mailbox.id && m.role !== 'drafts')
               .map((m) => (
@@ -255,7 +254,7 @@ export function MessageView({
           onToggle={(keyword, on) => update.mutate({ update: { [data.id]: { [`keywords/${keyword}`]: on ? true : null } } })}
         />
         <IconAction
-          label="Mark as unread"
+          label={t('Mark as unread')}
           onClick={() => {
             update.mutate({ update: { [data.id]: { 'keywords/$seen': null } } });
             back();
@@ -265,16 +264,14 @@ export function MessageView({
         </IconAction>
         <div className="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={() => onReply(data, false)}>
-            <Reply aria-hidden />
-            Reply
-          </Button>
+            <Reply aria-hidden />{t('Reply')}</Button>
           <Button variant="ghost" size="sm" onClick={() => onReply(data, true)}>
             <ReplyAll aria-hidden />
-            <span className="hidden xl:inline">Reply all</span>
+            <span className="hidden xl:inline">{t('Reply all')}</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onForward(data)}>
             <Forward aria-hidden />
-            <span className="hidden xl:inline">Forward</span>
+            <span className="hidden xl:inline">{t('Forward')}</span>
           </Button>
         </div>
       </div>
@@ -289,8 +286,7 @@ export function MessageView({
                 <span className="font-semibold">{displayName(data.from[0])}</span>
                 {data.from[0]?.name ? <span className="truncate text-muted-foreground">{data.from[0].email}</span> : null}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                To {addressList(data.to)}
+              <p className="truncate text-xs text-muted-foreground">{t('To')}{' '}{addressList(data.to)}
                 {data.cc.length ? `, cc ${addressList(data.cc)}` : ''}
                 {data.bcc.length ? `, bcc ${addressList(data.bcc)}` : ''}
               </p>
@@ -302,7 +298,7 @@ export function MessageView({
         </header>
 
         {labels.some((l) => data.keywords[l.keyword]) ? (
-          <div className="-mt-2 flex flex-wrap gap-1.5" aria-label="Labels">
+          <div className="-mt-2 flex flex-wrap gap-1.5" aria-label={t('Labels')}>
             {labels
               .filter((l) => data.keywords[l.keyword])
               .map((l) => (
@@ -322,20 +318,17 @@ export function MessageView({
         {data.blockedImages > 0 ? (
           <Alert className="bg-muted/50">
             <ImageOff aria-hidden />
-            <AlertDescription className="flex flex-wrap items-center gap-2">
-              Remote images are blocked to protect your privacy ({data.blockedImages}).
-              <Button size="xs" variant="outline" onClick={() => setRemoteImages(true)}>
-                Show images
-              </Button>
+            <AlertDescription className="flex flex-wrap items-center gap-2">{t('Remote images are blocked to protect your privacy (')}{data.blockedImages}).
+              <Button size="xs" variant="outline" onClick={() => setRemoteImages(true)}>{t('Show images')}</Button>
             </AlertDescription>
           </Alert>
         ) : null}
-        {data.truncated ? <p className="text-xs text-muted-foreground">This message is very long; only the beginning is shown.</p> : null}
+        {data.truncated ? <p className="text-xs text-muted-foreground">{t('This message is very long; only the beginning is shown.')}</p> : null}
 
         <MessageFrame html={data.html} title={`Message: ${data.subject}`} />
 
         {data.attachments.length ? (
-          <section aria-label="Attachments" className="grid gap-2 sm:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
+          <section aria-label={t('Attachments')} className="grid gap-2 sm:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
             {data.attachments.map((a) => (
               <AttachmentLink key={a.blobId} attachment={a} />
             ))}

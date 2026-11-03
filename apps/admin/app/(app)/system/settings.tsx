@@ -11,6 +11,7 @@ import { FormField } from '@/components/form-field';
 import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { api, errorMessage } from '@/lib/api';
+import { t } from '@/lib/i18n';
 
 interface InstanceSettings {
   signIn: { maxFailures: number; lockMinutes: number };
@@ -77,51 +78,51 @@ export function SettingsTab() {
     <form onSubmit={submit} className="max-w-2xl">
       <FieldGroup>
         {error ? <Notice>{error}</Notice> : null}
-        <Section title="Sign-in protection" description="For the web and mail apps alike. App passwords are never locked.">
+        <Section title={t('Sign-in protection')} description={t('For the web and mail apps alike. App passwords are never locked.')}>
           <div className="grid grid-cols-2 gap-3">
-            <FormField label="Failed passwords before locking">
+            <FormField label={t('Failed passwords before locking')}>
               {(props) => <Input {...props} name="maxFailures" type="number" min={3} max={100} defaultValue={s.signIn.maxFailures} required />}
             </FormField>
-            <FormField label="Locked for (minutes)">
+            <FormField label={t('Locked for (minutes)')}>
               {(props) => <Input {...props} name="lockMinutes" type="number" min={1} max={1440} defaultValue={s.signIn.lockMinutes} required />}
             </FormField>
           </div>
         </Section>
-        <Section title="Passwords" description="For new passwords: mailboxes created here, resets and changes.">
-          <FormField label="Minimum length">
+        <Section title={t('Passwords')} description={t('For new passwords: mailboxes created here, resets and changes.')}>
+          <FormField label={t('Minimum length')}>
             {(props) => <Input {...props} name="minLength" type="number" min={12} max={128} defaultValue={s.passwords.minLength} required />}
           </FormField>
           <Field orientation="horizontal">
             <Checkbox id="requireMixed" name="requireMixed" defaultChecked={s.passwords.requireMixed} />
             <FieldLabel htmlFor="requireMixed" className="font-normal">
-              Require three of: lowercase, uppercase, digits, symbols
+              {t('Require three of: lowercase, uppercase, digits, symbols')}
             </FieldLabel>
           </Field>
         </Section>
-        <Section title="Mailbox quota" description="People are told by mail when their mailbox fills up.">
-          <FormField label="Warn when full at (percent)" hint="0: never.">
+        <Section title={t('Mailbox quota')} description={t('People are told by mail when their mailbox fills up.')}>
+          <FormField label={t('Warn when full at (percent)')} hint={t('0: never.')}>
             {(props) => <Input {...props} name="warnAtPercent" type="number" min={0} max={100} defaultValue={s.quota.warnAtPercent} required />}
           </FormField>
         </Section>
-        <Section title="Branding" description="What people see on the sign-in pages and while signed in.">
-          <FormField label="Name">
+        <Section title={t('Branding')} description={t('What people see on the sign-in pages and while signed in.')}>
+          <FormField label={t('Name')}>
             {(props) => <Input {...props} name="productName" defaultValue={s.branding.productName} maxLength={60} required />}
           </FormField>
-          <FormField label="Sign-in message" hint="E.g. who to contact for help.">
+          <FormField label={t('Sign-in message')} hint={t('E.g. who to contact for help.')}>
             {(props) => <Textarea {...props} name="loginMessage" rows={2} defaultValue={s.branding.loginMessage} maxLength={500} />}
           </FormField>
-          <FormField label="Announcement" hint="Shown to everyone signed in to the webmail and the admin panel. Empty: none.">
+          <FormField label={t('Announcement')} hint={t('Shown to everyone signed in to the webmail and the admin panel. Empty: none.')}>
             {(props) => <Textarea {...props} name="announcement" rows={2} defaultValue={s.branding.announcement} maxLength={500} />}
           </FormField>
-          <FormField label="Help page">
+          <FormField label={t('Help page')}>
             {(props) => <Input {...props} name="supportUrl" type="url" defaultValue={s.branding.supportUrl} placeholder="https://" />}
           </FormField>
         </Section>
         <div className="flex items-center gap-3">
           <LoadingButton type="submit" loading={pending}>
-            Save settings
+            {t('Save settings')}
           </LoadingButton>
-          {saved ? <span className="text-sm text-muted-foreground">Saved. Every server applies it within a few seconds.</span> : null}
+          {saved ? <span className="text-sm text-muted-foreground">{t('Saved. Every server applies it within a few seconds.')}</span> : null}
         </div>
       </FieldGroup>
     </form>

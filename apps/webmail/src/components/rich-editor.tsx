@@ -4,6 +4,7 @@ import { cn } from '@postarix/ui/lib/utils';
 import { Bold, Italic, Link, List, ListOrdered, Quote, RemoveFormatting, Underline } from 'lucide-react';
 import { type ReactNode, forwardRef, useImperativeHandle, useRef } from 'react';
 import { cleanHtml } from '@/lib/rich-text';
+import { t } from '@/lib/i18n';
 
 export interface RichEditorHandle {
   /** The body as clean HTML. */
@@ -11,21 +12,21 @@ export interface RichEditorHandle {
 }
 
 const ACTIONS: { label: string; shortcut?: string; icon: ReactNode; run: () => void }[] = [
-  { label: 'Bold', shortcut: 'Ctrl+B', icon: <Bold aria-hidden />, run: () => document.execCommand('bold') },
-  { label: 'Italic', shortcut: 'Ctrl+I', icon: <Italic aria-hidden />, run: () => document.execCommand('italic') },
-  { label: 'Underline', shortcut: 'Ctrl+U', icon: <Underline aria-hidden />, run: () => document.execCommand('underline') },
-  { label: 'Bulleted list', icon: <List aria-hidden />, run: () => document.execCommand('insertUnorderedList') },
-  { label: 'Numbered list', icon: <ListOrdered aria-hidden />, run: () => document.execCommand('insertOrderedList') },
-  { label: 'Quote', icon: <Quote aria-hidden />, run: () => document.execCommand('formatBlock', false, 'blockquote') },
+  { label: t('Bold'), shortcut: 'Ctrl+B', icon: <Bold aria-hidden />, run: () => document.execCommand('bold') },
+  { label: t('Italic'), shortcut: 'Ctrl+I', icon: <Italic aria-hidden />, run: () => document.execCommand('italic') },
+  { label: t('Underline'), shortcut: 'Ctrl+U', icon: <Underline aria-hidden />, run: () => document.execCommand('underline') },
+  { label: t('Bulleted list'), icon: <List aria-hidden />, run: () => document.execCommand('insertUnorderedList') },
+  { label: t('Numbered list'), icon: <ListOrdered aria-hidden />, run: () => document.execCommand('insertOrderedList') },
+  { label: t('Quote'), icon: <Quote aria-hidden />, run: () => document.execCommand('formatBlock', false, 'blockquote') },
   {
-    label: 'Link',
+    label: t('Link'),
     icon: <Link aria-hidden />,
     run: () => {
       const url = window.prompt('Link address (https://…)');
       if (url && /^(https?:\/\/|mailto:)/i.test(url.trim())) document.execCommand('createLink', false, url.trim());
     },
   },
-  { label: 'Clear formatting', icon: <RemoveFormatting aria-hidden />, run: () => document.execCommand('removeFormat') },
+  { label: t('Clear formatting'), icon: <RemoveFormatting aria-hidden />, run: () => document.execCommand('removeFormat') },
 ];
 
 /** The message body with simple formatting (bold, lists, links, quotes). */
@@ -38,7 +39,7 @@ export const RichEditor = forwardRef<RichEditorHandle, { initialHtml: string; au
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-      <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5 border-b px-4 py-1">
+      <div role="toolbar" aria-label={t('Formatting')} className="flex flex-wrap items-center gap-0.5 border-b px-4 py-1">
         {ACTIONS.map((action) => (
           <Tooltip key={action.label}>
             <TooltipTrigger asChild>
@@ -72,7 +73,7 @@ export const RichEditor = forwardRef<RichEditorHandle, { initialHtml: string; au
         }}
         role="textbox"
         aria-multiline="true"
-        aria-label="Message"
+        aria-label={t('Message')}
         contentEditable
         suppressContentEditableWarning
         data-placeholder="Write your message…"

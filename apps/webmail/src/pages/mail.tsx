@@ -11,6 +11,7 @@ import { jmap } from '@/lib/jmap';
 import { keys, useDeleteLabel, useIdentities, useLabels, useMailboxes } from '@/lib/mail';
 import { labelPath, mailboxPath, navigate } from '@/lib/router';
 import { cn } from '@postarix/ui/lib/utils';
+import { t } from '@/lib/i18n';
 
 /** Refreshes lists when the server reports changes (JMAP push over server-sent events). */
 function usePush() {
@@ -129,7 +130,7 @@ export function MailPage({
       }
     >
       <div className="flex h-full min-h-0">
-        <section className={cn('min-h-0 w-full border-r lg:w-[24rem] lg:shrink-0', emailId && 'max-lg:hidden')} aria-label="Message list">
+        <section className={cn('min-h-0 w-full border-r lg:w-[24rem] lg:shrink-0', emailId && 'max-lg:hidden')} aria-label={t('Message list')}>
           <MessageList
             key={`${label?.keyword ?? current?.id}:${search}`}
             mailbox={label ? undefined : current}
@@ -141,7 +142,7 @@ export function MailPage({
           />
         </section>
 
-        <section className={cn('min-h-0 min-w-0 flex-1', !emailId && 'max-lg:hidden')} aria-label="Reading pane">
+        <section className={cn('min-h-0 min-w-0 flex-1', !emailId && 'max-lg:hidden')} aria-label={t('Reading pane')}>
           {emailId && current ? (
             <MessageView
               key={emailId}
@@ -159,7 +160,7 @@ export function MailPage({
             <div className="grid h-full place-items-center p-8">
               <div className="text-center text-muted-foreground">
                 <MailOpen className="mx-auto mb-3 size-10 stroke-[1.25] text-muted-foreground/40" aria-hidden />
-                <p className="text-sm">Pick a message to read it here.</p>
+                <p className="text-sm">{t('Pick a message to read it here.')}</p>
               </div>
             </div>
           )}

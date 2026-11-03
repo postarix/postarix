@@ -9,7 +9,7 @@ import {
 } from '@postarix/ui/components/dropdown-menu';
 import { Postmark } from '@postarix/ui/components/postmark';
 import { cn } from '@postarix/ui/lib/utils';
-import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, MailCheck, Menu, Settings, ShieldAlert, ShieldX, UsersRound, X } from 'lucide-react';
+import { CalendarDays, ChevronsUpDown, Download, Inbox, LogOut, ListFilter, Languages, MailCheck, Menu, Settings, ShieldAlert, ShieldX, UsersRound, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { useRoute } from '@/lib/router';
@@ -20,11 +20,12 @@ import { MailSettingsDialog } from './mail-settings-dialog';
 import { QuarantineDialog } from './quarantine-dialog';
 import { SpamDialog } from './spam-dialog';
 import { useBranding } from '@/lib/branding';
+import { language, languages, setLanguage, t } from '@/lib/i18n';
 
 const APPS = [
-  { name: 'mailbox', label: 'Mail', href: '/', icon: Inbox },
-  { name: 'calendar', label: 'Calendar', href: '/calendar', icon: CalendarDays },
-  { name: 'contacts', label: 'Contacts', href: '/contacts', icon: UsersRound },
+  { name: 'mailbox', label: t('Mail'), href: '/', icon: Inbox },
+  { name: 'calendar', label: t('Calendar'), href: '/calendar', icon: CalendarDays },
+  { name: 'contacts', label: t('Contacts'), href: '/contacts', icon: UsersRound },
 ] as const;
 
 /**
@@ -59,10 +60,10 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
     <div className="flex h-full flex-col gap-5 px-3 pt-4 pb-3">
       <a data-nav href="/" className="flex items-center gap-2.5 rounded-md px-2 py-1 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none">
         <Postmark className="size-7" />
-        <span className="text-[1.05rem] leading-none font-semibold tracking-tight text-white">Postarix</span>
+        <span className="text-[1.05rem] leading-none font-semibold tracking-tight text-white">{t('Postarix')}</span>
       </a>
 
-      <nav aria-label="Apps" className="grid grid-cols-3 gap-0.5 rounded-lg bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.4)] ring-1 ring-white/[0.05]">
+      <nav aria-label={t('Apps')} className="grid grid-cols-3 gap-0.5 rounded-lg bg-black/25 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.4)] ring-1 ring-white/[0.05]">
         {APPS.map(({ name: app, label, href, icon: Icon }) => {
           const active = route.name === app;
           return (
@@ -104,35 +105,29 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
           <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{email}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setFiltersOpen(true)}>
-            <ListFilter aria-hidden />
-            Filters
-          </DropdownMenuItem>
+            <ListFilter aria-hidden />{t('Filters')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
-            <MailCheck aria-hidden />
-            Automatic reply and forwarding
-          </DropdownMenuItem>
+            <MailCheck aria-hidden />{t('Automatic reply and forwarding')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setSpamOpen(true)}>
-            <ShieldAlert aria-hidden />
-            Spam filter
-          </DropdownMenuItem>
+            <ShieldAlert aria-hidden />{t('Spam filter')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setQuarantineOpen(true)}>
-            <ShieldX aria-hidden />
-            Quarantine
-          </DropdownMenuItem>
+            <ShieldX aria-hidden />{t('Quarantine')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-            <Download aria-hidden />
-            Import mail from another account
-          </DropdownMenuItem>
+            <Download aria-hidden />{t('Import mail from another account')}</DropdownMenuItem>
           <DropdownMenuItem asChild>
             <a href="/admin/account">
-              <Settings aria-hidden />
-              Security and app passwords
-            </a>
+              <Settings aria-hidden />{t('Security and app passwords')}</a>
           </DropdownMenuItem>
+          {languages
+            .filter((l) => l.code !== language)
+            .map((l) => (
+              <DropdownMenuItem key={l.code} onSelect={() => setLanguage(l.code)}>
+                <Languages aria-hidden />
+                {l.label}
+              </DropdownMenuItem>
+            ))}
           <DropdownMenuItem onSelect={() => void signOut()}>
-            <LogOut aria-hidden />
-            Sign out
-          </DropdownMenuItem>
+            <LogOut aria-hidden />{t('Sign out')}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -143,19 +138,19 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
       <aside className="hidden w-60 shrink-0 text-sidebar-foreground md:block">{sidebar}</aside>
 
       {open ? (
-        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-          <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true" aria-label={t('Menu')}>
+          <button type="button" aria-label={t('Close menu')} className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <aside className="relative h-full w-72 max-w-[85vw] bg-sidebar text-sidebar-foreground shadow-2xl">{sidebar}</aside>
         </div>
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 bg-sidebar px-2 py-2 text-white md:hidden">
-          <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label="Open menu" aria-expanded={open} onClick={() => setOpen(true)}>
+          <Button variant="ghost" size="icon-sm" className="text-white hover:bg-sidebar-accent hover:text-white" aria-label={t('Open menu')} aria-expanded={open} onClick={() => setOpen(true)}>
             {open ? <X aria-hidden /> : <Menu aria-hidden />}
           </Button>
           <Postmark className="size-6" />
-          <span className="font-semibold tracking-tight">Postarix</span>
+          <span className="font-semibold tracking-tight">{t('Postarix')}</span>
         </header>
         {settingsOpen ? <MailSettingsDialog onClose={() => setSettingsOpen(false)} /> : null}
         {filtersOpen ? <FiltersDialog onClose={() => setFiltersOpen(false)} /> : null}

@@ -24,6 +24,7 @@ import { useSession } from '@/lib/auth-client';
 import { formatDate } from '@/lib/format';
 import { keys, useOrganization, useOrgList } from '@/lib/queries';
 import type { Member, OrgRole } from '@/lib/types';
+import { t } from '@/lib/i18n';
 
 const roleVariant = { owner: 'default', admin: 'secondary', member: 'outline' } as const;
 
@@ -38,9 +39,9 @@ function useRefresh(orgId: string) {
 function RoleOptions({ canGrantOwner }: { canGrantOwner: boolean }) {
   return (
     <>
-      <NativeSelectOption value="member">Member</NativeSelectOption>
-      <NativeSelectOption value="admin">Admin</NativeSelectOption>
-      {canGrantOwner ? <NativeSelectOption value="owner">Owner</NativeSelectOption> : null}
+      <NativeSelectOption value="member">{t('Member')}</NativeSelectOption>
+      <NativeSelectOption value="admin">{t('Admin')}</NativeSelectOption>
+      {canGrantOwner ? <NativeSelectOption value="owner">{t('Owner')}</NativeSelectOption> : null}
     </>
   );
 }
@@ -70,14 +71,14 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
     <AppDialog
       open={open}
       onClose={onClose}
-      title="Add member"
-      description="Mailbox owners are members automatically. Use this to add back someone with a mailbox here who was removed."
+      title={t('Add member')}
+      description={t('Mailbox owners are members automatically. Use this to add back someone with a mailbox here who was removed.')}
     >
       <form onSubmit={submit}>
         <FieldGroup>
           {error ? <Notice>{error}</Notice> : null}
-          <FormField label="Email">{(props) => <Input {...props} name="email" type="email" required autoFocus />}</FormField>
-          <FormField label="Role" hint="Admins manage domains, mailboxes and aliases. Owners can also manage other owners.">
+          <FormField label={t('Email')}>{(props) => <Input {...props} name="email" type="email" required autoFocus />}</FormField>
+          <FormField label={t('Role')} hint={t('Admins manage domains, mailboxes and aliases. Owners can also manage other owners.')}>
             {(props) => (
               <NativeSelect {...props} name="role" defaultValue="member">
                 <RoleOptions canGrantOwner={canGrantOwner} />
@@ -86,10 +87,10 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
           </FormField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <LoadingButton type="submit" loading={pending}>
-              Add member
+              {t('Add member')}
             </LoadingButton>
           </DialogFooter>
         </FieldGroup>
@@ -102,7 +103,7 @@ function RoleSelect({ orgId, member, canGrantOwner }: { orgId: string; member: M
   const refresh = useRefresh(orgId);
   const [error, setError] = useState<string | null>(null);
   if (!canGrantOwner && member.role === 'owner') {
-    return <Badge variant={roleVariant[member.role]}>Owner</Badge>;
+    return <Badge variant={roleVariant[member.role]}>{t('Owner')}</Badge>;
   }
   return (
     <div className="w-32">
@@ -140,12 +141,12 @@ export default function MembersPage() {
   return (
     <>
       <PageHeader
-        title="Members"
-        description="People who belong to this organization and what they may manage."
+        title={t('Members')}
+        description={t('People who belong to this organization and what they may manage.')}
         actions={
           <Button onClick={() => setAdding(true)}>
             <UserPlus aria-hidden />
-            Add member
+            {t('Add member')}
           </Button>
         }
       />
@@ -157,11 +158,11 @@ export default function MembersPage() {
         <ListTable>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-4">Person</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Since</TableHead>
+              <TableHead className="pl-4">{t('Person')}</TableHead>
+              <TableHead>{t('Role')}</TableHead>
+              <TableHead>{t('Since')}</TableHead>
               <TableHead className="pr-4 text-right">
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">{t('Actions')}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -171,7 +172,7 @@ export default function MembersPage() {
                 <TableCell className="pl-4">
                   <div className="font-medium">
                     {member.name}
-                    {member.userId === session?.user.id ? <span className="ml-2 text-xs text-muted-foreground">(you)</span> : null}
+                    {member.userId === session?.user.id ? <span className="ml-2 text-xs text-muted-foreground">{t('(you)')}</span> : null}
                   </div>
                   <div className="text-sm text-muted-foreground">{member.email}</div>
                 </TableCell>
@@ -198,8 +199,8 @@ export default function MembersPage() {
         open={removing !== null}
         onClose={() => setRemoving(null)}
         title={`Remove ${removing?.email ?? ''}?`}
-        description="They lose access to this organization. Their account and mailbox are not affected."
-        confirmLabel="Remove"
+        description={t('They lose access to this organization. Their account and mailbox are not affected.')}
+        confirmLabel={t('Remove')}
         onConfirm={async () => {
           if (!removing) return;
           await api.delete(`/orgs/${orgId}/members/${removing.id}`);

@@ -7,6 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { type ShareAccess, useSetSharing, useSharing } from '@/lib/calendar';
+import { t } from '@/lib/i18n';
 
 /**
  * Who a calendar or the contacts are shared with. Only people in the same
@@ -47,20 +48,23 @@ export function ShareDialog({ kind, id, onClose }: { kind: 'calendars' | 'addres
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-xl">{kind === 'calendars' ? 'Share calendar' : 'Share contacts'}</DialogTitle>
-          <DialogDescription>People in your organization you add here can see {what}. Those who can edit may also change it.</DialogDescription>
+          <DialogDescription>
+            {t('People in your organization you add here can see')} {what}
+            {t('. Those who can edit may also change it.')}
+          </DialogDescription>
         </DialogHeader>
         {sharing.isPending ? (
           <Spinner />
         ) : (
           <form onSubmit={submit} className="grid gap-3">
-            {shares.length === 0 ? <p className="text-sm text-muted-foreground">Not shared with anyone.</p> : null}
-            <ul className="grid gap-2" aria-label="People">
+            {shares.length === 0 ? <p className="text-sm text-muted-foreground">{t('Not shared with anyone.')}</p> : null}
+            <ul className="grid gap-2" aria-label={t('People')}>
               {shares.map((share, index) => (
                 <li key={index} className="flex items-center gap-2">
                   <Input
                     type="email"
                     aria-label={`Person ${index + 1}`}
-                    placeholder="colleague@example.com"
+                    placeholder={t('colleague@example.com')}
                     value={share.email}
                     onChange={(e) => change(index, { email: e.target.value })}
                     required
@@ -70,8 +74,8 @@ export function ShareDialog({ kind, id, onClose }: { kind: 'calendars' | 'addres
                     value={share.access}
                     onChange={(e) => change(index, { access: e.target.value as ShareAccess })}
                   >
-                    <NativeSelectOption value="read">Can see</NativeSelectOption>
-                    <NativeSelectOption value="write">Can edit</NativeSelectOption>
+                    <NativeSelectOption value="read">{t('Can see')}</NativeSelectOption>
+                    <NativeSelectOption value="write">{t('Can edit')}</NativeSelectOption>
                   </NativeSelect>
                   <Button
                     type="button"
@@ -88,7 +92,7 @@ export function ShareDialog({ kind, id, onClose }: { kind: 'calendars' | 'addres
             <div>
               <Button type="button" variant="outline" size="sm" onClick={() => setShares((list) => [...list, { email: '', access: 'read' }])}>
                 <Plus aria-hidden />
-                Add person
+                {t('Add person')}
               </Button>
             </div>
             {error ? (
@@ -97,16 +101,16 @@ export function ShareDialog({ kind, id, onClose }: { kind: 'calendars' | 'addres
               </p>
             ) : saved ? (
               <p role="status" className="text-sm text-muted-foreground">
-                Sharing saved.
+                {t('Sharing saved.')}
               </p>
             ) : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Close
+                {t('Close')}
               </Button>
               <Button type="submit" disabled={save.isPending || !collection}>
                 {save.isPending ? <Spinner /> : null}
-                Save sharing
+                {t('Save sharing')}
               </Button>
             </DialogFooter>
           </form>

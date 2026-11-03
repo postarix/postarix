@@ -13,6 +13,10 @@ import { CalendarPage } from '@/pages/calendar';
 import { ContactsPage } from '@/pages/contacts';
 import { MailPage } from '@/pages/mail';
 import './styles.css';
+import { t } from '@/lib/i18n';
+import { language } from './lib/i18n';
+
+document.documentElement.lang = language;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,11 +60,11 @@ function App() {
       return (
         <Centered>
           <div className="max-w-sm space-y-2">
-            <p className="text-base font-medium text-foreground">Your organization requires two-step sign-in.</p>
-            <p>Set up an authenticator app or a passkey for your account, then come back.</p>
+            <p className="text-base font-medium text-foreground">{t('Your organization requires two-step sign-in.')}</p>
+            <p>{t('Set up an authenticator app or a passkey for your account, then come back.')}</p>
             <p>
               <a className="underline underline-offset-4" href="/admin/account">
-                Open your account settings
+                {t('Open your account settings')}
               </a>
             </p>
           </div>
@@ -75,7 +79,7 @@ function App() {
           <p>
             {noMailbox ? (
               <a className="underline underline-offset-4" href="/admin/">
-                Open the admin panel
+                {t('Open the admin panel')}
               </a>
             ) : (
               'Try again in a moment.'
@@ -112,10 +116,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
     return (
       <Centered>
         <div className="max-w-sm space-y-3">
-          <p className="text-base font-medium text-foreground">Something on this page could not be shown.</p>
+          <p className="text-base font-medium text-foreground">{t('Something on this page could not be shown.')}</p>
           <p>
             <a className="underline underline-offset-4" href="/">
-              Back to the inbox
+              {t('Back to the inbox')}
             </a>
           </p>
         </div>

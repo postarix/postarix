@@ -2,6 +2,7 @@ import type { CalendarEvent } from '@postarix/jmap-client';
 import { cn } from '@postarix/ui/lib/utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dayKey, eventSpan, layoutDay, overlapsDay } from '@/lib/calendar';
+import { t } from '@/lib/i18n';
 
 const HOUR_HEIGHT = 48; // px
 const time = (d: Date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(d);
@@ -54,7 +55,7 @@ export function TimeGrid({
             </div>
           );
         })}
-        <div className="flex items-start justify-end pt-1 pr-2 text-[11px] text-muted-foreground">All day</div>
+        <div className="flex items-start justify-end pt-1 pr-2 text-[11px] text-muted-foreground">{t('All day')}</div>
         {days.map((day) => {
           const allDay = spans.filter(({ span }) => span.allDay && overlapsDay(span, day));
           return (
