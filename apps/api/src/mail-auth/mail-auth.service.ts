@@ -9,6 +9,7 @@ import type { Database } from '../db/client.js';
 import { type AppPasswordScope, domains, mailboxes, type MailProtocol } from '../db/schema/index.js';
 import { DATABASE, ENV, COUNTER_STORE } from '../core/tokens.js';
 import { looksLikeJmapToken, verifyJmapToken } from '../jmap/jmap-token.js';
+import { loadInstanceSettings } from '../settings/instance-settings.js';
 import { FailureLimiter } from './failure-limiter.js';
 import type { CounterStore } from '../core/counter-store.js';
 
@@ -63,7 +64,10 @@ export class MailAuthService {
     @Inject(COUNTER_STORE) counters: CounterStore,
     @Inject(SecondFactorPolicy) private readonly secondFactor: SecondFactorPolicy,
   ) {
-    this.limiter = new FailureLimiter(counters, 'mail-login', 10, 15 * 60 * 1000);
+    this.limiter = new FailureLimiter(counters, 'mail-login', async () => {
+      const { signIn } = await loadInstanceSettings(this.db);
+      return { maxFailures: signIn.maxFailures, windowMs: signIn.lockMinutes * 60_000 };
+    });
   }
 
   /**

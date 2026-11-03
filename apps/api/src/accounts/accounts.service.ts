@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import type { Auth } from '../auth/auth.js';
 import { hasInstanceAdminRole } from '../auth/roles.js';
@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from '../auth/passwords.js';
 import { AUTH, DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { account, session, user } from '../db/schema/index.js';
+import { loadInstanceSettings, passwordProblem } from '../settings/instance-settings.js';
 
 export interface AccountSummary {
   id: string;
@@ -24,8 +25,15 @@ export class AccountsService {
     @Inject(DATABASE) private readonly db: Database,
   ) {}
 
+  /** Refuses a password the instance's policy does not accept (422). */
+  async assertPasswordAllowed(password: string): Promise<void> {
+    const problem = passwordProblem(password, (await loadInstanceSettings(this.db)).passwords);
+    if (problem) throw new UnprocessableEntityException({ message: problem, code: 'PASSWORD_POLICY' });
+  }
+
   /** Creates a regular user with email/password credentials. Throws 409 if the email is taken. */
   async create(input: { email: string; password: string; name: string }): Promise<string> {
+    await this.assertPasswordAllowed(input.password);
     const [existing] = await this.db
       .select({ id: user.id })
       .from(user)
@@ -67,6 +75,7 @@ export class AccountsService {
 
   /** Replaces the account password and signs the user out everywhere. */
   async setPassword(userId: string, password: string): Promise<void> {
+    await this.assertPasswordAllowed(password);
     const passwordHash = await hashPassword(password);
     await this.db.transaction(async (tx) => {
       await tx

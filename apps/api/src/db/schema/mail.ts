@@ -75,6 +75,8 @@ export const mailboxes = pgTable(
     spamJunkScore: real(),
     spamRejectScore: real(),
     quarantineNotify: text({ enum: quarantineNotifyIntervals }).notNull().default('daily'),
+    /** When its people were last told it is nearly full. */
+    quotaWarnedAt: timestamp({ withTimezone: true }),
     /** Send its mail through this smart host instead of its domain's (set by instance administrators). */
     relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
@@ -246,6 +248,23 @@ export const quarantineItems = pgTable(
 );
 
 export type QuarantineItemRow = typeof quarantineItems.$inferSelect;
+
+/**
+ * Settings of the whole instance, changed by instance administrators in the
+ * admin panel (see src/settings). One row; missing values take their defaults.
+ */
+export const instanceSettings = pgTable(
+  'instance_settings',
+  {
+    id: integer().primaryKey().default(1),
+    settings: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    updatedAt: timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [check('instance_settings_single_row', sql`${table.id} = 1`)],
+);
 
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type AliasRow = typeof aliases.$inferSelect;

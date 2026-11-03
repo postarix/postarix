@@ -8,10 +8,12 @@ import { Postmark } from '@postarix/ui/components/postmark';
 import { Building2, CircleAlert, KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { useBranding } from '@/lib/branding';
 import { navigate } from '@/lib/router';
 import { ssoErrorMessage, startSso } from '@/lib/sso';
 
 export function LoginPage() {
+  const branding = useBranding();
   const [step, setStep] = useState<'password' | '2fa'>('password');
   const [error, setError] = useState<string | null>(() => ssoErrorMessage(new URLSearchParams(window.location.search).get('error')));
   const [pending, setPending] = useState(false);
@@ -63,7 +65,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2.5">
           <Postmark className="size-8" />
-          <span className="text-lg font-semibold tracking-tight text-white">Postarix</span>
+          <span className="text-lg font-semibold tracking-tight text-white">{branding?.productName ?? 'Postarix'}</span>
         </div>
       <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
         <CardHeader className="text-center">
@@ -130,6 +132,9 @@ export function LoginPage() {
         </CardContent>
       </Card>
         <p className="mt-6 text-center text-xs text-sidebar-muted">Mail apps sign in with an app password from your account settings.</p>
+        {branding?.loginMessage ? (
+          <p className="mt-3 text-center text-xs whitespace-pre-line text-sidebar-muted">{branding.loginMessage}</p>
+        ) : null}
       </div>
     </main>
   );

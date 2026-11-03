@@ -43,3 +43,20 @@ export function useOrgList<T>(orgId: string, part: string) {
     queryFn: () => api.get<{ data: T[] }>(`/orgs/${orgId}/${part}`).then((r) => r.data),
   });
 }
+
+export interface Branding {
+  productName: string;
+  loginMessage: string;
+  announcement: string;
+  supportUrl: string;
+  passwordMinLength: number;
+}
+
+/** What instance administrators set for the sign-in page and everyone's screens. */
+export function useBranding() {
+  return useQuery({
+    queryKey: ['branding'],
+    queryFn: () => api.get<Branding>('/branding'),
+    staleTime: 60_000,
+  });
+}

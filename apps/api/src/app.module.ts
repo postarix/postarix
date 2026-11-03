@@ -24,6 +24,7 @@ import { SystemModule } from './system/system.module.js';
 import { RoutingModule } from './routing/routing.js';
 import { SpamModule } from './spam/spam.js';
 import { QuarantineModule } from './quarantine/quarantine.js';
+import { InstanceSettingsModule } from './settings/instance-settings.js';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { QuarantineModule } from './quarantine/quarantine.js';
     RoutingModule,
     SpamModule,
     QuarantineModule,
+    InstanceSettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

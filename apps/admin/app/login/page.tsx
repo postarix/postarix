@@ -9,6 +9,7 @@ import { Building2, KeyRound } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, Suspense, useState } from 'react';
 import { BrandMark } from '@/components/brand';
+import { useBranding } from '@/lib/queries';
 import { FormField } from '@/components/form-field';
 import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
@@ -16,6 +17,7 @@ import { authClient } from '@/lib/auth-client';
 import { ssoErrorMessage, startSso } from '@/lib/sso';
 
 function LoginForm() {
+  const branding = useBranding();
   const router = useRouter();
   const params = useSearchParams();
   const [step, setStep] = useState<'password' | '2fa'>(params.get('step') === '2fa' ? '2fa' : 'password');
@@ -71,7 +73,7 @@ function LoginForm() {
     <div className="w-full max-w-sm">
       <div className="mb-6 flex items-center justify-center gap-2.5">
         <BrandMark className="size-8" />
-        <span className="text-lg font-semibold tracking-tight text-white">Postarix</span>
+        <span className="text-lg font-semibold tracking-tight text-white">{branding.data?.productName ?? 'Postarix'}</span>
       </div>
     <Card className="gap-6 shadow-2xl ring-1 ring-black/10">
       <CardHeader className="text-center">
@@ -144,6 +146,9 @@ function LoginForm() {
         )}
       </CardContent>
     </Card>
+      {branding.data?.loginMessage ? (
+        <p className="mt-6 text-center text-xs whitespace-pre-line text-sidebar-muted">{branding.data.loginMessage}</p>
+      ) : null}
     </div>
   );
 }

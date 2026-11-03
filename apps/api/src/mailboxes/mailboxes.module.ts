@@ -10,11 +10,12 @@ import { MailboxCollectionsService } from './mailbox-collections.service.js';
 import { MailboxesController } from './mailboxes.controller.js';
 import { MailboxesRepository } from './mailboxes.repository.js';
 import { MailboxesService } from './mailboxes.service.js';
+import { QuotaWarningsService } from './quota-warnings.js';
 
 @Module({
   imports: [AccountsModule, DomainsModule, RateLimitsModule, SpamModule],
   controllers: [MailboxesController, ArchivingController],
-  providers: [MailboxesRepository, MailboxesService, MailboxCollectionsService, ArchivingService, AddressRegistry, OrgAccessGuard],
+  providers: [MailboxesRepository, MailboxesService, QuotaWarningsService, MailboxCollectionsService, ArchivingService, AddressRegistry, OrgAccessGuard],
   exports: [MailboxesRepository, MailboxesService, ArchivingService],
 })
 export class MailboxesModule {}

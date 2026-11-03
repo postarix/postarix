@@ -190,6 +190,13 @@
       "when": 1793705242448,
       "tag": "0026_free_squadron_supreme",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793706192218,
+      "tag": "0027_superb_harry_osborn",
+      "breakpoints": true
     }
   ]
 }
