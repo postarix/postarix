@@ -24,6 +24,7 @@ import { useSession } from '@/lib/auth-client';
 import { formatBytes, formatDate } from '@/lib/format';
 import { isSuperAdmin } from '@/lib/queries';
 import { RoutingTab } from './routing';
+import { SpamLists } from '@/components/spam-lists';
 
 interface ServiceStatus {
   name: string;
@@ -309,6 +310,7 @@ export default function SystemPage() {
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="queue">Mail queue</TabsTrigger>
           <TabsTrigger value="routing">Outgoing routing</TabsTrigger>
+          <TabsTrigger value="spam">Spam filter</TabsTrigger>
         </TabsList>
         <TabsContent value="status" className="pt-4">
           <StatusTab />
@@ -321,6 +323,15 @@ export default function SystemPage() {
         </TabsContent>
         <TabsContent value="routing" className="pt-4">
           <RoutingTab />
+        </TabsContent>
+        <TabsContent value="spam" className="max-w-2xl space-y-3 pt-4">
+          <h3 className="font-medium">Senders for every mailbox on this server</h3>
+          <SpamLists
+            queryKey={['system', 'spam-lists']}
+            listUrl="/system/spam-lists"
+            addUrl="/system/spam-lists"
+            deleteUrl={(id) => `/system/spam-lists/${id}`}
+          />
         </TabsContent>
       </Tabs>
     </>

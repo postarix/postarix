@@ -57,6 +57,8 @@ export class DomainsRepository {
         | 'rateLimit'
         | 'ratePeriod'
         | 'relayHostId'
+        | 'spamJunkScore'
+        | 'spamRejectScore'
       >
     >,
     check: (domain: DomainRow, usage: DomainUsage, largestQuota: number | null) => void,

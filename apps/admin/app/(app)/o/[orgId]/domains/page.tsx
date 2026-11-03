@@ -12,7 +12,7 @@ import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Globe, KeyRound, Plus, RefreshCw, Settings, ShieldCheck, Trash2 } from 'lucide-react';
+import { Globe, KeyRound, Plus, RefreshCw, Settings, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { AppDialog } from '@/components/app-dialog';
@@ -24,6 +24,7 @@ import { LoadingButton } from '@/components/loading-button';
 import { Notice } from '@/components/notice';
 import { PageHeader } from '@/components/page-header';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
+import { SpamDialog } from '@/components/spam-dialog';
 import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { formatBytes, formatDate } from '@/lib/format';
@@ -370,6 +371,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [dkim, setDkim] = useState(false);
+  const [spam, setSpam] = useState(false);
   const [showDns, setShowDns] = useState(domain.status === 'pending');
 
   const refresh = () => {
@@ -427,6 +429,9 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
           <Button size="sm" variant="outline" onClick={() => setShowDns((v) => !v)} aria-expanded={showDns}>
             {showDns ? 'Hide DNS records' : 'DNS records'}
           </Button>
+          <Button size="icon-sm" variant="ghost" aria-label={`Spam filter of ${domain.name}`} onClick={() => setSpam(true)}>
+            <ShieldAlert aria-hidden />
+          </Button>
           <Button size="icon-sm" variant="ghost" aria-label={`DKIM key of ${domain.name}`} onClick={() => setDkim(true)}>
             <KeyRound aria-hidden />
           </Button>
@@ -453,6 +458,25 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
             </>
           ) : null}
         </CardContent>
+      ) : null}
+      {spam ? (
+        <SpamDialog
+          title={`Spam filter of ${domain.name}`}
+          inherited="the server's"
+          scores={domain.spamScores}
+          saveScores={async (spamScores) => {
+            await api.patch(`/orgs/${orgId}/domains/${domain.id}`, { spamScores });
+            refresh();
+          }}
+          lists={{
+            queryKey: [...keys.orgPart(orgId, 'domains'), domain.id, 'spam-lists'],
+            listUrl: `/orgs/${orgId}/spam-lists?domainId=${domain.id}`,
+            addUrl: `/orgs/${orgId}/spam-lists`,
+            deleteUrl: (id) => `/orgs/${orgId}/spam-lists/${id}`,
+            extra: { domainId: domain.id },
+          }}
+          onClose={() => setSpam(false)}
+        />
       ) : null}
       {dkim ? <DkimDialog orgId={orgId} domain={domain} onClose={() => setDkim(false)} /> : null}
       {editing ? <DomainSettingsDialog orgId={orgId} domain={domain} open={editing} onClose={() => setEditing(false)} /> : null}

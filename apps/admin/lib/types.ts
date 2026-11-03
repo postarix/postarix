@@ -10,6 +10,12 @@ export interface OrganizationSummary {
   createdAt: string;
 }
 
+/** Spam thresholds; null: inherited. */
+export interface SpamScores {
+  junkScore: number | null;
+  rejectScore: number | null;
+}
+
 /** A sending limit: messages per period. */
 export interface RateLimit {
   messages: number;
@@ -38,6 +44,7 @@ export interface Domain {
   rateLimit: RateLimit | null;
   /** Smart host its mail goes through (instance administrators set it). */
   relayHostId: string | null;
+  spamScores: SpamScores;
   createdAt: string;
 }
 
@@ -68,6 +75,7 @@ export interface Mailbox {
   /** Null: its domain's limit, if any. */
   rateLimit: RateLimit | null;
   relayHostId: string | null;
+  spamScores: SpamScores;
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
   createdAt: string;

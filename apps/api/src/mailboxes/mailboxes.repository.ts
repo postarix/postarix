@@ -29,6 +29,8 @@ export type MailboxChanges = Partial<
     | 'rateLimit'
     | 'ratePeriod'
     | 'relayHostId'
+    | 'spamJunkScore'
+    | 'spamRejectScore'
   >
 >;
 

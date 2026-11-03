@@ -3,6 +3,7 @@ import { AccountsModule } from '../accounts/accounts.module.js';
 import { AddressRegistry } from '../common/address-registry.js';
 import { DomainsModule } from '../domains/domains.module.js';
 import { RateLimitsModule } from '../rate-limits/rate-limits.module.js';
+import { SpamModule } from '../spam/spam.js';
 import { OrgAccessGuard } from '../tenancy/org-access.guard.js';
 import { ArchivingController, ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
@@ -11,7 +12,7 @@ import { MailboxesRepository } from './mailboxes.repository.js';
 import { MailboxesService } from './mailboxes.service.js';
 
 @Module({
-  imports: [AccountsModule, DomainsModule, RateLimitsModule],
+  imports: [AccountsModule, DomainsModule, RateLimitsModule, SpamModule],
   controllers: [MailboxesController, ArchivingController],
   providers: [MailboxesRepository, MailboxesService, MailboxCollectionsService, ArchivingService, AddressRegistry, OrgAccessGuard],
   exports: [MailboxesRepository, MailboxesService, ArchivingService],

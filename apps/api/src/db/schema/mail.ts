@@ -6,6 +6,7 @@ import {
   index,
   integer,
   jsonb,
+  real,
   pgTable,
   text,
   timestamp,
@@ -61,6 +62,9 @@ export const mailboxes = pgTable(
     /** Messages it may send per period; null: its domain's limit, if any. */
     rateLimit: integer(),
     ratePeriod: text({ enum: Object.keys(ratePeriods) as [RatePeriod, ...RatePeriod[]] }),
+    /** Spam score from which its mail is filed as junk, and refused (null: its domain's). */
+    spamJunkScore: real(),
+    spamRejectScore: real(),
     /** Send its mail through this smart host instead of its domain's (set by instance administrators). */
     relayHostId: uuid().references(() => relayHosts.id, { onDelete: 'set null' }),
     /** Cyrus Murder: the backend the mailbox lives on (null: the default one). */
@@ -163,6 +167,39 @@ export const mailboxSendAs = pgTable(
     index('mailbox_send_as_sender_idx').on(table.sender),
   ],
 );
+
+export const spamListKinds = ['allow', 'block'] as const;
+export type SpamListKind = (typeof spamListKinds)[number];
+
+/**
+ * Senders always accepted (allow) or always treated as spam (block): for a
+ * mailbox, for a domain, or for the whole instance (no organization). A
+ * pattern is an address, "@domain" or "@.domain" (the domain's subdomains).
+ */
+export const spamListEntries = pgTable(
+  'spam_list_entries',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text().references(() => organization.id, { onDelete: 'cascade' }),
+    domainId: uuid().references(() => domains.id, { onDelete: 'cascade' }),
+    mailboxId: uuid().references(() => mailboxes.id, { onDelete: 'cascade' }),
+    kind: text({ enum: spamListKinds }).notNull(),
+    pattern: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('spam_list_entries_organization_id_idx').on(table.organizationId),
+    index('spam_list_entries_domain_id_idx').on(table.domainId),
+    index('spam_list_entries_mailbox_id_idx').on(table.mailboxId),
+    check(
+      'spam_list_entries_one_target',
+      sql`(${table.organizationId} IS NULL AND ${table.domainId} IS NULL AND ${table.mailboxId} IS NULL)
+        OR (${table.organizationId} IS NOT NULL AND ((${table.domainId} IS NULL) <> (${table.mailboxId} IS NULL)))`,
+    ),
+  ],
+);
+
+export type SpamListEntryRow = typeof spamListEntries.$inferSelect;
 
 export type MailboxRow = typeof mailboxes.$inferSelect;
 export type AliasRow = typeof aliases.$inferSelect;

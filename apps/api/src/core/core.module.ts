@@ -10,7 +10,8 @@ import type { MailEngine } from '@postarix/mail-engine';
 import { createDnsResolver } from './dns.js';
 import { createMailEngine } from './mail-engine.js';
 import { type DkimPublisher, MemoryDkimPublisher, ValkeyDkimPublisher } from '../dkim/dkim-publisher.js';
-import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, RATE_LIMIT_STORE, SYSTEM_MAILER, SYSTEM_STORE } from './tokens.js';
+import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, HASH_STORE, RATE_LIMIT_STORE, SYSTEM_MAILER, SYSTEM_STORE } from './tokens.js';
+import { type HashStore, MemoryHashStore, ValkeyHashStore } from '../spam/spam-store.js';
 import { MemorySystemStore, type SystemStore, ValkeySystemStore } from '../system/system-store.js';
 import { MemoryRateLimitStore, type RateLimitStore, ValkeyRateLimitStore } from '../rate-limits/rate-limits.js';
 
@@ -77,6 +78,11 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       inject: [ENV],
       useFactory: (env: Env): SystemStore => (env.VALKEY_URL ? new ValkeySystemStore(env.VALKEY_URL) : new MemorySystemStore()),
     },
+    {
+      provide: HASH_STORE,
+      inject: [ENV],
+      useFactory: (env: Env): HashStore => (env.VALKEY_URL ? new ValkeyHashStore(env.VALKEY_URL) : new MemoryHashStore()),
+    },
   ],
   exports: [
     SecondFactorPolicy,
@@ -91,6 +97,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
     SYSTEM_MAILER,
     RATE_LIMIT_STORE,
     SYSTEM_STORE,
+    HASH_STORE,
   ],
 })
 export class CoreModule implements OnApplicationShutdown {
@@ -101,6 +108,7 @@ export class CoreModule implements OnApplicationShutdown {
     @Inject(COUNTER_STORE) private readonly counters: CounterStore,
     @Inject(RATE_LIMIT_STORE) private readonly rateLimits: RateLimitStore,
     @Inject(SYSTEM_STORE) private readonly systemStore: SystemStore,
+    @Inject(HASH_STORE) private readonly hashStore: HashStore,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
@@ -108,6 +116,7 @@ export class CoreModule implements OnApplicationShutdown {
     await this.dkimPublisher.close();
     await this.rateLimits.close();
     await this.systemStore.close();
+    await this.hashStore.close();
     await this.counters.close();
     await this.pool.end();
   }
