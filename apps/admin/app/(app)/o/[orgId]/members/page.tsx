@@ -5,7 +5,7 @@ import { Button } from '@postarix/ui/components/button';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { FieldGroup } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQueryClient } from '@tanstack/react-query';
@@ -36,14 +36,23 @@ function useRefresh(orgId: string) {
   };
 }
 
-function RoleOptions({ canGrantOwner }: { canGrantOwner: boolean }) {
-  return (
-    <>
-      <NativeSelectOption value="member">{t('Member')}</NativeSelectOption>
-      <NativeSelectOption value="admin">{t('Admin')}</NativeSelectOption>
-      {canGrantOwner ? <NativeSelectOption value="owner">{t('Owner')}</NativeSelectOption> : null}
-    </>
-  );
+/** The roles one may give (FormSelect reads its options directly, so not a component). */
+function roleOptions(canGrantOwner: boolean) {
+  return [
+    <FormSelectOption key="member" value="member">
+      {t('Member')}
+    </FormSelectOption>,
+    <FormSelectOption key="admin" value="admin">
+      {t('Admin')}
+    </FormSelectOption>,
+    ...(canGrantOwner
+      ? [
+          <FormSelectOption key="owner" value="owner">
+            {t('Owner')}
+          </FormSelectOption>,
+        ]
+      : []),
+  ];
 }
 
 function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: string; canGrantOwner: boolean; open: boolean; onClose: () => void }) {
@@ -80,9 +89,9 @@ function AddMemberDialog({ orgId, canGrantOwner, open, onClose }: { orgId: strin
           <FormField label={t('Email')}>{(props) => <Input {...props} name="email" type="email" required autoFocus />}</FormField>
           <FormField label={t('Role')} hint={t('Admins manage domains, mailboxes and aliases. Owners can also manage other owners.')}>
             {(props) => (
-              <NativeSelect {...props} name="role" defaultValue="member">
-                <RoleOptions canGrantOwner={canGrantOwner} />
-              </NativeSelect>
+              <FormSelect {...props} name="role" defaultValue="member">
+                {roleOptions(canGrantOwner)}
+              </FormSelect>
             )}
           </FormField>
           <DialogFooter>
@@ -107,7 +116,7 @@ function RoleSelect({ orgId, member, canGrantOwner }: { orgId: string; member: M
   }
   return (
     <div className="w-32">
-      <NativeSelect
+      <FormSelect
         size="sm"
         aria-label={`Role of ${member.email}`}
         value={member.role}
@@ -121,8 +130,8 @@ function RoleSelect({ orgId, member, canGrantOwner }: { orgId: string; member: M
           }
         }}
       >
-        <RoleOptions canGrantOwner={canGrantOwner} />
-      </NativeSelect>
+        {roleOptions(canGrantOwner)}
+      </FormSelect>
       {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
     </div>
   );

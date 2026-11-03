@@ -1,7 +1,7 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -69,14 +69,14 @@ export function ShareDialog({ kind, id, onClose }: { kind: 'calendars' | 'addres
                     onChange={(e) => change(index, { email: e.target.value })}
                     required
                   />
-                  <NativeSelect
+                  <FormSelect
                     aria-label={`Access for person ${index + 1}`}
                     value={share.access}
                     onChange={(e) => change(index, { access: e.target.value as ShareAccess })}
                   >
-                    <NativeSelectOption value="read">{t('Can see')}</NativeSelectOption>
-                    <NativeSelectOption value="write">{t('Can edit')}</NativeSelectOption>
-                  </NativeSelect>
+                    <FormSelectOption value="read">{t('Can see')}</FormSelectOption>
+                    <FormSelectOption value="write">{t('Can edit')}</FormSelectOption>
+                  </FormSelect>
                   <Button
                     type="button"
                     variant="ghost"

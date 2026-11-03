@@ -26,4 +26,4 @@ else
 fi
 
 log "starting clamd"
-exec clamd --config-file=/etc/clamav/clamd.conf
+exec postarix-logged clamav /var/lib/clamav "$(clamd --version 2>/dev/null)" -- clamd --config-file=/etc/clamav/clamd.conf

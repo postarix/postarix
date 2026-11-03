@@ -8,7 +8,7 @@ FROM ${BASE_IMAGE}
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends lego openssl ca-certificates; \
+    apt-get install -y --no-install-recommends lego openssl ca-certificates curl; \
     rm -rf /var/lib/apt/lists/*
 
 COPY rootfs/ /

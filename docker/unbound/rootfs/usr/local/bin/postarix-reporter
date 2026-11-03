@@ -1,0 +1,67 @@
+#!/bin/sh
+# Reports to the Postarix API every 15 seconds: the new lines of this
+# container's log, with its version, host name and disk use, and (Postfix only)
+# the mail queue. The API answers the queue report with the queue actions
+# instance administrators chose, which are run here. The API never reaches
+# into this container: it only answers. (The same script is in the postfix,
+# cyrus, rspamd, unbound, clamav, crowdsec and certs images; the last five
+# start it through postarix-logged.)
+#
+# Usage: postarix-reporter <service> <log file> <disk path> <CA file> <version>
+# /etc/postarix/reports.env sets POSTARIX_API_INTERNAL (host:port of the API's
+# internal HTTPS listener) and MAIL_HOSTNAME (the name on its certificate);
+# /etc/postarix/reports.headers holds the secret header.
+set -u
+service=$1
+log_file=$2
+disk_path=$3
+ca_file=$4
+version=$5
+. /etc/postarix/reports.env
+port=${POSTARIX_API_INTERNAL##*:}
+base="https://${MAIL_HOSTNAME}:${port}/api/internal/reports"
+work=$(mktemp -d)
+host=$(hostname)
+
+api() {
+  curl --silent --show-error --fail --max-time 20 --proto '=https' \
+    --connect-to "${MAIL_HOSTNAME}:${port}:${POSTARIX_API_INTERNAL}" \
+    --cacert "$ca_file" --capath /etc/ssl/certs \
+    --header @/etc/postarix/reports.headers --header 'Content-Type: text/plain' "$@"
+}
+
+# Start with the end of the current log, not all of it.
+offset=$(stat -c %s "$log_file" 2>/dev/null || echo 0)
+[ "$offset" -gt 65536 ] && offset=$((offset - 65536)) || offset=0
+
+while sleep 15; do
+  size=$(stat -c %s "$log_file" 2>/dev/null || echo 0)
+  [ "$size" -lt "$offset" ] && offset=0 # rotated
+  # At most 1 MB per report; anything older is skipped.
+  [ $((size - offset)) -gt 1048576 ] && offset=$((size - 1048576))
+  tail -c +$((offset + 1)) "$log_file" 2>/dev/null | head -c $((size - offset)) > "$work/log"
+  disk=$(df -P "$disk_path" 2>/dev/null | awk 'NR == 2 { print $6 " " $3 * 1024 " " $2 * 1024 }')
+  if api --header "x-postarix-version: $version" --header "x-postarix-host: $host" --header "x-postarix-disk: $disk" \
+    --data-binary "@$work/log" --output /dev/null "$base/$service"; then
+    offset=$size
+    # Files written by postarix-logged are ours to keep small (appends continue at 0).
+    case "$log_file" in
+      /var/log/postarix-report/*) [ "$size" -gt 8388608 ] && : > "$log_file" && offset=0 ;;
+    esac
+  fi
+
+  [ "$service" = postfix ] || continue
+  postqueue -j 2>/dev/null | head -n 5000 > "$work/queue"
+  api --data-binary "@$work/queue" --output "$work/actions" "$base/postfix/queue" || continue
+  while read -r action id; do
+    case "$id" in *[!0-9A-Za-z]*) continue ;; esac
+    case "$action" in
+      deliver) [ -n "$id" ] && postqueue -i "$id" ;;
+      hold) [ -n "$id" ] && postsuper -h "$id" ;;
+      release) [ -n "$id" ] && postsuper -H "$id" ;;
+      delete) [ -n "$id" ] && postsuper -d "$id" ;;
+      flush) postqueue -f ;;
+      delete-all) postsuper -d ALL ;;
+    esac
+  done < "$work/actions"
+done

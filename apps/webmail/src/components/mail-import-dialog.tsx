@@ -2,7 +2,7 @@ import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { type FormEvent, useState } from 'react';
 import { errorMessage } from '@/lib/api';
@@ -89,10 +89,10 @@ export function MailImportDialog({ onClose }: { onClose: () => void }) {
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="import-security">{t('Connection')}</FieldLabel>
-                  <NativeSelect id="import-security" value={form.security} onChange={(e) => set({ security: e.target.value as MailImportInput['security'] })}>
-                    <NativeSelectOption value="tls">{t('TLS (port 993)')}</NativeSelectOption>
-                    <NativeSelectOption value="starttls">{t('STARTTLS (port 143)')}</NativeSelectOption>
-                  </NativeSelect>
+                  <FormSelect id="import-security" value={form.security} onChange={(e) => set({ security: e.target.value as MailImportInput['security'] })}>
+                    <FormSelectOption value="tls">{t('TLS (port 993)')}</FormSelectOption>
+                    <FormSelectOption value="starttls">{t('STARTTLS (port 143)')}</FormSelectOption>
+                  </FormSelect>
                 </Field>
               </FieldSet>
               <p className="text-sm text-muted-foreground">{t('Microsoft 365 and Outlook.com accounts cannot be imported this way: they no longer accept passwords from other apps.')}</p>

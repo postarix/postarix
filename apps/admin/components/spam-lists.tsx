@@ -3,7 +3,7 @@
 import { Badge } from '@postarix/ui/components/badge';
 import { Button } from '@postarix/ui/components/button';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
@@ -66,10 +66,10 @@ export function SpamLists({
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">{t('Blocked senders are refused. Allowed senders skip the spam filter, if they prove who they are (SPF or DMARC). Use an address,')}{' '}<code>@domain</code>{t(', or')}{' '}<code>@.domain</code>{' '}{t('for its subdomains.')}</p>
       <form onSubmit={add} className="flex flex-wrap gap-2">
-        <NativeSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
-          <NativeSelectOption value="block">{t('Block')}</NativeSelectOption>
-          <NativeSelectOption value="allow">{t('Allow')}</NativeSelectOption>
-        </NativeSelect>
+        <FormSelect aria-label={t('List')} value={kind} onChange={(e) => setKind(e.target.value as 'allow' | 'block')}>
+          <FormSelectOption value="block">{t('Block')}</FormSelectOption>
+          <FormSelectOption value="allow">{t('Allow')}</FormSelectOption>
+        </FormSelect>
         <Input
           aria-label={t('Sender')}
           value={pattern}

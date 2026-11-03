@@ -6,7 +6,7 @@ import { Checkbox } from '@postarix/ui/components/checkbox';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -156,12 +156,12 @@ export function DomainTemplateFields({ settings }: { settings: DomainTemplateSet
       <SpamFields scores={settings.spamScores} />
       <FormField label={t('MTA-STS policy')}>
         {(props) => (
-          <NativeSelect {...props} name="mtaStsMode" defaultValue={settings.mtaStsMode ?? ''} className="w-full">
-            <NativeSelectOption value="">{t('The server\'s default')}</NativeSelectOption>
-            <NativeSelectOption value="enforce">enforce</NativeSelectOption>
-            <NativeSelectOption value="testing">testing</NativeSelectOption>
-            <NativeSelectOption value="none">none</NativeSelectOption>
-          </NativeSelect>
+          <FormSelect {...props} name="mtaStsMode" defaultValue={settings.mtaStsMode ?? ''} className="w-full">
+            <FormSelectOption value="">{t('The server\'s default')}</FormSelectOption>
+            <FormSelectOption value="enforce">enforce</FormSelectOption>
+            <FormSelectOption value="testing">testing</FormSelectOption>
+            <FormSelectOption value="none">none</FormSelectOption>
+          </FormSelect>
         )}
       </FormField>
     </>
@@ -204,13 +204,13 @@ export function MailboxTemplateFields({ settings }: { settings: MailboxTemplateS
       <SpamFields scores={settings.spamScores} />
       <FormField label={t('Quarantine notices')}>
         {(props) => (
-          <NativeSelect {...props} name="quarantineNotify" defaultValue={settings.quarantineNotify ?? ''} className="w-full">
-            <NativeSelectOption value="">{t('The usual (daily)')}</NativeSelectOption>
-            <NativeSelectOption value="never">{t('Never')}</NativeSelectOption>
-            <NativeSelectOption value="hourly">{t('Hourly')}</NativeSelectOption>
-            <NativeSelectOption value="daily">{t('Daily')}</NativeSelectOption>
-            <NativeSelectOption value="weekly">{t('Weekly')}</NativeSelectOption>
-          </NativeSelect>
+          <FormSelect {...props} name="quarantineNotify" defaultValue={settings.quarantineNotify ?? ''} className="w-full">
+            <FormSelectOption value="">{t('The usual (daily)')}</FormSelectOption>
+            <FormSelectOption value="never">{t('Never')}</FormSelectOption>
+            <FormSelectOption value="hourly">{t('Hourly')}</FormSelectOption>
+            <FormSelectOption value="daily">{t('Daily')}</FormSelectOption>
+            <FormSelectOption value="weekly">{t('Weekly')}</FormSelectOption>
+          </FormSelect>
         )}
       </FormField>
     </>

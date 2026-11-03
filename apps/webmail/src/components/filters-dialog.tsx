@@ -1,7 +1,7 @@
 import { Button } from '@postarix/ui/components/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@postarix/ui/components/dialog';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Spinner } from '@postarix/ui/components/spinner';
 import { Plus, Trash2 } from 'lucide-react';
 import { type FormEvent, useEffect, useState } from 'react';
@@ -83,39 +83,39 @@ export function FiltersDialog({ onClose }: { onClose: () => void }) {
             <ol className="space-y-2" aria-label={t('Filters')}>
               {filters.map((filter, index) => (
                 <li key={index} className="grid items-center gap-2 rounded-lg border p-2 sm:grid-cols-[8rem_1fr_10rem_10rem_auto]">
-                  <NativeSelect aria-label={`Filter ${index + 1}: field`} value={filter.field} onChange={(e) => change(index, { field: e.target.value as MailFilter['field'] })}>
+                  <FormSelect aria-label={`Filter ${index + 1}: field`} value={filter.field} onChange={(e) => change(index, { field: e.target.value as MailFilter['field'] })}>
                     {FIELDS.map((f) => (
-                      <NativeSelectOption key={f.value} value={f.value}>
+                      <FormSelectOption key={f.value} value={f.value}>
                         {f.label}
-                      </NativeSelectOption>
+                      </FormSelectOption>
                     ))}
-                  </NativeSelect>
+                  </FormSelect>
                   <Input aria-label={`Filter ${index + 1}: contains`} placeholder={t('contains…')} value={filter.contains} maxLength={200} onChange={(e) => change(index, { contains: e.target.value })} />
-                  <NativeSelect aria-label={`Filter ${index + 1}: action`} value={filter.action} onChange={(e) => change(index, { action: e.target.value as MailFilter['action'] })}>
+                  <FormSelect aria-label={`Filter ${index + 1}: action`} value={filter.action} onChange={(e) => change(index, { action: e.target.value as MailFilter['action'] })}>
                     {ACTIONS.map((a) => (
-                      <NativeSelectOption key={a.value} value={a.value}>
+                      <FormSelectOption key={a.value} value={a.value}>
                         {a.label}
-                      </NativeSelectOption>
+                      </FormSelectOption>
                     ))}
-                  </NativeSelect>
+                  </FormSelect>
                   {filter.action === 'move' ? (
-                    <NativeSelect aria-label={`Filter ${index + 1}: folder`} value={filter.folder ?? ''} onChange={(e) => change(index, { folder: e.target.value })}>
-                      <NativeSelectOption value="">{t('Folder…')}</NativeSelectOption>
+                    <FormSelect aria-label={`Filter ${index + 1}: folder`} value={filter.folder ?? ''} onChange={(e) => change(index, { folder: e.target.value })}>
+                      <FormSelectOption value="">{t('Folder…')}</FormSelectOption>
                       {folders.map((name) => (
-                        <NativeSelectOption key={name} value={name}>
+                        <FormSelectOption key={name} value={name}>
                           {name}
-                        </NativeSelectOption>
+                        </FormSelectOption>
                       ))}
-                    </NativeSelect>
+                    </FormSelect>
                   ) : filter.action === 'label' ? (
-                    <NativeSelect aria-label={`Filter ${index + 1}: label`} value={filter.keyword ?? ''} onChange={(e) => change(index, { keyword: e.target.value })}>
-                      <NativeSelectOption value="">{t('Label…')}</NativeSelectOption>
+                    <FormSelect aria-label={`Filter ${index + 1}: label`} value={filter.keyword ?? ''} onChange={(e) => change(index, { keyword: e.target.value })}>
+                      <FormSelectOption value="">{t('Label…')}</FormSelectOption>
                       {(labels.data ?? []).map((l) => (
-                        <NativeSelectOption key={l.keyword} value={l.keyword}>
+                        <FormSelectOption key={l.keyword} value={l.keyword}>
                           {l.name}
-                        </NativeSelectOption>
+                        </FormSelectOption>
                       ))}
-                    </NativeSelect>
+                    </FormSelect>
                   ) : (
                     <span />
                   )}
@@ -129,11 +129,11 @@ export function FiltersDialog({ onClose }: { onClose: () => void }) {
               <Plus aria-hidden />{t('Add filter')}</Button>
             <label className="flex flex-wrap items-center gap-2 text-sm">
               <span>{t('Mail to your address with a tag (you+news@…)')}</span>
-              <NativeSelect value={taggedMail} onChange={(e) => setTaggedMail(e.target.value as MailSettings['taggedMail'])}>
-                <NativeSelectOption value="inbox">{t('stays in the inbox')}</NativeSelectOption>
-                <NativeSelectOption value="folder">{t('goes to a folder named after the tag')}</NativeSelectOption>
-                <NativeSelectOption value="subject">{t('gets [tag] in its subject')}</NativeSelectOption>
-              </NativeSelect>
+              <FormSelect value={taggedMail} onChange={(e) => setTaggedMail(e.target.value as MailSettings['taggedMail'])}>
+                <FormSelectOption value="inbox">{t('stays in the inbox')}</FormSelectOption>
+                <FormSelectOption value="folder">{t('goes to a folder named after the tag')}</FormSelectOption>
+                <FormSelectOption value="subject">{t('gets [tag] in its subject')}</FormSelectOption>
+              </FormSelect>
             </label>
             {current.data?.otherFiltersActive ? (
               <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{t('Filters set up in a mail app are active. Saving here turns them off.')}</p>

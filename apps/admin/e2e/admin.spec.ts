@@ -96,9 +96,12 @@ test('lists the mailbox owner as a member and promotes them', async ({ page }) =
   // Every mailbox owner is a member of its organization.
   const row = page.getByRole('row', { name: new RegExp(`jane@${domain}`) });
   await expect(row).toBeVisible();
-  await row.getByLabel(`Role of jane@${domain}`).selectOption('admin');
+  await row.getByLabel(`Role of jane@${domain}`).click();
+  await page.getByRole('option', { name: 'Admin' }).click();
+  await expect(page.getByText(/role changed|saved/i).or(page.getByRole('row', { name: new RegExp(`jane@${domain}`) }))).toBeVisible();
+  await page.waitForTimeout(500);
   await page.reload();
-  await expect(page.getByRole('row', { name: new RegExp(`jane@${domain}`) }).getByLabel(`Role of jane@${domain}`)).toHaveValue('admin');
+  await expect(page.getByRole('row', { name: new RegExp(`jane@${domain}`) }).getByLabel(`Role of jane@${domain}`)).toHaveText('Admin');
 });
 
 test('records every change in the activity log', async ({ page }) => {
@@ -140,4 +143,26 @@ test('deletes the organization only after its name is typed', async ({ page }) =
   await confirm.click();
   await expect(page).toHaveURL(/\/admin\/?$/);
   await expect(page.getByText(orgName)).toHaveCount(0);
+});
+
+test('reaches every server section from the sidebar', async ({ page }) => {
+  await page.goto('/admin');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  for (const [link, heading] of [
+    ['Services', 'Services'],
+    ['Logs', 'Logs'],
+    ['Spam filter history', 'Spam filter history'],
+    ['Mail queue', 'Mail queue'],
+    ['Outgoing routing', 'Outgoing routing'],
+    ['Templates', 'Domain templates'],
+    ['API keys', 'API keys'],
+    ['Settings', 'Settings'],
+  ]) {
+    await nav.getByRole('link', { name: link, exact: true }).click();
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  }
+  await expect(nav.getByRole('link', { name: /Rspamd web interface/ })).toHaveAttribute('href', '/api/rspamd-ui/');
+  // The logs of the API itself are listed with the others.
+  await page.goto('/admin/system/logs?service=api');
+  await expect(page.getByRole('tab', { name: 'API' })).toHaveAttribute('aria-selected', 'true');
 });

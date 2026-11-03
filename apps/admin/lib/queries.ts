@@ -48,6 +48,8 @@ export interface Branding {
   productName: string;
   loginMessage: string;
   announcement: string;
+  /** How prominent the announcement is (older servers: none). */
+  announcementLevel?: 'info' | 'important' | 'urgent';
   supportUrl: string;
   passwordMinLength: number;
 }

@@ -76,3 +76,30 @@ capabilities:
 {{- end -}}
 {{- if $pairs -}}{{ join "," $out }}{{- else -}}{{ join " " $out }}{{- end -}}
 {{- end -}}
+
+{{/*
+Reporting a container's log to the API (System → Logs in the admin panel):
+the reports secret (optional for existing secrets), the public name on the
+API's certificate and its internal HTTPS listener. Mount the certs volume
+(postarix.certsVolume) at /certs too.
+*/}}
+{{- define "postarix.reportsEnv" -}}
+- name: POSTARIX_SECRET_REPORTS
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "postarix.secretName" . }}
+      key: POSTARIX_SECRET_REPORTS
+      optional: true
+- name: MAIL_HOSTNAME
+  value: {{ .Values.mailHostname | quote }}
+- name: POSTARIX_API_INTERNAL
+  value: "{{ include "postarix.name" (list . "api") }}:3443"
+{{- end }}
+
+{{- define "postarix.certsVolume" -}}
+- name: certs
+  secret:
+    secretName: {{ .Values.tls.secretName }}
+    items:
+      - { key: tls.crt, path: fullchain.pem }
+{{- end }}

@@ -22,6 +22,13 @@ spec:
           securityContext: {{- include "postarix.containerSecurity" . | nindent 12 }}
           env:
             {{- include "postarix.secretEnv" (list . "RSPAMD_CONTROLLER_PASSWORD") | nindent 12 }}
+            # Optional: write access to Rspamd's web interface (learning, settings).
+            - name: RSPAMD_CONTROLLER_ENABLE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: RSPAMD_CONTROLLER_ENABLE_PASSWORD
+                  optional: true
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -35,6 +42,7 @@ spec:
               value: {{ .Values.rspamd.greylist | quote }}
             - name: QUARANTINE_MAX_BYTES
               value: {{ .Values.rspamd.quarantineMaxBytes | int64 | toString | quote }}
+            {{- include "postarix.reportsEnv" . | nindent 12 }}
             {{- if .Values.clamav.enabled }}
             - name: CLAMAV_SERVERS
               value: "{{ include "postarix.name" (list . "clamav") }}:3310"
@@ -44,6 +52,7 @@ spec:
             - { name: controller, containerPort: 11334 }
           volumeMounts:
             - { name: data, mountPath: /var/lib/rspamd }
+            - { name: certs, mountPath: /certs, readOnly: true }
           readinessProbe:
             tcpSocket: { port: milter }
             periodSeconds: 15
@@ -52,6 +61,7 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ $name }}
+        {{- include "postarix.certsVolume" . | nindent 8 }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

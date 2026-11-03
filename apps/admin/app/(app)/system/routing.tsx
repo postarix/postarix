@@ -6,7 +6,7 @@ import { Checkbox } from '@postarix/ui/components/checkbox';
 import { DialogFooter } from '@postarix/ui/components/dialog';
 import { Field, FieldGroup, FieldLabel } from '@postarix/ui/components/field';
 import { Input } from '@postarix/ui/components/input';
-import { NativeSelect, NativeSelectOption } from '@postarix/ui/components/native-select';
+import { FormSelect, FormSelectOption } from '@postarix/ui/components/select';
 import { Skeleton } from '@postarix/ui/components/skeleton';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postarix/ui/components/table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -308,13 +308,13 @@ export function RoutingTab() {
             </FormField>
             <FormField label={t('Policy')}>
               {(props) => (
-                <NativeSelect {...props} name="policy" defaultValue={r?.policy ?? 'encrypt'} className="w-full">
+                <FormSelect {...props} name="policy" defaultValue={r?.policy ?? 'encrypt'} className="w-full">
                   {tlsLevels.map((level) => (
-                    <NativeSelectOption key={level} value={level}>
+                    <FormSelectOption key={level} value={level}>
                       {level}
-                    </NativeSelectOption>
+                    </FormSelectOption>
                   ))}
-                </NativeSelect>
+                </FormSelect>
               )}
             </FormField>
             <FormField label={t('Parameters')} hint={t('Optional, e.g. protocols=>=TLSv1.2 match=.example.com')}>

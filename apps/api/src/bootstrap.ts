@@ -12,6 +12,7 @@ import { originCheck } from './common/origin-check.middleware.js';
 import type { Env } from './config/env.js';
 import { AUTH, ENV } from './core/tokens.js';
 import { JmapProxy } from './jmap/jmap-proxy.js';
+import { RspamdUiProxy } from './system/rspamd-ui-proxy.js';
 import { httpMetrics } from './metrics/metrics.js';
 
 /**
@@ -37,6 +38,12 @@ export async function createApp(): Promise<INestApplication> {
   app.disable('x-powered-by');
 
   app.use(httpMetrics);
+  // Rspamd's web interface sets its own security headers (it needs scripts and styles of its own).
+  app.use('/api/rspamd-ui', (req: Request, res: Response, next: NextFunction) => {
+    // Better Auth needs the client IP for its session checks below.
+    req.headers[CLIENT_IP_HEADER] = req.ip ?? '';
+    app.get(RspamdUiProxy).handle(req, res, next);
+  });
   app.use(helmet());
   if (env.TRUSTED_ORIGINS.length > 0) {
     app.enableCors({ origin: env.TRUSTED_ORIGINS, credentials: true });

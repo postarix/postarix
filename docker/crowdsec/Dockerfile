@@ -13,7 +13,7 @@ RUN set -eux; \
     mkdir -p /etc/crowdsec; \
     echo '# central API disabled (see docs/CROWDSEC.md)' > /etc/crowdsec/online_api_credentials.yaml; \
     apt-get update; \
-    apt-get install -y --no-install-recommends crowdsec ca-certificates curl; \
+    apt-get install -y --no-install-recommends crowdsec ca-certificates curl openssl; \
     rm -rf /var/lib/apt/lists/*; \
     # Local decisions only: no central API client.
     sed -i '/^\s*online_client:/,/online_api_credentials.yaml/d' /etc/crowdsec/config.yaml; \
