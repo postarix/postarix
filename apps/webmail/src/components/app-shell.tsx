@@ -19,6 +19,7 @@ import { MailImportDialog } from './mail-import-dialog';
 import { MailSettingsDialog } from './mail-settings-dialog';
 import { QuarantineDialog } from './quarantine-dialog';
 import { SpamDialog } from './spam-dialog';
+import { useBranding } from '@/lib/branding';
 
 const APPS = [
   { name: 'mailbox', label: 'Mail', href: '/', icon: Inbox },
@@ -33,6 +34,7 @@ const APPS = [
  */
 export function AppShell({ email, name, nav, children }: { email: string; name: string; nav?: ReactNode; children: ReactNode }) {
   const route = useRoute();
+  const branding = useBranding();
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -160,6 +162,11 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         {importOpen ? <MailImportDialog onClose={() => setImportOpen(false)} /> : null}
         {spamOpen ? <SpamDialog onClose={() => setSpamOpen(false)} /> : null}
         {quarantineOpen ? <QuarantineDialog onClose={() => setQuarantineOpen(false)} /> : null}
+        {branding?.announcement ? (
+          <div role="status" className="bg-warning/15 px-4 py-2 text-sm text-white md:mt-2 md:mr-2 md:rounded-lg">
+            {branding.announcement}
+          </div>
+        ) : null}
         <main className="min-h-0 flex-1 overflow-hidden bg-card md:my-2 md:mr-2 md:rounded-xl md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
           {children}
         </main>

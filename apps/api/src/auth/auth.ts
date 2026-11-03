@@ -14,12 +14,16 @@ import { mapOidcConfigSecret, openOidcConfig } from '../sso/sso-crypto.js';
 import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
 import { FailureLimiter } from '../mail-auth/failure-limiter.js';
+import { loadInstanceSettings, passwordProblem } from '../settings/instance-settings.js';
 import { webSignIns } from '../metrics/metrics.js';
 
 /** Header the API sets with the client IP resolved by Express (honours TRUSTED_PROXIES). */
 export const CLIENT_IP_HEADER = 'x-postarix-client-ip';
 
 export const AUTH_BASE_PATH = '/api/auth';
+
+/** Better Auth routes where someone chooses a password. */
+const PASSWORD_PATHS = new Set(['/sign-up/email', '/change-password', '/reset-password']);
 
 
 /**
@@ -97,7 +101,10 @@ function accountKey(email: unknown): string | null {
 export function createAuth(db: Database, env: Env, counters: CounterStore = new MemoryCounterStore()) {
   const localCounters = new MemoryCounterStore();
   // 10 failed sign-ins per account per 15 minutes, like mail logins.
-  const signInFailures = new FailureLimiter(counters, 'web-sign-in', 10, 15 * 60 * 1000);
+  const signInFailures = new FailureLimiter(counters, 'web-sign-in', async () => {
+    const { signIn } = await loadInstanceSettings(db);
+    return { maxFailures: signIn.maxFailures, windowMs: signIn.lockMinutes * 60_000 };
+  });
   const authUrl = new URL(env.AUTH_URL);
 
   return betterAuth({
@@ -190,6 +197,15 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
         }
         if ((ctx.path.startsWith('/sso/') || ctx.path === '/sign-in/sso') && !isOpenSsoEndpoint(ctx.path)) {
           throw new APIError('NOT_FOUND');
+        }
+        // The instance's password policy, wherever a password is chosen.
+        if (PASSWORD_PATHS.has(ctx.path)) {
+          const body = (ctx.body ?? {}) as { password?: unknown; newPassword?: unknown };
+          const chosen = ctx.path === '/sign-up/email' ? body.password : body.newPassword;
+          if (typeof chosen === 'string') {
+            const problem = passwordProblem(chosen, (await loadInstanceSettings(db)).passwords);
+            if (problem) throw new APIError('BAD_REQUEST', { message: problem, code: 'PASSWORD_POLICY' });
+          }
         }
         // Password guessing against one account from many addresses: the
         // per-address limit does not see it, this one does.

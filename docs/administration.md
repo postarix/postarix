@@ -139,6 +139,19 @@ settings). Organization admins see their mailboxes' items in the
   Passwords are never shown again; Postfix needs them in clear, so they are
   stored as given (readable by the API and Postfix' database accounts only).
 
+- **Settings:**
+  - *Sign-in protection:* how many wrong passwords (web or mail apps) lock
+    an account, and for how long (10 and 15 minutes by default). App
+    passwords are never locked.
+  - *Passwords:* minimum length (12 or more) and whether to require a mix
+    of lowercase, uppercase, digits and symbols.
+  - *Mailbox quota:* at what percentage people are told by mail that their
+    mailbox is filling up (90% by default; reminded weekly while it stays
+    full).
+  - *Branding:* the name on the sign-in pages, a sign-in message (e.g. who
+    to call for help), an announcement shown to everyone signed in, and a
+    help page.
+
 Postfix and Cyrus send their logs and the queue to the API every 15 seconds
 (with `POSTARIX_SECRET_REPORTS`; see the [configuration](./configuration)), so
 what you see is at most that old, and queue actions take effect within that

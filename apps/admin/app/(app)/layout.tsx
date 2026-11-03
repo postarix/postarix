@@ -17,7 +17,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 import { BrandMark } from '@/components/brand';
 import { authClient, useSession } from '@/lib/auth-client';
-import { isSuperAdmin, useAllOrganizations, useMyOrganizations } from '@/lib/queries';
+import { isSuperAdmin, useAllOrganizations, useBranding, useMyOrganizations } from '@/lib/queries';
+import { Notice } from '@/components/notice';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const superAdmin = isSuperAdmin(session?.user.role);
   const mine = useMyOrganizations();
   const all = useAllOrganizations(superAdmin);
+  const branding = useBranding();
 
   useEffect(() => {
     if (!isPending && !session) router.replace('/login');
@@ -168,7 +170,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="min-w-0 flex-1 overflow-y-auto bg-background px-4 py-8 md:rounded-xl md:px-10 md:shadow-[0_0_0_1px_rgb(0_0_0/0.25),0_8px_30px_rgb(0_0_0/0.25)]">
-          <div className="mx-auto max-w-6xl">{children}</div>
+          <div className="mx-auto max-w-6xl">
+            {branding.data?.announcement ? (
+              <div className="mb-6">
+                <Notice tone="warning">{branding.data.announcement}</Notice>
+              </div>
+            ) : null}
+            {children}
+          </div>
         </main>
       </div>
     </div>
