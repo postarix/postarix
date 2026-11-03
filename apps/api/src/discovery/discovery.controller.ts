@@ -6,7 +6,7 @@ import type { Env } from '../config/env.js';
 import { DATABASE, ENV } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { domains } from '../db/schema/index.js';
-import { autoconfigXml, autodiscoverXml, domainOfAddress, emailFromAutodiscoverRequest, mtaStsPolicy } from './discovery.js';
+import { autoconfigXml, autodiscoverXml, domainOfAddress, emailFromAutodiscoverRequest, type MtaStsMode, mtaStsPolicy } from './discovery.js';
 
 /**
  * Public endpoints that mail software fetches by itself: Thunderbird's
@@ -21,14 +21,19 @@ export class DiscoveryController {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  private async isHosted(domain: string | null): Promise<boolean> {
-    if (!domain) return false;
+  /** The active domain, if its mail is hosted here (not a backup MX domain). */
+  private async hosted(domain: string | null): Promise<{ mtaStsMode: MtaStsMode | null } | undefined> {
+    if (!domain) return undefined;
     const [row] = await this.db
-      .select({ id: domains.id })
+      .select({ mtaStsMode: domains.mtaStsMode })
       .from(domains)
-      .where(and(eq(domains.name, domain), eq(domains.status, 'active')))
+      .where(and(eq(domains.name, domain), eq(domains.status, 'active'), eq(domains.backupMx, false)))
       .limit(1);
-    return Boolean(row);
+    return row;
+  }
+
+  private async isHosted(domain: string | null): Promise<boolean> {
+    return Boolean(await this.hosted(domain));
   }
 
   /** The user's domain: from ?emailaddress=, else from the host (autoconfig.<domain>). */
@@ -79,8 +84,9 @@ export class DiscoveryController {
   @Header('cache-control', 'public, max-age=3600')
   async mtaSts(@Req() req: Request): Promise<string> {
     const host = req.hostname.toLowerCase();
-    if (!host.startsWith('mta-sts.') || !(await this.isHosted(host.slice('mta-sts.'.length)))) throw new NotFoundException();
-    return mtaStsPolicy(this.env.MTA_STS_MODE, this.env.MAIL_HOSTNAME);
+    const domain = host.startsWith('mta-sts.') ? await this.hosted(host.slice('mta-sts.'.length)) : undefined;
+    if (!domain) throw new NotFoundException();
+    return mtaStsPolicy(domain.mtaStsMode ?? this.env.MTA_STS_MODE, this.env.MAIL_HOSTNAME);
   }
 
   /**

@@ -65,7 +65,16 @@ export function aliasDomainRefusal(): UnprocessableEntityException {
   });
 }
 
+/** A backup MX domain's mail is hosted elsewhere. */
+export function backupMxRefusal(): UnprocessableEntityException {
+  return new UnprocessableEntityException({
+    message: 'This domain is a backup MX: its mailboxes and aliases are on its primary server',
+    code: 'BACKUP_MX_DOMAIN',
+  });
+}
+
 export function assertMayAddMailbox(domain: DomainRow, usage: DomainUsage): void {
+  if (domain.backupMx) throw backupMxRefusal();
   if (domain.maxMailboxes !== null && usage.mailboxes >= domain.maxMailboxes) {
     throw limitReached(
       `${domain.name} already has its maximum of ${domain.maxMailboxes} mailboxes`,
@@ -75,6 +84,7 @@ export function assertMayAddMailbox(domain: DomainRow, usage: DomainUsage): void
 }
 
 export function assertMayAddAlias(domain: DomainRow, usage: DomainUsage): void {
+  if (domain.backupMx) throw backupMxRefusal();
   if (domain.maxAliases !== null && usage.aliases >= domain.maxAliases) {
     throw limitReached(`${domain.name} already has its maximum of ${domain.maxAliases} aliases`, 'DOMAIN_ALIAS_LIMIT');
   }

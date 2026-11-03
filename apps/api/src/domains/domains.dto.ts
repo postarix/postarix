@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type DomainRow } from '../db/schema/index.js';
+import { type DomainRow, mtaStsModes } from '../db/schema/index.js';
 import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
 import { type SpamScores, spamScoresSchema } from '../spam/spam.js';
 import type { DomainUsage } from './domain-limits.js';
@@ -19,6 +19,8 @@ export const createDomainSchema = z.strictObject({
     }),
   /** Makes it an alias domain of this domain of the organization. */
   aliasOf: z.uuid().optional(),
+  /** A domain template (instance administrators only); omitted: the default template; null: none. */
+  templateId: z.uuid().nullable().optional(),
 });
 
 export type CreateDomainInput = z.infer<typeof createDomainSchema>;
@@ -51,6 +53,19 @@ export const updateDomainSchema = z
     relayHostId: z.uuid().nullable().optional(),
     /** Spam thresholds for its mailboxes without their own. */
     spamScores: spamScoresSchema.optional(),
+    /** Backup MX: accept the domain's mail and hand it to its primary server (instance administrators only). */
+    backupMx: z.boolean().optional(),
+    /** The primary server, host, host:port, [host] or [host]:port (null: the domain's lowest MX). */
+    backupMxNexthop: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .max(300)
+      .regex(/^(\[[a-z0-9.:-]+\]|[a-z0-9.-]+)(:\d{1,5})?$/, 'Use host, host:port, [host] or [host]:port')
+      .nullable()
+      .optional(),
+    /** The domain's MTA-STS policy mode (null: the server's). */
+    mtaStsMode: z.enum(mtaStsModes).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateDomainInput = z.infer<typeof updateDomainSchema>;
@@ -82,7 +97,7 @@ export interface DkimKeyDto {
   createdAt: string;
 }
 
-export const domainLimitFields = ['maxMailboxes', 'maxAliases', 'maxMailboxQuotaBytes', 'totalQuotaBytes', 'relayHostId'] as const;
+export const domainLimitFields = ['maxMailboxes', 'maxAliases', 'maxMailboxQuotaBytes', 'totalQuotaBytes', 'relayHostId', 'backupMx', 'backupMxNexthop'] as const;
 
 export interface DomainDto {
   id: string;
@@ -105,6 +120,9 @@ export interface DomainDto {
   rateLimit: RateLimit | null;
   relayHostId: string | null;
   spamScores: SpamScores;
+  backupMx: { enabled: boolean; nexthop: string | null };
+  /** Null: the server's. */
+  mtaStsMode: DomainRow['mtaStsMode'];
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +147,8 @@ export function toDomainDto(row: DomainRow, usage: DomainUsage): DomainDto {
     rateLimit: toRateLimit(row),
     relayHostId: row.relayHostId,
     spamScores: { junkScore: row.spamJunkScore, rejectScore: row.spamRejectScore },
+    backupMx: { enabled: row.backupMx, nexthop: row.backupMxNexthop },
+    mtaStsMode: row.mtaStsMode,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

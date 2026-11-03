@@ -1,0 +1,7 @@
+# Generated at container start.
+# Backup MX domains (relay_domains), see mail.backup_mx_domains.
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT 1 FROM mail.backup_mx_domains WHERE name = '%s'

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, max } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { type DomainRow, domains, mailboxes, session, ssoProvider } from '../db/schema/index.js';
@@ -59,6 +59,9 @@ export class DomainsRepository {
         | 'relayHostId'
         | 'spamJunkScore'
         | 'spamRejectScore'
+        | 'backupMx'
+        | 'backupMxNexthop'
+        | 'mtaStsMode'
       >
     >,
     check: (domain: DomainRow, usage: DomainUsage, largestQuota: number | null) => void,
@@ -87,6 +90,15 @@ export class DomainsRepository {
       .from(mailboxes)
       .where(and(eq(mailboxes.organizationId, ctx.organizationId), eq(mailboxes.domainId, id)));
     await this.db.delete(session).where(inArray(session.userId, owners));
+  }
+
+  /** How many alias domains repeat this domain. */
+  async aliasDomainsOf(ctx: TenantContext, id: string): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(domains)
+      .where(and(this.scope(ctx), eq(domains.aliasOfDomainId, id)));
+    return row?.n ?? 0;
   }
 
   async create(ctx: TenantContext, name: string, aliasOfDomainId: string | null = null): Promise<DomainRow> {

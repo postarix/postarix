@@ -27,6 +27,7 @@ import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
 import { api, errorMessage } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
+import { type DomainTemplateSettings, type Template } from '@/components/templates';
 import { formatBytes, formatDate } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
@@ -146,6 +147,7 @@ function DomainSettingsDialog({
         description: text('description'),
         defaultMailboxQuotaBytes: quotaFromGiB(text('defaultQuota')),
         rateLimit: rateLimitFrom(data),
+        mtaStsMode: text('mtaStsMode') || null,
       };
       if (domain.status !== 'pending') body.enabled = data.get('enabled') === 'on';
       if (instanceAdmin) {
@@ -154,6 +156,8 @@ function DomainSettingsDialog({
         body.maxMailboxQuotaBytes = quotaFromGiB(text('maxMailboxQuota'));
         body.totalQuotaBytes = quotaFromGiB(text('totalQuota'));
         if (relayHosts.data) body.relayHostId = text('relayHostId') || null;
+        body.backupMx = data.get('backupMx') === 'on';
+        body.backupMxNexthop = text('backupMxNexthop').trim() || null;
       }
       await api.patch(`/orgs/${orgId}/domains/${domain.id}`, body);
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
@@ -183,6 +187,16 @@ function DomainSettingsDialog({
             hint={t('Messages each mailbox may send, unless it has its own limit. Empty: no limit.')}
             value={domain.rateLimit}
           />
+          <FormField label={t('MTA-STS policy')} hint={t('Tells other servers to deliver to this domain over verified TLS only (enforce), to report failures without refusing (testing), or that the policy is withdrawn (none).')}>
+            {(props) => (
+              <NativeSelect {...props} name="mtaStsMode" defaultValue={domain.mtaStsMode ?? ''} className="w-full">
+                <NativeSelectOption value="">{t('The server\'s default')}</NativeSelectOption>
+                <NativeSelectOption value="enforce">enforce</NativeSelectOption>
+                <NativeSelectOption value="testing">testing</NativeSelectOption>
+                <NativeSelectOption value="none">none</NativeSelectOption>
+              </NativeSelect>
+            )}
+          </FormField>
           {domain.status !== 'pending' ? (
             <div className="flex items-start gap-2">
               <Checkbox id={`enabled-${domain.id}`} name="enabled" defaultChecked={domain.status === 'active'} />
@@ -232,6 +246,22 @@ function DomainSettingsDialog({
                   <Input {...props} name="totalQuota" inputMode="decimal" defaultValue={quotaToGiB(domain.limits.totalQuotaBytes)} />
                 )}
               </FormField>
+              {!domain.aliasOfDomainId ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <Checkbox id={`backup-mx-${domain.id}`} name="backupMx" defaultChecked={domain.backupMx.enabled} />
+                    <label htmlFor={`backup-mx-${domain.id}`} className="text-sm">
+                      {t('Backup MX')}
+                      <span className="block text-muted-foreground">
+                        {t('The domain\'s mail is hosted on another server. This one accepts it while that server is down and hands it over later. The domain has no mailboxes or aliases here.')}
+                      </span>
+                    </label>
+                  </div>
+                  <FormField label={t('Primary server')} hint={t('[mx.example.com]:25. Empty: the domain\'s preferred MX.')}>
+                    {(props) => <Input {...props} name="backupMxNexthop" defaultValue={domain.backupMx.nexthop ?? ''} placeholder="[mx.example.com]:25" />}
+                  </FormField>
+                </>
+              ) : null}
             </>
           ) : null}
           <DialogFooter>
@@ -373,6 +403,7 @@ function DomainCard({ orgId, domain, aliasOf }: { orgId: string; domain: Domain;
             <Badge variant="secondary">{t('Disabled')}</Badge>
           )}
           {aliasOf ? <Badge variant="outline">{t('Alias of')}{' '}{aliasOf}</Badge> : null}
+          {domain.backupMx.enabled ? <Badge variant="outline">{t('Backup MX')}</Badge> : null}
         </CardTitle>
         <CardDescription>
           {domain.description ? <span className="block">{domain.description}</span> : null}
@@ -482,6 +513,13 @@ function AddDomainDialog({
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const { data: session } = useSession();
+  const instanceAdmin = isSuperAdmin(session?.user.role);
+  const templates = useQuery({
+    queryKey: ['system', 'domain-templates'],
+    queryFn: () => api.get<{ data: Template<DomainTemplateSettings>[] }>('/system/domain-templates').then((r) => r.data),
+    enabled: instanceAdmin && open,
+  });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -491,7 +529,13 @@ function AddDomainDialog({
     try {
       const data = new FormData(form);
       const aliasOf = String(data.get('aliasOf') ?? '');
-      await api.post(`/orgs/${orgId}/domains`, { name: String(data.get('name')), ...(aliasOf ? { aliasOf } : {}) });
+      // "None" chosen: no template, not even the default one.
+      const templateId = data.has('templateId') ? String(data.get('templateId')) || null : undefined;
+      await api.post(`/orgs/${orgId}/domains`, {
+        name: String(data.get('name')),
+        ...(aliasOf ? { aliasOf } : {}),
+        ...(templateId !== undefined && !aliasOf ? { templateId } : {}),
+      });
       await queryClient.invalidateQueries({ queryKey: keys.orgPart(orgId, 'domains') });
       await queryClient.invalidateQueries({ queryKey: keys.org(orgId) });
       onClose();
@@ -521,6 +565,20 @@ function AddDomainDialog({
                   {domains.map((d) => (
                     <NativeSelectOption key={d.id} value={d.id}>
                       {d.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+            </FormField>
+          ) : null}
+          {templates.data?.length ? (
+            <FormField label={t('Template')} hint={t('Settings and limits the new domain starts with.')}>
+              {(props) => (
+                <NativeSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
+                  <NativeSelectOption value="">{t('None')}</NativeSelectOption>
+                  {templates.data.map((tpl) => (
+                    <NativeSelectOption key={tpl.id} value={tpl.id}>
+                      {tpl.name}
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>

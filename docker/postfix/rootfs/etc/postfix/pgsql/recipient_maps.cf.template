@@ -1,0 +1,9 @@
+# Generated at container start.
+# Instance-wide recipient rewriting (first in virtual_alias_maps, so it wins
+# over mailboxes and aliases, and applies to outside addresses too), see
+# mail.recipient_maps.
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT destination FROM mail.recipient_maps WHERE address = '%s'

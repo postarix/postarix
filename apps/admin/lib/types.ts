@@ -45,6 +45,10 @@ export interface Domain {
   /** Smart host its mail goes through (instance administrators set it). */
   relayHostId: string | null;
   spamScores: SpamScores;
+  /** The domain's mail is hosted elsewhere; this server is its backup MX. */
+  backupMx: { enabled: boolean; nexthop: string | null };
+  /** Null: the server's default. */
+  mtaStsMode: 'enforce' | 'testing' | 'none' | null;
   createdAt: string;
 }
 
@@ -167,4 +171,15 @@ export interface SyncJob {
   nextRunAt: string | null;
   createdAt: string;
   finishedAt: string | null;
+}
+
+/** A blind copy of the mail an address or domain sends or receives. */
+export interface BccRule {
+  id: string;
+  domainId: string;
+  address: string;
+  direction: 'sender' | 'recipient';
+  destination: string;
+  enabled: boolean;
+  createdAt: string;
 }

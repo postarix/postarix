@@ -1,0 +1,16 @@
+# Generated at container start.
+# The stand-in of bcc_recipient.cf and bcc_sender.cf (virtual_alias_maps):
+# "r.ann=example.com@bcc.postarix.invalid" becomes every blind copy of mail to
+# ann@example.com. If nothing is left (the rule was just removed), the stand-in
+# is discarded (transport_maps in the entrypoint). (No SQL comments in the
+# query: Postfix joins its lines into one.)
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT DISTINCT t.destination FROM mail.bcc_targets t,
+    (SELECT CASE left('%u', 2) WHEN 'r.' THEN 'recipient' WHEN 's.' THEN 'sender' END AS direction,
+      regexp_replace(substr('%u', 3), '=([^=]*)$', '@\1') AS address) k
+  WHERE '%d' = 'bcc.postarix.invalid'
+    AND t.direction = k.direction
+    AND (t.address = k.address OR t.address = '@' || split_part(k.address, '@', 2))

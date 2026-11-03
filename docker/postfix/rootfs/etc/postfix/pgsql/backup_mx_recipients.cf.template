@@ -1,0 +1,8 @@
+# Generated at container start.
+# Every address of a backup MX domain is accepted (relay_recipient_maps): only
+# the primary server knows its recipients, and refuses unknown ones itself.
+hosts = ${POSTFIX_DB_HOST}
+user = ${POSTFIX_DB_USER}
+password = ${POSTFIX_DB_PASSWORD}
+dbname = ${POSTFIX_DB_NAME}
+query = SELECT 'OK' FROM mail.backup_mx_domains WHERE name = '%d'

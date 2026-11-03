@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Inbox, KeyRound, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, Inbox, KeyRound, LayoutTemplate, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -30,6 +30,7 @@ import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
 import { SyncJobsDialog } from '@/components/sync-jobs-dialog';
+import { MailboxTemplateFields, type MailboxTemplateSettings, mailboxSettingsFrom, type Template, TemplateList } from '@/components/templates';
 import { ApiError, api, errorMessage } from '@/lib/api';
 import { formatBytes } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
@@ -81,6 +82,7 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const templates = useOrgList<Template<MailboxTemplateSettings>>(orgId, 'mailbox-templates');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,7 +90,10 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
     setPending(true);
     setError(null);
     try {
+      // "None" chosen: no template, not even the default one.
+      const templateId = data.has('templateId') ? String(data.get('templateId')) || null : undefined;
       await api.post(`/orgs/${orgId}/mailboxes`, {
+        ...(templateId !== undefined ? { templateId } : {}),
         domainId: String(data.get('domainId')),
         localPart: String(data.get('localPart')),
         displayName: String(data.get('displayName')),
@@ -126,7 +131,21 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           <FormField label={t('Password')} hint={t('At least 12 characters.')}>
             {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
           </FormField>
-          <FormField label={t('Quota (GB)')} hint={t('Leave empty for the domain\'s default quota.')}>
+          {templates.data?.length ? (
+            <FormField label={t('Template')} hint={t('Settings the new mailbox starts with.')}>
+              {(props) => (
+                <NativeSelect {...props} name="templateId" defaultValue={templates.data.find((tpl) => tpl.isDefault)?.id ?? ''} className="w-full">
+                  <NativeSelectOption value="">{t('None')}</NativeSelectOption>
+                  {templates.data.map((tpl) => (
+                    <NativeSelectOption key={tpl.id} value={tpl.id}>
+                      {tpl.name}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+            </FormField>
+          ) : null}
+          <FormField label={t('Quota (GB)')} hint={t('Leave empty for the template\'s or the domain\'s default quota.')}>
             {(props) => <Input {...props} name="quota" inputMode="decimal" placeholder="5" />}
           </FormField>
           <DialogFooter>
@@ -437,6 +456,7 @@ export default function MailboxesPage() {
   const [resetting, setResetting] = useState<Mailbox | null>(null);
   const [spamOf, setSpamOf] = useState<Mailbox | null>(null);
   const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
 
   return (
@@ -445,8 +465,14 @@ export default function MailboxesPage() {
         title={t('Mailboxes')}
         description={t('Accounts that sign in and store mail.')}
         actions={
-          <Button onClick={() => setCreating(true)} disabled={activeDomains.length === 0}>
-            <Plus aria-hidden />{t('New mailbox')}</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
+              <LayoutTemplate aria-hidden />
+              {t('Templates')}
+            </Button>
+            <Button onClick={() => setCreating(true)} disabled={activeDomains.length === 0}>
+              <Plus aria-hidden />{t('New mailbox')}</Button>
+          </div>
         }
       />
       {domains.data && activeDomains.length === 0 ? (
@@ -549,6 +575,17 @@ export default function MailboxesPage() {
           }}
           onClose={() => setSpamOf(null)}
         />
+      ) : null}
+      {templatesOpen ? (
+        <AppDialog open onClose={() => setTemplatesOpen(false)} title={t('Mailbox templates')}>
+          <TemplateList<MailboxTemplateSettings>
+            url={`/orgs/${orgId}/mailbox-templates`}
+            queryKey={keys.orgPart(orgId, 'mailbox-templates')}
+            description={t('Settings new mailboxes start with. The default template applies unless another is chosen.')}
+            fields={(settings) => <MailboxTemplateFields settings={settings} />}
+            read={mailboxSettingsFrom}
+          />
+        </AppDialog>
       ) : null}
       {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
