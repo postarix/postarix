@@ -9,6 +9,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { fromNodeHeaders } from 'better-auth/node';
 import { AUTH } from '../core/tokens.js';
+import { ApiKeysService } from '../api-keys/api-keys.js';
 import type { Auth } from './auth.js';
 import { SECOND_FACTOR_REQUIRED, SecondFactorPolicy } from './second-factor-policy.js';
 import { ALLOW_WITHOUT_SECOND_FACTOR, type AuthenticatedRequest, IS_PUBLIC } from './session.js';
@@ -24,6 +25,7 @@ export class SessionGuard implements CanActivate {
     @Inject(AUTH) private readonly auth: Auth,
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(SecondFactorPolicy) private readonly secondFactor: SecondFactorPolicy,
+    @Inject(ApiKeysService) private readonly apiKeys: ApiKeysService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,6 +36,14 @@ export class SessionGuard implements CanActivate {
     if (isPublic) return true;
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    // Software with an API key (instance-administrator access; no second factor).
+    const authorization = request.headers.authorization;
+    if (typeof authorization === 'string' && /^Bearer\s+px_/i.test(authorization)) {
+      const keySession = await this.apiKeys.authenticate(authorization.replace(/^Bearer\s+/i, '').trim(), request.ip, request.method);
+      if (!keySession) throw new UnauthorizedException('Invalid API key, or not allowed for this request');
+      request.auth = keySession;
+      return true;
+    }
     const session = await this.auth.api.getSession({
       headers: fromNodeHeaders(request.headers),
     });

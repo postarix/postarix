@@ -25,6 +25,7 @@ import { RoutingModule } from './routing/routing.js';
 import { SpamModule } from './spam/spam.js';
 import { QuarantineModule } from './quarantine/quarantine.js';
 import { InstanceSettingsModule } from './settings/instance-settings.js';
+import { ApiKeysModule } from './api-keys/api-keys.js';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { InstanceSettingsModule } from './settings/instance-settings.js';
     SpamModule,
     QuarantineModule,
     InstanceSettingsModule,
+    ApiKeysModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

@@ -250,6 +250,35 @@ export const quarantineItems = pgTable(
 export type QuarantineItemRow = typeof quarantineItems.$inferSelect;
 
 /**
+ * Keys for scripts and other software to use the API as an instance
+ * administrator (read-only or read-write), optionally only from given
+ * addresses. Only a hash of the key is stored.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    name: text().notNull(),
+    /** The key's first characters, to find it without scanning every hash. */
+    lookupPrefix: text().notNull(),
+    keyHash: text().notNull(),
+    access: text({ enum: ['read', 'write'] }).notNull(),
+    /** Addresses or networks (CIDR) it works from; empty: anywhere. */
+    allowedIps: text().array().notNull().default(sql`ARRAY[]::text[]`),
+    /** It acts as this instance administrator, and stops working when they no longer are one. */
+    createdBy: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    lastUsedAt: timestamp({ withTimezone: true }),
+    expiresAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('api_keys_lookup_idx').on(table.lookupPrefix)],
+);
+
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
+
+/**
  * Settings of the whole instance, changed by instance administrators in the
  * admin panel (see src/settings). One row; missing values take their defaults.
  */
