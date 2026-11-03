@@ -158,7 +158,8 @@ test('saves filters', async ({ page }) => {
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Add filter' }).click();
   await dialog.getByLabel('Filter 1: contains').fill('newsletter@');
-  await dialog.getByLabel('Filter 1: folder').selectOption('Archive');
+  await dialog.getByRole('combobox', { name: 'Filter 1: folder' }).click();
+  await page.getByRole('option', { name: 'Archive', exact: true }).click();
   await dialog.getByRole('button', { name: 'Save filters' }).click();
   await expect(dialog.getByRole('status')).toHaveText('Saved.');
 });
