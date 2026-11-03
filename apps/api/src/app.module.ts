@@ -20,6 +20,7 @@ import { MailModule } from './mail/mail.module.js';
 import { MailAuthModule } from './mail-auth/mail-auth.module.js';
 import { MailboxesModule } from './mailboxes/mailboxes.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { SystemModule } from './system/system.module.js';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     DeprovisioningModule,
     SsoModule,
     MailLogModule,
+    SystemModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

@@ -176,6 +176,14 @@ internal_secret() {
   if [ -n "$value" ]; then printf '%s' "$value"; return; fi
   printf 'postarix:%s' "$1" | openssl dgst -sha256 -hmac "${INTERNAL_API_TOKEN:?$var is required}" -r | cut -d' ' -f1
 }
+# Reports (logs, the mail queue) to the API's internal HTTPS listener, with a
+# secret for that alone (POSTARIX_SECRET_REPORTS). Without it, nothing is reported.
+REPORTS_SECRET=""
+if [ -n "${POSTARIX_SECRET_REPORTS:-}" ] || [ -n "${INTERNAL_API_TOKEN:-}" ]; then
+  REPORTS_SECRET=$(internal_secret reports)
+fi
+unset POSTARIX_SECRET_REPORTS
+
 if [ -n "${POSTARIX_SECRET_SUBMISSION:-}" ] || [ -n "${INTERNAL_API_TOKEN:-}" ]; then
   rm -f /etc/postfix/sasl/sasldb2
   internal_secret submission | saslpasswd2 -p -c -u "$MAIL_HOSTNAME" -f /etc/postfix/sasl/sasldb2 postarix-api
@@ -267,5 +275,15 @@ tail -n 0 -F "$LOG_FILE" 2>/dev/null &
     fi
   done
 ) &
+if [ -n "$REPORTS_SECRET" ]; then
+  install -d -m 0700 /etc/postarix
+  printf 'POSTARIX_API_INTERNAL=%s\nMAIL_HOSTNAME=%s\n' "${POSTARIX_API_INTERNAL:-api:3443}" "$MAIL_HOSTNAME" > /etc/postarix/reports.env
+  ( umask 077; printf 'x-postarix-internal-token: %s\n' "$REPORTS_SECRET" > /etc/postarix/reports.headers )
+  postarix-reporter postfix "$LOG_FILE" /var/spool/postfix /etc/postfix/tls/fullchain.pem "Postfix $(postconf -h mail_version)" &
+else
+  log "no reports secret set: logs and the mail queue are not shown in the admin panel"
+fi
+unset REPORTS_SECRET
+
 log "starting Postfix for $MAIL_HOSTNAME"
 exec postfix start-fg

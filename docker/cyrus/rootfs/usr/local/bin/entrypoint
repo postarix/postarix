@@ -49,6 +49,10 @@ if [ "$CYRUS_ROLE" != mupdate ]; then
   MAIL_AUTH_SECRET=$(internal_secret mail-auth)
   CYRUS_SMTP_SECRET=$(internal_secret cyrus-smtp)
 fi
+# Reports (logs, version, disk use) to the API; optional (POSTARIX_SECRET_REPORTS).
+REPORTS_SECRET=""
+if [ -n "${POSTARIX_SECRET_REPORTS:-}" ] || [ -n "${INTERNAL_API_TOKEN:-}" ]; then REPORTS_SECRET=$(internal_secret reports); fi
+unset POSTARIX_SECRET_REPORTS
 # Murder: backends publish their mailboxes to mupdate, frontends log in to
 # backends on behalf of users. Internal accounts, never valid on public ports.
 if [ "$CYRUS_ROLE" != standalone ]; then MUPDATE_SECRET=$(internal_secret murder-mupdate); fi
@@ -251,6 +255,15 @@ rsyslogd -n -f /etc/rsyslog-postarix.conf -i /run/rsyslogd.pid &
     fi
   done
 ) &
+
+if [ -n "$REPORTS_SECRET" ]; then
+  mkdir -p /etc/postarix
+  printf 'POSTARIX_API_INTERNAL=%s\nMAIL_HOSTNAME=%s\n' "$POSTARIX_API_INTERNAL" "$MAIL_HOSTNAME" > /etc/postarix/reports.env
+  ( umask 077; printf 'x-postarix-internal-token: %s\n' "$REPORTS_SECRET" > /etc/postarix/reports.headers )
+  cyrus_version=$(/usr/lib/cyrus/bin/cyr_info version 2>/dev/null | head -n 1 || true)
+  postarix-reporter cyrus /var/log/postarix/cyrus.log /var/spool/cyrus /etc/cyrus-tls/fullchain.pem "${cyrus_version:-Cyrus IMAP} ($CYRUS_ROLE)" &
+fi
+unset REPORTS_SECRET
 
 # --- saslauthd (shared with Postfix through the /run/saslauthd volume) -------
 # -r passes "user@realm" to PAM. No credential cache (-c): revocations apply at once.

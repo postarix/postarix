@@ -47,6 +47,11 @@ export function bodyLimits(): Array<RequestHandler | ErrorRequestHandler> {
     express.urlencoded({ limit: BODY_LIMIT, extended: false }),
     // Small XML documents only (Outlook's Autodiscover request).
     express.text({ type: ['text/xml', 'application/xml'], limit: '16kb' }),
+    // Logs and the mail queue the mail containers report (internal routes only).
+    express.text({
+      type: (req) => (req as express.Request).path.startsWith('/api/internal/reports/') && /^text\/plain\b/i.test(String(req.headers['content-type'] ?? '')),
+      limit: '2mb',
+    }),
     express.text({
       type: (req) => IMPORT_ROUTES.has((req as express.Request).path) && /^text\/(calendar|vcard|x-vcard)\b/i.test(String(req.headers['content-type'] ?? '')),
       limit: IMPORT_LIMIT,

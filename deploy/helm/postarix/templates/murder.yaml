@@ -104,6 +104,12 @@ spec:
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_MUPDATE") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_PROXY") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_XFER") | nindent 12 }}
+            - name: POSTARIX_SECRET_REPORTS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: POSTARIX_SECRET_REPORTS
+                  optional: true
             - name: POD_NAME
               valueFrom: { fieldRef: { fieldPath: metadata.name } }
             - { name: CYRUS_ROLE, value: backend }

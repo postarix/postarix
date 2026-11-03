@@ -10,7 +10,8 @@ import type { MailEngine } from '@postarix/mail-engine';
 import { createDnsResolver } from './dns.js';
 import { createMailEngine } from './mail-engine.js';
 import { type DkimPublisher, MemoryDkimPublisher, ValkeyDkimPublisher } from '../dkim/dkim-publisher.js';
-import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, RATE_LIMIT_STORE, SYSTEM_MAILER } from './tokens.js';
+import { AUTH, DATABASE, DATABASE_POOL, DKIM_PUBLISHER, DNS_RESOLVER, ENV, MAIL_ENGINE, COUNTER_STORE, RATE_LIMIT_STORE, SYSTEM_MAILER, SYSTEM_STORE } from './tokens.js';
+import { MemorySystemStore, type SystemStore, ValkeySystemStore } from '../system/system-store.js';
 import { MemoryRateLimitStore, type RateLimitStore, ValkeyRateLimitStore } from '../rate-limits/rate-limits.js';
 
 const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
@@ -71,6 +72,11 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
       useFactory: (env: Env): RateLimitStore =>
         env.VALKEY_URL ? new ValkeyRateLimitStore(env.VALKEY_URL) : new MemoryRateLimitStore(),
     },
+    {
+      provide: SYSTEM_STORE,
+      inject: [ENV],
+      useFactory: (env: Env): SystemStore => (env.VALKEY_URL ? new ValkeySystemStore(env.VALKEY_URL) : new MemorySystemStore()),
+    },
   ],
   exports: [
     SecondFactorPolicy,
@@ -84,6 +90,7 @@ const DATABASE_HANDLE = Symbol('DATABASE_HANDLE');
     COUNTER_STORE,
     SYSTEM_MAILER,
     RATE_LIMIT_STORE,
+    SYSTEM_STORE,
   ],
 })
 export class CoreModule implements OnApplicationShutdown {
@@ -93,12 +100,14 @@ export class CoreModule implements OnApplicationShutdown {
     @Inject(DKIM_PUBLISHER) private readonly dkimPublisher: DkimPublisher,
     @Inject(COUNTER_STORE) private readonly counters: CounterStore,
     @Inject(RATE_LIMIT_STORE) private readonly rateLimits: RateLimitStore,
+    @Inject(SYSTEM_STORE) private readonly systemStore: SystemStore,
   ) {}
 
   async onApplicationShutdown(): Promise<void> {
     await this.mailEngine.close();
     await this.dkimPublisher.close();
     await this.rateLimits.close();
+    await this.systemStore.close();
     await this.counters.close();
     await this.pool.end();
   }

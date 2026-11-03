@@ -69,3 +69,22 @@ Besides the name, quota and password, a mailbox has:
   for an old address that only gets spam, without telling the sender.
 - Spam for an alias goes to the Junk folder of its destinations on this
   server, and is never forwarded outside.
+
+## System (instance administrators)
+
+**System**, in the sidebar, shows the server itself:
+
+- **Services:** whether the API, PostgreSQL, Valkey, Rspamd, Postfix and
+  Cyrus are running, their versions and the disk use of the mail store and
+  the mail queue.
+- **Logs:** the last few thousand lines of Postfix' and Cyrus' logs, with a
+  filter (an address, a queue ID, an IP address…). The spam filter's
+  decisions are in each organization's **Mail log**.
+- **Mail queue:** the messages waiting to be delivered and why. Select
+  messages to deliver them now, hold them, release them or delete them, or
+  retry or delete the whole queue.
+
+Postfix and Cyrus send their logs and the queue to the API every 15 seconds
+(with `POSTARIX_SECRET_REPORTS`; see the [configuration](./configuration)), so
+what you see is at most that old, and queue actions take effect within that
+time. No container gets access to Docker for this.

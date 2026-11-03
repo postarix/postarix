@@ -54,6 +54,13 @@ spec:
             {{- include "postarix.secretEnv" (list . "CYRUS_ADMIN_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MAIL_AUTH") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_CYRUS_SMTP") | nindent 12 }}
+            # Logs (and the mail queue) shown to instance administrators; optional for existing secrets.
+            - name: POSTARIX_SECRET_REPORTS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: POSTARIX_SECRET_REPORTS
+                  optional: true
             {{- if .Values.mail.murder.enabled }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_MUPDATE") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_MURDER_PROXY") | nindent 12 }}
@@ -102,6 +109,15 @@ spec:
             {{- include "postarix.secretEnv" (list . "POSTFIX_DB_PASSWORD") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_SUBMISSION") | nindent 12 }}
             {{- include "postarix.secretEnv" (list . "POSTARIX_SECRET_CYRUS_SMTP") | nindent 12 }}
+            # Logs (and the mail queue) shown to instance administrators; optional for existing secrets.
+            - name: POSTARIX_SECRET_REPORTS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "postarix.secretName" . }}
+                  key: POSTARIX_SECRET_REPORTS
+                  optional: true
+            - name: POSTARIX_API_INTERNAL
+              value: "{{ $api }}:3443"
             - name: MAIL_HOSTNAME
               value: {{ .Values.mailHostname | quote }}
             - name: POSTFIX_DB_HOST

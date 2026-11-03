@@ -110,6 +110,8 @@ const envSchema = z
     POSTARIX_SECRET_MAIL_AUTH: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
     /** The password of Postfix's internal submission port (Postfix has it too). Default: derived from INTERNAL_API_TOKEN. */
     POSTARIX_SECRET_SUBMISSION: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
+    /** The secret mail containers send their logs and queue with (they have it too). Default: derived from INTERNAL_API_TOKEN. */
+    POSTARIX_SECRET_REPORTS: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(32).optional()),
     /**
      * The internal HTTPS listener for the mail-login bridge (/api/internal/*),
      * so mail passwords never cross the network in clear. When the key and
