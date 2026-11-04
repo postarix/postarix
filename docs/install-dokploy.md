@@ -73,10 +73,13 @@ create an API token with *Zone → DNS → Edit* on your zone, and store it on t
 server:
 
 ```bash
-sudo mkdir -p /etc/postarix
-printf 'CLOUDFLARE_DNS_API_TOKEN=%s\n' 'your-token' | sudo tee /etc/postarix/acme-dns.env >/dev/null
-sudo chmod 600 /etc/postarix/acme-dns.env
+sudo mkdir -p /etc/dokploy/postarix
+printf 'CLOUDFLARE_DNS_API_TOKEN=%s\n' 'your-token' | sudo tee /etc/dokploy/postarix/acme-dns.env >/dev/null
+sudo chmod 600 /etc/dokploy/postarix/acme-dns.env
 ```
+
+Keep it under `/etc/dokploy`: Dokploy runs `docker compose` from its own
+container, which sees that folder of the server and no other.
 
 Any [lego DNS provider](https://go-acme.github.io/lego/dns/) works (OVH,
 Route 53, Hetzner, DigitalOcean, Gandi…): set its variables in that file and
@@ -116,7 +119,7 @@ domain of the `webmail` service in Dokploy (step 6).
    CERTS_MODE=acme
    ACME_CHALLENGE=dns
    ACME_DNS_PROVIDER=cloudflare
-   ACME_DNS_ENV_FILE=/etc/postarix/acme-dns.env
+   ACME_DNS_ENV_FILE=/etc/dokploy/postarix/acme-dns.env
    ```
 
 4. **Advanced → Command:** replace the default command so Dokploy uses the
@@ -187,7 +190,10 @@ your environment. See [Updating](./updating).
 ## Troubleshooting on Dokploy
 
 - **The web works but mail apps warn about the certificate:** the certs
-  service has not obtained its certificate yet. Check its logs in Dokploy
+  service has not obtained its certificate yet. Check that it received the
+  DNS token: `sudo docker exec <certs container> sh -c 'test -n "$CLOUDFLARE_DNS_API_TOKEN" && echo OK'`
+  (a file outside `/etc/dokploy` is not seen by Dokploy and is skipped
+  silently). Check its logs in Dokploy
   (`certs` container) for DNS-challenge errors (token permissions, provider
   name).
 - **Sign-ins are throttled for everyone / the audit log shows Traefik's
