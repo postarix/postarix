@@ -100,7 +100,7 @@ mailbox templates: quota, allowed protocols, TLS requirements, sending limit,
 spam scores and quarantine notices. New mailboxes start with the template
 chosen when creating them (the default one is preselected; **None** for no
 template); what is typed in the form wins over the template. Instance
-administrators keep domain templates in **System → Templates**: limits,
+administrators keep domain templates in **Administration → Templates**: limits,
 default quota, sending limit, spam scores and MTA-STS mode. The default domain
 template applies to every domain an organization adds, so new domains start
 with the instance's limits. Changing or deleting a template does not change
@@ -135,7 +135,7 @@ private network must be allowed first (see [Migration](MIGRATION.md)).
 
 ## Copies (BCC)
 
-The **Copies (BCC)** tab sends a blind copy of the mail an address, or every
+The **Copies (BCC)** page sends a blind copy of the mail an address, or every
 address of a domain (`@example.com`), receives or sends to another address,
 here or elsewhere: a manager, a compliance mailbox, a CRM. Senders and
 recipients do not see the copy. Rules apply to the domain's alias domains too,
@@ -158,7 +158,7 @@ A sender is an address, `@example.com`, or `@.example.com` for its
 subdomains. A mailbox's settings come first, then its domain's, then the
 server's. People can change their own in the webmail (their menu → Spam
 filter). Instance administrators keep a list for every mailbox on the server
-in **System → Spam filter**. A message sent to several people at once is
+in **Mail policy → Spam filter**. A message sent to several people at once is
 judged by the first recipient's settings.
 
 ### Quarantine
@@ -166,14 +166,14 @@ judged by the first recipient's settings.
 Spam that is refused (not viruses, not blocked senders) is kept for its
 recipients for 30 days (`QUARANTINE_RETENTION_DAYS`), up to 10 MB per
 message (`QUARANTINE_MAX_BYTES`); instance administrators change both, and
-the rest of its behaviour, in **System → Quarantine**. The sender is still told it was refused.
+the rest of its behaviour, in **Mail policy → Quarantine**. The sender is still told it was refused.
 People see theirs in the webmail (their menu → Quarantine) and release a
 message to their inbox, or delete it; they get a digest of new items daily
 by default (never, hourly, daily or weekly: in the webmail or the mailbox's
 settings). Organization admins see their mailboxes' items in the
-**Quarantine** tab, and can release, download or delete them.
+**Quarantine** page, and can release, download or delete them.
 
-## System (instance administrators)
+## Server, mail policy and administration (instance administrators)
 
 The sidebar has the organization in view (switch with the box at the top),
 its sections, the sections for instance administrators (in three groups:
