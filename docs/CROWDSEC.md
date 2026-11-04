@@ -44,15 +44,30 @@ The engine's local API listens on `127.0.0.1:8081` of the host only
 On Debian or Ubuntu:
 
 ```bash
-sudo apt install crowdsec-firewall-bouncer   # or crowdsec-firewall-bouncer-nftables
+sudo apt install crowdsec-firewall-bouncer ipset   # ipset is needed in iptables mode
 ```
+
+Installing the package can also install and start a CrowdSec engine on the
+host, and write that engine's key to `crowdsec-firewall-bouncer.yaml.local`,
+which overrides the main file. The bouncer must talk to the Postarix engine
+instead, so turn the host's off and move that file aside:
+
+```bash
+sudo systemctl disable --now crowdsec
+sudo mv /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml.local{,.old}
+```
+
+If port 8081 is already taken on the host, set `CROWDSEC_LAPI_PORT` (for
+example `8091`) and use that port in `api_url` below. On Dokploy, add
+`--profile crowdsec` to the compose command and the two variables to
+Environment.
 
 Then edit `/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml`:
 
 ```yaml
 api_url: http://127.0.0.1:8081/
 api_key: <the CROWDSEC_BOUNCER_KEY value>
-mode: nftables          # or iptables
+mode: iptables          # or nftables; iptables works alongside ufw and Docker
 # Published container ports are forwarded, so filter the forwarding path too.
 iptables_chains: [INPUT, DOCKER-USER]
 nftables:
