@@ -120,7 +120,7 @@ export function useMessage(id: string | null, remoteImages: boolean) {
 export function useIdentities() {
   return useQuery({
     queryKey: keys.identities,
-    queryFn: () => api<{ address: string; addresses: string[] }>('/mail/identities'),
+    queryFn: () => api<{ address: string; name?: string; addresses: string[] }>('/mail/identities'),
     staleTime: 10 * 60_000,
   });
 }

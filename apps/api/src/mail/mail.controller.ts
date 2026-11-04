@@ -33,7 +33,7 @@ export class MailController {
 
   /** The addresses the user may send as (for the From field). */
   @Get('identities')
-  identities(@CurrentSession() session: AuthSession): Promise<{ address: string; addresses: string[] }> {
+  identities(@CurrentSession() session: AuthSession): Promise<{ address: string; name: string; addresses: string[] }> {
     return this.sender.identities(session.user.id);
   }
 

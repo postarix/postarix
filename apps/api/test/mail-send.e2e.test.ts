@@ -45,7 +45,7 @@ describe('Webmail sending rules', () => {
     await admin.agent.post(`/api/orgs/${orgId}/domains/${domain.body.id}/verify`).expect(200);
     const mailbox = await admin.agent
       .post(`/api/orgs/${orgId}/mailboxes`)
-      .send({ domainId: domain.body.id, localPart: 'ann', password: PASSWORD })
+      .send({ domainId: domain.body.id, localPart: 'ann', displayName: 'Ann Example', password: PASSWORD })
       .expect(201);
     annAddress = mailbox.body.address;
     annId = mailbox.body.id;
@@ -154,14 +154,14 @@ describe('Webmail sending rules', () => {
 
   it('lists the addresses the user may send as, own address first', async () => {
     const res = await ann.get('/api/mail/identities').expect(200);
-    expect(res.body).toEqual({ address: annAddress, addresses: [annAddress, `sales@${domainName}`] });
+    expect(res.body).toEqual({ address: annAddress, name: 'Ann Example', addresses: [annAddress, `sales@${domainName}`] });
     await admin.agent.get('/api/mail/identities').expect(404);
   });
 
   it('keeps senders of another organization to their own addresses', async () => {
     const other = await mailboxInNewOrg(app, 'send-other');
     const identities = await other.agent.get('/api/mail/identities').expect(200);
-    expect(identities.body).toEqual({ address: other.address, addresses: [other.address] });
+    expect(identities.body).toMatchObject({ address: other.address, addresses: [other.address] });
     seenAddresses = [];
     for (const email of [annAddress, `sales@${domainName}`]) {
       draft.from = [{ email }];
