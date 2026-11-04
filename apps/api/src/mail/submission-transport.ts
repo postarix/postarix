@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { rootCertificates } from 'node:tls';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import type { Env } from '../config/env.js';
 import { secretFor } from '../config/internal-secrets.js';
@@ -24,7 +25,7 @@ export function createSubmissionTransport(env: Env) {
         tls: {
           rejectUnauthorized: env.CYRUS_TLS_VERIFY,
           ...(env.CYRUS_TLS_SERVERNAME ? { servername: env.CYRUS_TLS_SERVERNAME } : {}),
-          ...(env.CYRUS_TLS_CA_FILE ? { ca: readCa(env.CYRUS_TLS_CA_FILE) } : {}),
+          ...trustedCa(env.CYRUS_TLS_CA_FILE),
         },
         auth: { user: 'postarix-api', pass: password },
         connectionTimeout: 10_000,
@@ -37,6 +38,18 @@ export function createSubmissionTransport(env: Env) {
       }
     },
   };
+}
+
+/**
+ * The certificates to trust: the system's roots plus the file's. The file is
+ * Postfix' own certificate chain: self-signed, it is its own anchor; from a
+ * public CA (Let's Encrypt), it holds no root, and the chain is checked up to
+ * the system's roots. Given alone, it would replace them and a public chain
+ * could never be verified.
+ */
+export function trustedCa(path: string | undefined): { ca?: string[] } {
+  const extra = path ? readCa(path) : undefined;
+  return extra ? { ca: [...rootCertificates, extra] } : {};
 }
 
 function readCa(path: string): string | undefined {
