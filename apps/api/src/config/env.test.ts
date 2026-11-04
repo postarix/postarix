@@ -24,6 +24,15 @@ describe('loadEnv', () => {
     expect(env.TRUSTED_PROXIES).toEqual(['10.0.0.0/8', '172.16.0.1']);
   });
 
+  it('accepts web origins only in TRUSTED_ORIGINS', () => {
+    expect(loadEnv({ ...base, TRUSTED_ORIGINS: 'https://a.example.com, http://localhost:3001' }).TRUSTED_ORIGINS).toEqual([
+      'https://a.example.com',
+      'http://localhost:3001',
+    ]);
+    expect(() => loadEnv({ ...base, TRUSTED_ORIGINS: '10.0.1.0/24' })).toThrow(/TRUSTED_ORIGINS: "10.0.1.0\/24" is not an origin.*TRUSTED_PROXIES/);
+    expect(() => loadEnv({ ...base, TRUSTED_ORIGINS: 'https://a.example.com/admin' })).toThrow(/is not an origin/);
+  });
+
   it('reads the backends of a Cyrus Murder', () => {
     expect(loadEnv(base).CYRUS_BACKENDS).toEqual([]);
     const env = loadEnv({ ...base, CYRUS_BACKENDS: 'b1=cyrus-backend-1, b2=cyrus-backend-2.cluster.local', CYRUS_DEFAULT_BACKEND: 'b2' });
