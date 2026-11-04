@@ -30,6 +30,7 @@ interface LogEntry {
 
 const LOG_SERVICES = ['api', 'postfix', 'cyrus', 'rspamd', 'unbound', 'clamav', 'crowdsec', 'certs'] as const;
 type LogService = (typeof LOG_SERVICES)[number];
+const OPTIONAL = new Set<string>(['certs', 'clamav', 'crowdsec']);
 
 const LEVELS: { value: '' | Level; label: string }[] = [
   { value: '', label: t('All levels') },
@@ -123,6 +124,8 @@ function LogsView() {
   };
 
   const stateOf = (name: string) => status.data?.find((s) => s.name === name)?.state ?? 'unknown';
+  // Optional services (certificates, antivirus, CrowdSec: not every setup runs them) are listed once they report.
+  const shown = LOG_SERVICES.filter((name) => !OPTIONAL.has(name) || name === service || status.data?.some((s) => s.name === name));
 
   return (
     <>
@@ -132,7 +135,7 @@ function LogsView() {
       />
       <div className="grid gap-4 lg:grid-cols-[14rem_1fr]">
         <Card className="h-fit gap-0 p-1.5" role="tablist" aria-label={t('Service')} aria-orientation="vertical">
-          {LOG_SERVICES.map((name) => {
+          {shown.map((name) => {
             const meta = SERVICES[name]!;
             const Icon = meta.icon;
             const active = service === name;

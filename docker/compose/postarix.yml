@@ -128,6 +128,10 @@ services:
       CERTS_EXTERNAL_DIR: /external
       CERTS_EXTERNAL_CERT: ${CERTS_EXTERNAL_CERT:-fullchain.pem}
       CERTS_EXTERNAL_KEY: ${CERTS_EXTERNAL_KEY:-privkey.pem}
+      # Its log for the admin panel (Server → Logs), sent to the API's internal
+      # listener over the proxy network; unset, nothing is reported.
+      POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
+      POSTARIX_API_INTERNAL: postarix-api:3443
     env_file:
       # Credentials for lego's DNS provider (e.g. CLOUDFLARE_DNS_API_TOKEN), if any.
       - path: ${ACME_DNS_ENV_FILE:-/dev/null}
