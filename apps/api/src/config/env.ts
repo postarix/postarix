@@ -16,6 +16,24 @@ const commaList = z
       .filter((item) => item.length > 0),
   );
 
+/** Comma-separated web origins ("https://host[:port]"), checked at start. */
+const originList = commaList.superRefine((items, ctx) => {
+  for (const item of items) {
+    let url: URL | undefined;
+    try {
+      url = new URL(item);
+    } catch {
+      url = undefined;
+    }
+    if (!url || !/^https?:$/.test(url.protocol) || url.origin !== item.replace(/\/$/, '')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `"${item}" is not an origin such as https://mail.example.com (a proxy's address or network goes in TRUSTED_PROXIES)`,
+      });
+    }
+  }
+});
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -29,7 +47,7 @@ const envSchema = z
     AUTH_URL: z.url(),
     AUTH_SECRET: z.string().min(32, 'AUTH_SECRET must be at least 32 characters'),
     /** Browser origins allowed to call the API with credentials (admin, webmail). */
-    TRUSTED_ORIGINS: commaList,
+    TRUSTED_ORIGINS: originList,
     /**
      * Origins of identity providers on a private network that organizations
      * may use for single sign-on (e.g. https://idp.corp.internal). Public https
