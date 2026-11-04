@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { forwardDraft, replyDraft } from './compose';
+import { draftEmail, emptyDraft, forwardDraft, replyDraft } from './compose';
 import type { RenderedMessage } from './mail';
 
 const message: RenderedMessage = {
@@ -51,5 +51,22 @@ describe('forwardDraft', () => {
     expect(draft.attachments).toEqual(message.attachments);
     expect(draft.text).toContain('Forwarded message');
     expect(draft.text).toContain('Line 1');
+  });
+});
+
+describe('draftEmail', () => {
+  it('leaves out empty address lists', () => {
+    const email = draftEmail({ ...emptyDraft('ann@me.com'), to: [{ email: 'bob@x.com' }], subject: 'Hola', text: 'Año' }, 'D1');
+    expect(email.to).toEqual([{ email: 'bob@x.com' }]);
+    expect(email).not.toHaveProperty('cc');
+    expect(email).not.toHaveProperty('bcc');
+    expect(email.textBody).toEqual([{ partId: 'body', type: 'text/plain' }]);
+  });
+
+  it('keeps the recipients it has, and both parts of a formatted message', () => {
+    const email = draftEmail({ ...emptyDraft('ann@me.com'), cc: [{ email: 'c@x.com' }], text: 'a', html: '<p>a</p>' }, 'D1');
+    expect(email).not.toHaveProperty('to');
+    expect(email.cc).toEqual([{ email: 'c@x.com' }]);
+    expect(email.htmlBody).toEqual([{ partId: 'html', type: 'text/html' }]);
   });
 });
