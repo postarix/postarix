@@ -55,7 +55,7 @@ services:
       POSTARIX_SECRET_MURDER_PROXY: ${POSTARIX_SECRET_MURDER_PROXY:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_SECRET_MURDER_XFER: ${POSTARIX_SECRET_MURDER_XFER:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      POSTARIX_API_INTERNAL: postarix-api:3443
       # Backends are on the internal network only.
       JMAP_LISTEN_ADDRESS: 0.0.0.0
     volumes:

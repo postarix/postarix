@@ -5,7 +5,7 @@
 	# Certificates for autoconfig.<domain> and mta-sts.<domain> of every hosted
 	# domain, obtained when first asked for; the API says which names qualify.
 	on_demand_tls {
-		ask http://api:3000/api/tls/allowed
+		ask http://postarix-api:3000/api/tls/allowed
 	}
 }
 
@@ -23,7 +23,7 @@
 	# Mail app setup (autoconfig, Autodiscover) and the MTA-STS policy.
 	@discovery path /.well-known/autoconfig/* /mail/config-v1.1.xml /autodiscover/autodiscover.xml /Autodiscover/Autodiscover.xml /.well-known/mta-sts.txt
 	handle @discovery {
-		reverse_proxy api:3000
+		reverse_proxy postarix-api:3000
 	}
 }
 
@@ -31,7 +31,7 @@
 	import postarix
 
 	handle /api/* {
-		reverse_proxy api:3000
+		reverse_proxy postarix-api:3000
 	}
 
 	handle /admin* {

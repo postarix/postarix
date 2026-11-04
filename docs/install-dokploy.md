@@ -15,7 +15,7 @@ and the mail ports go straight to Postfix and Cyrus, as they must.
 :::
 
 The examples use `mail.example.com` for the mail server's name and
-`0.0.1-beta.5` for the [release](https://github.com/postarix/postarix/releases).
+`0.0.1-beta.6` for the [release](https://github.com/postarix/postarix/releases).
 
 ## 1. DNS
 
@@ -33,7 +33,7 @@ Dokploy opens 80, 443 and its own panel's port. Also open the mail ports in
 your provider's firewall and on the server, for example with ufw:
 
 ```bash
-ufw allow 25,465,587,143,993,995,4190/tcp
+sudo ufw allow 25,465,587,143,993,995,4190/tcp
 ```
 
 ## 3. Generate the configuration
@@ -42,12 +42,13 @@ Postarix needs a set of random secrets. Generate them on the Dokploy server
 (over SSH), in a temporary copy of the project:
 
 ```bash
-git clone --depth 1 --branch v0.0.1-beta.5 https://github.com/postarix/postarix /tmp/postarix
-/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.5
+git clone --depth 1 --branch v0.0.1-beta.6 https://github.com/postarix/postarix /tmp/postarix
+/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.6
 cat /tmp/postarix/docker/compose/postarix.env
 ```
 
-Copy the output: you will paste it into Dokploy in step 5. Keep a copy in a
+Copy the output: you will paste it into Dokploy in step 5. Generate it only
+once: the database keeps the passwords it is first created with. Keep a copy in a
 password manager too; it is not part of the backups. Then remove the
 temporary copy:
 
@@ -59,7 +60,7 @@ Find the address range of Dokploy's network (the API must trust Traefik's
 `X-Forwarded-For` header from it):
 
 ```bash
-docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+sudo docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
 # e.g. 10.0.1.0/24
 ```
 
@@ -72,9 +73,9 @@ create an API token with *Zone → DNS → Edit* on your zone, and store it on t
 server:
 
 ```bash
-mkdir -p /etc/postarix
-printf 'CLOUDFLARE_DNS_API_TOKEN=%s\n' 'your-token' > /etc/postarix/acme-dns.env
-chmod 600 /etc/postarix/acme-dns.env
+sudo mkdir -p /etc/postarix
+printf 'CLOUDFLARE_DNS_API_TOKEN=%s\n' 'your-token' | sudo tee /etc/postarix/acme-dns.env >/dev/null
+sudo chmod 600 /etc/postarix/acme-dns.env
 ```
 
 Any [lego DNS provider](https://go-acme.github.io/lego/dns/) works (OVH,
@@ -97,7 +98,7 @@ domain of the `webmail` service in Dokploy (step 6).
 1. **Create a project** (e.g. *Mail*), then **Create Service → Compose**.
 2. **General → Provider:** *Git* (or *GitHub*), repository
    `https://github.com/postarix/postarix`, branch `main` — or, better, the
-   release tag `v0.0.1-beta.5` if your Dokploy version lets you pick tags.
+   release tag `v0.0.1-beta.6` if your Dokploy version lets you pick tags.
    **Compose path:** `docker/compose/postarix.yml`. Compose type: *Docker
    Compose* (not Stack).
 3. **Environment:** paste the configuration from step 3, then change or add
@@ -150,8 +151,8 @@ HTTPS too. Add each one in Dokploy's **Domains** tab: service `api`, port
 Over SSH on the server:
 
 ```bash
-docker exec -e ADMIN_EMAIL=you@example.com -e ADMIN_PASSWORD='a long passphrase' \
-  "$(docker ps -q --filter label=com.docker.compose.project=<app-name> --filter label=com.docker.compose.service=api)" \
+sudo docker exec -e ADMIN_EMAIL=you@example.com -e ADMIN_PASSWORD='a long passphrase' \
+  "$(sudo docker ps -q --filter label=com.docker.compose.project=<app-name> --filter label=com.docker.compose.service=api)" \
   node dist/cli/create-admin.js
 ```
 
@@ -166,7 +167,7 @@ folder Dokploy deploys into (usually `/etc/dokploy/compose/<app-name>/code`):
 
 ```bash
 cd /etc/dokploy/compose/<app-name>/code
-COMPOSE_PROJECT_NAME=<app-name> ENV_FILE=docker/compose/.env \
+sudo env COMPOSE_PROJECT_NAME=<app-name> ENV_FILE=docker/compose/.env \
 COMPOSE_FILE=docker/compose/postarix.yml:deploy/proxies/traefik/compose.traefik.yml \
 BACKUP_AGE_RECIPIENTS=/etc/postarix/backup-recipients.txt \
   deploy/scripts/backup.sh /srv/backups/postarix-$(date +%F)
@@ -192,4 +193,13 @@ your environment. See [Updating](./updating).
 - **Sign-ins are throttled for everyone / the audit log shows Traefik's
   address:** `TRUSTED_PROXIES` does not match `dokploy-network`'s range.
 - **Port 25 is already in use:** another app on the server publishes it.
+- **The API restarts with "password authentication failed for user
+  postarix":** on releases before 0.0.1-beta.6, the API looked up its database
+  as `postgres`, and on `dokploy-network` that name can belong to another
+  app's database. Update. (If the database volume was created with other
+  secrets, see the next point.)
+- **"password authentication failed" after changing the Environment:** the
+  database keeps the password it was created with. On a new installation,
+  remove the project's volumes and deploy again; never generate the secrets
+  twice for the same data.
 - More in [Troubleshooting](./troubleshooting).
