@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Inbox, KeyRound, LayoutTemplate, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -36,6 +36,7 @@ import { formatBytes } from '@/lib/format';
 import { isSuperAdmin, keys, useOrgList } from '@/lib/queries';
 import { quotaFromGiB, quotaToGiB } from '@/lib/quota';
 import { useSession } from '@/lib/auth-client';
+import { ImpersonateDialog } from '@/components/impersonate-dialog';
 import { useRelayHosts } from '../../../system/routing';
 import type { Domain, Mailbox } from '@/lib/types';
 import { t } from '@/lib/i18n';
@@ -458,6 +459,7 @@ export default function MailboxesPage() {
   const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
+  const [entering, setEntering] = useState<Mailbox | null>(null);
 
   return (
     <>
@@ -535,6 +537,9 @@ export default function MailboxesPage() {
                     <Button size="icon-sm" variant="ghost" aria-label={`Sync jobs of ${mailbox.address}`} onClick={() => setSyncOf(mailbox)}>
                       <RefreshCw aria-hidden />
                     </Button>
+                    <Button size="icon-sm" variant="ghost" aria-label={`${t('Sign in as')} ${mailbox.address}`} title={t('Sign in as')} onClick={() => setEntering(mailbox)}>
+                      <LogIn aria-hidden />
+                    </Button>
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -588,6 +593,7 @@ export default function MailboxesPage() {
         </AppDialog>
       ) : null}
       {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
+      {entering ? <ImpersonateDialog orgId={orgId} mailbox={entering} onClose={() => setEntering(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}

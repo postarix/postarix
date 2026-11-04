@@ -26,6 +26,7 @@ import { RulesModule } from './rules/rules.js';
 import { TemplatesModule } from './templates/templates.js';
 import { SpamModule } from './spam/spam.js';
 import { QuarantineModule } from './quarantine/quarantine.js';
+import { ImpersonationModule } from './impersonation/impersonation.js';
 import { PoliciesModule } from './policies/policies.js';
 import { InstanceAdminModule } from './system/instance-admin.js';
 import { InstanceSettingsModule } from './settings/instance-settings.js';
@@ -59,6 +60,7 @@ import { ApiKeysModule } from './api-keys/api-keys.js';
     QuarantineModule,
     InstanceSettingsModule,
     PoliciesModule,
+    ImpersonationModule,
     InstanceAdminModule,
     ApiKeysModule,
   ],

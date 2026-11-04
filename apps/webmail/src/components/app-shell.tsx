@@ -20,6 +20,7 @@ import { QuarantineDialog } from './quarantine-dialog';
 import { TemporaryAddressesDialog } from './temporary-addresses-dialog';
 import { SpamDialog } from './spam-dialog';
 import { BrandLogo } from '@/components/brand-logo';
+import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { useBranding } from '@/lib/branding';
 import { language, languages, setLanguage, t } from '@/lib/i18n';
 
@@ -179,6 +180,7 @@ export function AppShell({ email, name, nav, children }: { email: string; name: 
         {spamOpen ? <SpamDialog onClose={() => setSpamOpen(false)} /> : null}
         {quarantineOpen ? <QuarantineDialog onClose={() => setQuarantineOpen(false)} /> : null}
         {temporaryOpen ? <TemporaryAddressesDialog onClose={() => setTemporaryOpen(false)} /> : null}
+        <ImpersonationBanner />
         {branding?.announcement ? (
           <div
             role="status"

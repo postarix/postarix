@@ -29,6 +29,16 @@ export const settingsSchema = z.object({
       requireMixed: z.boolean().default(false),
     })
     .default({ minLength: 12, requireMixed: false }),
+  impersonation: z
+    .object({
+      /**
+       * "Sign in as" a mailbox: instance administrators always may (with a
+       * second factor and a reason, recorded); with this, the owners and admins
+       * of each organization may too, in their organization's mailboxes.
+       */
+      allowOrgAdmins: z.boolean().default(false),
+    })
+    .default({ allowOrgAdmins: false }),
   quota: z
     .object({
       /** Tell people when their mailbox is this full (percent); 0 never. */
@@ -134,6 +144,7 @@ export type InstanceSettings = z.infer<typeof settingsSchema>;
 export const settingsUpdateSchema = z.strictObject({
   signIn: settingsSchema.shape.signIn.unwrap().partial().strict().optional(),
   passwords: settingsSchema.shape.passwords.unwrap().partial().strict().optional(),
+  impersonation: settingsSchema.shape.impersonation.unwrap().partial().strict().optional(),
   quota: settingsSchema.shape.quota.unwrap().partial().strict().optional(),
   quarantine: settingsSchema.shape.quarantine.unwrap().partial().strict().optional(),
   branding: settingsSchema.shape.branding.unwrap().partial().strict().optional(),
@@ -190,6 +201,7 @@ export class InstanceSettingsService {
     const next = settingsSchema.parse({
       signIn: { ...current.signIn, ...change.signIn },
       passwords: { ...current.passwords, ...change.passwords },
+      impersonation: { ...current.impersonation, ...change.impersonation },
       quota: { ...current.quota, ...change.quota },
       quarantine: { ...current.quarantine, ...change.quarantine },
       branding: { ...current.branding, ...change.branding },
