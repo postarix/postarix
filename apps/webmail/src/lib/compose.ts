@@ -112,36 +112,50 @@ async function mailboxIdByRole(role: string): Promise<string> {
  * Stores the draft in Drafts and returns its id. Messages cannot be edited in
  * place, so a previous version (`replaces`) is destroyed in the same request.
  */
+/**
+ * The JMAP Email object for a draft. Empty address lists are left out: Cyrus
+ * would write them as empty headers ("Cc:" with nothing), a classic spam
+ * signal. (No charset on the parts: with bodyValues the server chooses it,
+ * RFC 8621 §4.6.)
+ */
+export function draftEmail(input: DraftInput, draftsId: string): Record<string, unknown> {
+  const text = { type: 'text/plain' };
+  const html = { type: 'text/html' };
+  return {
+    mailboxIds: { [draftsId]: true },
+    keywords: { $draft: true, $seen: true },
+    from: [{ email: input.from }],
+    ...(input.to.length ? { to: input.to } : {}),
+    ...(input.cc.length ? { cc: input.cc } : {}),
+    ...(input.bcc.length ? { bcc: input.bcc } : {}),
+    subject: input.subject,
+    ...(input.inReplyTo.length ? { inReplyTo: input.inReplyTo } : {}),
+    ...(input.references.length ? { references: input.references } : {}),
+    ...(input.html
+      ? {
+          bodyValues: { text: { value: input.text }, html: { value: wrapHtml(input.html) } },
+          textBody: [{ partId: 'text', ...text }],
+          htmlBody: [{ partId: 'html', ...html }],
+        }
+      : {
+          bodyValues: { body: { value: input.text } },
+          textBody: [{ partId: 'body', ...text }],
+        }),
+    attachments: input.attachments.map((a) => ({ blobId: a.blobId, type: a.type, name: a.name, disposition: 'attachment' })),
+  };
+}
+
+/**
+ * Stores the draft in Drafts and returns its id. Messages cannot be edited in
+ * place, so a previous version (`replaces`) is destroyed in the same request.
+ */
 export async function saveDraft(input: DraftInput, replaces?: string | null): Promise<string> {
   const accountId = await jmap.accountId();
   const draftsId = await mailboxIdByRole('drafts');
   const results = await jmap.batch((b) =>
     b.add('Email/set', {
       accountId,
-      create: {
-        draft: {
-          mailboxIds: { [draftsId]: true },
-          keywords: { $draft: true, $seen: true },
-          from: [{ email: input.from }],
-          to: input.to,
-          cc: input.cc,
-          bcc: input.bcc,
-          subject: input.subject,
-          ...(input.inReplyTo.length ? { inReplyTo: input.inReplyTo } : {}),
-          ...(input.references.length ? { references: input.references } : {}),
-          ...(input.html
-            ? {
-                bodyValues: { text: { value: input.text }, html: { value: wrapHtml(input.html) } },
-                textBody: [{ partId: 'text', type: 'text/plain' }],
-                htmlBody: [{ partId: 'html', type: 'text/html' }],
-              }
-            : {
-                bodyValues: { body: { value: input.text } },
-                textBody: [{ partId: 'body', type: 'text/plain' }],
-              }),
-          attachments: input.attachments.map((a) => ({ blobId: a.blobId, type: a.type, name: a.name, disposition: 'attachment' })),
-        },
-      },
+      create: { draft: draftEmail(input, draftsId) },
       ...(replaces ? { destroy: [replaces] } : {}),
     }),
   );
