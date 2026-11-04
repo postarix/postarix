@@ -13,11 +13,12 @@ it deserves the strongest protection.
 
 An organization is a company, a family, a customer: it owns domains,
 mailboxes and aliases, and its members only ever see its own data. Create one
-from the organization menu.
+with **New organization** on the dashboard, or from the organization box at
+the top of the sidebar.
 
 ## 3. Add your domain
 
-In **Domains**, add `example.com`. Postarix shows a TXT record that proves the
+In the sidebar, under the organization, open **Domains** and add `example.com`. Postarix shows a TXT record that proves the
 domain is yours: publish it at your DNS provider and press **Verify** (DNS
 changes can take a few minutes to be visible).
 

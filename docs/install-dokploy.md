@@ -15,7 +15,7 @@ and the mail ports go straight to Postfix and Cyrus, as they must.
 :::
 
 The examples use `mail.example.com` for the mail server's name and
-`0.0.1-beta.1` for the [release](https://github.com/postarix/postarix/releases).
+`0.0.1-beta.5` for the [release](https://github.com/postarix/postarix/releases).
 
 ## 1. DNS
 
@@ -42,8 +42,8 @@ Postarix needs a set of random secrets. Generate them on the Dokploy server
 (over SSH), in a temporary copy of the project:
 
 ```bash
-git clone --depth 1 --branch v0.0.1-beta.1 https://github.com/postarix/postarix /tmp/postarix
-/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.1
+git clone --depth 1 --branch v0.0.1-beta.5 https://github.com/postarix/postarix /tmp/postarix
+/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.5
 cat /tmp/postarix/docker/compose/postarix.env
 ```
 
@@ -97,7 +97,7 @@ domain of the `webmail` service in Dokploy (step 6).
 1. **Create a project** (e.g. *Mail*), then **Create Service → Compose**.
 2. **General → Provider:** *Git* (or *GitHub*), repository
    `https://github.com/postarix/postarix`, branch `main` — or, better, the
-   release tag `v0.0.1-beta.1` if your Dokploy version lets you pick tags.
+   release tag `v0.0.1-beta.5` if your Dokploy version lets you pick tags.
    **Compose path:** `docker/compose/postarix.yml`. Compose type: *Docker
    Compose* (not Stack).
 3. **Environment:** paste the configuration from step 3, then change or add

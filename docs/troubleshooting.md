@@ -40,12 +40,49 @@ nc -vz -w 10 gmail-smtp-in.l.google.com 25  # from the host: is port 25 open?
 ```
 
 - `Connection timed out` to every server: your provider blocks outbound
-  port 25. Ask them to lift the block.
+  port 25; see below.
 - Refused by Gmail/Outlook with a policy message: check the reverse DNS (PTR)
   of your IP, the SPF/DKIM/DMARC records in the admin panel (all green), and
   blocklists ([MXToolbox](https://mxtoolbox.com/blacklists.aspx)).
 
-Retry the queue once fixed: `postarix exec postfix postqueue -f`.
+Retry the queue once fixed: `postarix exec postfix postqueue -f` (or
+**Server → Mail queue → Retry** in the admin panel). Messages wait in the
+queue and are retried for 5 days, so nothing is lost meanwhile.
+
+## Port 25 is blocked
+
+Check from the host:
+
+```bash
+nc -vz -w 10 gmail-smtp-in.l.google.com 25
+```
+
+A timeout means the provider drops outgoing connections to port 25. Ask them
+to lift the block (AWS, Google Cloud, Azure and Hetzner do on request). Where
+they will not (DigitalOcean blocks 25, 465 and 587 on every Droplet), send
+through a relay that accepts port **2525**: Brevo, SendGrid and Mailgun do.
+
+1. Create an account with the relay, add your domain there and publish the
+   records it gives (its DKIM key; usually an `include:` in your SPF record,
+   e.g. `v=spf1 mx include:spf.brevo.com -all`).
+2. Check that the port is open: `nc -vz -w 10 smtp-relay.brevo.com 2525`.
+3. In the admin panel, **Server → Outgoing routing → Smart hosts**: add
+   `[smtp-relay.brevo.com]:2525` with the relay's SMTP login.
+4. Choose it in the settings of each domain (or of a single mailbox).
+5. **Server → Mail queue → Retry** sends what was waiting.
+
+## The webmail says "Could not send the message"
+
+The API hands the message to Postfix over its internal submission port, and
+checks Postfix' certificate first. Read the reason with
+`postarix logs api | grep "Submission failed"`:
+
+- `ESOCKET` with a Let's Encrypt certificate on releases before
+  0.0.1-beta.5: the API did not trust public certificate authorities there.
+  Update.
+- `ESOCKET` or a certificate error otherwise: the `certs` service has no
+  valid certificate for `MAIL_HOSTNAME` yet (`postarix logs certs`).
+- `ECONNREFUSED`: Postfix is not running (`postarix ps`).
 
 ## Mail goes to the spam folder at Gmail or Outlook
 
