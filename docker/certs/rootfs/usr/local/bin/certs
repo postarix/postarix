@@ -37,8 +37,20 @@ expires_within() { # seconds
   ! openssl x509 -in "$OUT/fullchain.pem" -noout -checkend "$1" >/dev/null
 }
 
+# Whether the installed certificate is valid for MAIL_HOSTNAME (it may be one
+# made for a previous name: the mail services and the API then refuse it).
+names_hostname() {
+  [ -s "$OUT/fullchain.pem" ] && openssl x509 -in "$OUT/fullchain.pem" -noout -checkhost "$MAIL_HOSTNAME" 2>/dev/null | grep -q 'does match'
+}
+
+# Whether it is our temporary self-signed one (issued by itself).
+self_signed() {
+  [ "$(openssl x509 -in "$OUT/fullchain.pem" -noout -issuer 2>/dev/null | sed 's/^issuer=//')" = \
+    "$(openssl x509 -in "$OUT/fullchain.pem" -noout -subject 2>/dev/null | sed 's/^subject=//')" ]
+}
+
 selfsigned() {
-  if expires_within $((30 * 86400)); then
+  if expires_within $((30 * 86400)) || ! names_hostname; then
     tmp=$(mktemp -d)
     openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=$MAIL_HOSTNAME" \
       -addext "subjectAltName=DNS:$MAIL_HOSTNAME" \
@@ -112,10 +124,12 @@ while true; do
   if [ ! -s "$OUT/fullchain.pem" ]; then
     log "no certificate yet; using a temporary self-signed one"
     selfsigned
+  elif ! names_hostname; then
+    log "the certificate is not for $MAIL_HOSTNAME; using a temporary self-signed one"
+    selfsigned
   fi
   # While serving the temporary certificate, retry the real one every few minutes.
-  if [ "$MODE" != selfsigned ] && openssl x509 -in "$OUT/fullchain.pem" -noout -issuer 2>/dev/null \
-       | grep -q "CN *= *$MAIL_HOSTNAME\$"; then
+  if [ "$MODE" != selfsigned ] && self_signed; then
     sleep 300
   else
     sleep "$CHECK_INTERVAL"
