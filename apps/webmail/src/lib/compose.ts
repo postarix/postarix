@@ -13,6 +13,8 @@ export interface Attachment {
 
 export interface DraftInput {
   from: string;
+  /** The sender's name shown with From ("Ann Example <ann@…>"), or '' for the bare address. */
+  fromName?: string;
   to: EmailAddress[];
   cc: EmailAddress[];
   bcc: EmailAddress[];
@@ -124,7 +126,7 @@ export function draftEmail(input: DraftInput, draftsId: string): Record<string, 
   return {
     mailboxIds: { [draftsId]: true },
     keywords: { $draft: true, $seen: true },
-    from: [{ email: input.from }],
+    from: [{ ...(input.fromName?.trim() ? { name: input.fromName.trim() } : {}), email: input.from }],
     ...(input.to.length ? { to: input.to } : {}),
     ...(input.cc.length ? { cc: input.cc } : {}),
     ...(input.bcc.length ? { bcc: input.bcc } : {}),

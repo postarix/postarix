@@ -55,6 +55,11 @@ describe('forwardDraft', () => {
 });
 
 describe('draftEmail', () => {
+  it('puts the sender’s name in From when there is one', () => {
+    expect(draftEmail({ ...emptyDraft('ann@me.com'), fromName: ' Ann Example ' }, 'D1').from).toEqual([{ name: 'Ann Example', email: 'ann@me.com' }]);
+    expect(draftEmail(emptyDraft('ann@me.com'), 'D1').from).toEqual([{ email: 'ann@me.com' }]);
+  });
+
   it('leaves out empty address lists', () => {
     const email = draftEmail({ ...emptyDraft('ann@me.com'), to: [{ email: 'bob@x.com' }], subject: 'Hola', text: 'Año' }, 'D1');
     expect(email.to).toEqual([{ email: 'bob@x.com' }]);

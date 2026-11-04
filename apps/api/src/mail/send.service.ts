@@ -10,11 +10,12 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { DATABASE, ENV, MAIL_ENGINE, COUNTER_STORE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
+import { mailboxes, user } from '../db/schema/index.js';
 import { findOwnMailbox } from '../jmap/my-mailbox.js';
 import { BlobTooLargeError, JmapMethodError, ServerJmap } from './jmap-client.js';
 import { stripBccHeader } from './raw-message.js';
@@ -176,14 +177,23 @@ export class SendService {
   }
 
   /** Addresses the user may put in From: their mailbox and their organization's aliases that deliver to it. */
-  async identities(userId: string): Promise<{ address: string; addresses: string[] }> {
+  async identities(userId: string): Promise<{ address: string; name: string; addresses: string[] }> {
     const address = await findOwnMailbox(this.db, userId);
     if (!address) throw new NotFoundException('You have no mailbox');
+    // The name shown with From: the mailbox's display name, else the account's (when it is not just the address).
+    const [named] = await this.db
+      .select({ displayName: mailboxes.displayName, userName: user.name })
+      .from(mailboxes)
+      .leftJoin(user, eq(user.id, mailboxes.userId))
+      .where(eq(mailboxes.address, address))
+      .limit(1);
+    const userName = named?.userName && named.userName.toLowerCase() !== address ? named.userName : '';
+    const name = (named?.displayName || userName).trim();
     const result = await this.db.execute<{ sender: string }>(
       // "@domain" entries allow any address of a domain; the webmail offers the listed addresses.
       sql`SELECT sender FROM mail.sender_logins WHERE login = ${address} AND sender NOT LIKE '@%' ORDER BY sender <> ${address}, sender`,
     );
-    return { address, addresses: result.rows.map((r) => r.sender) };
+    return { address, name, addresses: result.rows.map((r) => r.sender) };
   }
 
   private singleAddress(list: DraftAddress[] | null, header: string): string {

@@ -48,6 +48,7 @@ export function useComposer(email: string) {
   }, [notice]);
   const own = identities.data?.addresses ?? [email];
   const defaultFrom = identities.data?.address ?? email;
+  const fromName = identities.data?.name ?? '';
 
   const element = (
     <>
@@ -73,7 +74,9 @@ export function useComposer(email: string) {
       ) : null}
     </>
   );
-  return { element, open: setDraft, own, defaultFrom };
+  // Every draft carries the sender's name, so recipients see "Name <address>".
+  const open = (next: DraftInput) => setDraft({ ...next, fromName: next.fromName ?? fromName });
+  return { element, open, own, defaultFrom };
 }
 
 export function MailPage({
