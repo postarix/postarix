@@ -3,7 +3,7 @@ import { sso } from '@better-auth/sso';
 import { betterAuth } from 'better-auth';
 import { eq } from 'drizzle-orm';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
@@ -13,6 +13,7 @@ import { type CounterStore, MemoryCounterStore } from '../core/counter-store.js'
 import { mapOidcConfigSecret, openOidcConfig } from '../sso/sso-crypto.js';
 import { resolveSsoUser } from './sso-resolver.js';
 import { hasInstanceAdminRole } from './roles.js';
+import { closedWhileImpersonating, IMPERSONATION_FACTOR, postarixImpersonation } from './impersonation.js';
 import { FailureLimiter } from '../mail-auth/failure-limiter.js';
 import { loadInstanceSettings, passwordProblem } from '../settings/instance-settings.js';
 import { webSignIns } from '../metrics/metrics.js';
@@ -198,6 +199,16 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
         if ((ctx.path.startsWith('/sso/') || ctx.path === '/sign-in/sso') && !isOpenSsoEndpoint(ctx.path)) {
           throw new APIError('NOT_FOUND');
         }
+        // "Sign in as" goes through our API (rules, reason, audit record):
+        // Better Auth's own impersonation endpoint stays closed.
+        if (ctx.path === '/admin/impersonate-user') throw new APIError('NOT_FOUND');
+        // A "Sign in as" session never touches its account's security.
+        if (closedWhileImpersonating(ctx.path)) {
+          const current = await getSessionFromCtx(ctx).catch(() => null);
+          if ((current?.session as { impersonatedBy?: string | null } | undefined)?.impersonatedBy) {
+            throw new APIError('FORBIDDEN', { message: 'Not available while signed in as someone else', code: 'IMPERSONATING' });
+          }
+        }
         // The instance's password policy, wherever a password is chosen.
         if (PASSWORD_PATHS.has(ctx.path)) {
           const body = (ctx.body ?? {}) as { password?: unknown; newPassword?: unknown };
@@ -240,6 +251,10 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
     },
     plugins: [
       admin(),
+      postarixImpersonation(env.AUTH_SECRET, async (sessionId) => {
+        // Opened by an administrator who proved a second factor (checked before).
+        await db.insert(schema.sessionFactors).values({ sessionId, method: IMPERSONATION_FACTOR }).onConflictDoNothing();
+      }),
       organization({
         allowUserToCreateOrganization: (user) =>
           env.ALLOW_USER_CREATE_ORG || hasInstanceAdminRole((user as { role?: string | null }).role),

@@ -117,6 +117,34 @@ password encrypted until it is stopped or deleted; a one-time job erases it
 when it ends. **Run now** starts a repeating job at once. Old servers on a
 private network must be allowed first (see [Migration](MIGRATION.md)).
 
+### Sign in as a mailbox
+
+Instance administrators can open someone's mailbox in the webmail, as its
+owner, with **Sign in as** (the arrow in the mailbox's row). It is meant for
+legitimate needs: a colleague on leave, a departed employee's pending mail, a
+support case the owner asked for.
+
+- It needs two-step verification on the administrator's session, and a
+  **reason**, which is kept in the organization's **Activity** with who, when
+  and which mailbox (and when they left, with how long they stayed): the
+  organization's own administrators see it.
+- The session lasts at most an hour. A banner says whose mailbox it is, with
+  **Leave** to go back to your own session. Inside, only the mailbox's mail,
+  calendar, contacts and settings are open: no administration, and nothing
+  about the account's security (password, app passwords, two-step
+  verification, passkeys).
+- Another instance administrator's mailbox cannot be entered this way.
+- **Settings → Sign in as a mailbox** lets each organization's owners and
+  admins do the same in their organization's mailboxes (off by default).
+
+::: warning The law, not the software, decides when this is allowed
+In many countries reading an employee's mail requires a legitimate reason,
+proportionality and, often, having told people beforehand in a written policy
+(in the European Union, under the GDPR and national labour law). Postarix
+records every access but cannot judge whether it was allowed: write your
+policy, tell people, and keep the reasons meaningful.
+:::
+
 ## Aliases
 
 - An alias forwards to one or more addresses, inside or outside the server.

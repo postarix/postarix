@@ -11,6 +11,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { AUTH } from '../core/tokens.js';
 import { ApiKeysService } from '../api-keys/api-keys.js';
 import type { Auth } from './auth.js';
+import { openWhileImpersonating } from './impersonation.js';
 import { SECOND_FACTOR_REQUIRED, SecondFactorPolicy } from './second-factor-policy.js';
 import { ALLOW_WITHOUT_SECOND_FACTOR, type AuthenticatedRequest, IS_PUBLIC } from './session.js';
 
@@ -55,6 +56,14 @@ export class SessionGuard implements CanActivate {
     if (!session) throw new UnauthorizedException();
 
     request.auth = session;
+    // An administrator inside someone's mailbox ("Sign in as") reaches its
+    // mail, calendar and settings only: no administration, no account security.
+    if ((session.session as { impersonatedBy?: string | null }).impersonatedBy) {
+      const path = (request.originalUrl ?? request.url ?? '').split('?')[0] ?? '';
+      if (!openWhileImpersonating(path) && path !== '/api/me/impersonation/stop') {
+        throw new ForbiddenException({ message: 'Not available while signed in as someone else', code: 'IMPERSONATING' });
+      }
+    }
     const exempt = this.reflector.getAllAndOverride<boolean>(ALLOW_WITHOUT_SECOND_FACTOR, [context.getHandler(), context.getClass()]);
     if (!exempt && !(await this.secondFactor.satisfied(session.user.id, session.session.id))) {
       throw new ForbiddenException({

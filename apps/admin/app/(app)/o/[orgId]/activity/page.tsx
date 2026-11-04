@@ -60,7 +60,17 @@ export default function ActivityPage() {
               {rows.map((event) => (
                 <TableRow key={event.id}>
                   <TableCell className="pl-4 text-muted-foreground">{formatDate(event.createdAt)}</TableCell>
-                  <TableCell>{describe(event)}</TableCell>
+                  <TableCell className="whitespace-normal">
+                    {describe(event)}
+                    {typeof event.details?.reason === 'string' ? (
+                      <span className="block max-w-md text-xs text-muted-foreground">
+                        {t('Reason')}: {event.details.reason}
+                      </span>
+                    ) : null}
+                    {typeof event.details?.minutes === 'number' ? (
+                      <span className="block text-xs text-muted-foreground">{t('{n} minutes').replace('{n}', String(event.details.minutes))}</span>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="font-medium">{event.targetLabel ?? '—'}</TableCell>
                   <TableCell>
                     {event.actorEmail ?? 'System'}

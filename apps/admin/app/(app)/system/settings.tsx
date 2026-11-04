@@ -22,6 +22,7 @@ import { t } from '@/lib/i18n';
 export interface InstanceSettings {
   signIn: { maxFailures: number; lockMinutes: number };
   passwords: { minLength: number; requireMixed: boolean };
+  impersonation: { allowOrgAdmins: boolean };
   quota: { warnAtPercent: number; sender: string; subject: string; template: string };
   quarantine: {
     retentionDays: number | null;
@@ -117,6 +118,7 @@ export function SettingsTab() {
       build={(data) => ({
         signIn: { maxFailures: int(data, 'maxFailures'), lockMinutes: int(data, 'lockMinutes') },
         passwords: { minLength: int(data, 'minLength'), requireMixed: data.get('requireMixed') !== null },
+        impersonation: { allowOrgAdmins: data.get('allowOrgAdmins') !== null },
         quota: { warnAtPercent: int(data, 'warnAtPercent'), sender: text(data, 'quotaSender'), subject: text(data, 'quotaSubject'), template: String(data.get('quotaTemplate') ?? '') },
       })}
     >
@@ -140,6 +142,17 @@ export function SettingsTab() {
               <Checkbox id="requireMixed" name="requireMixed" defaultChecked={s.passwords.requireMixed} />
               <FieldLabel htmlFor="requireMixed" className="font-normal">
                 {t('Require three of: lowercase, uppercase, digits, symbols')}
+              </FieldLabel>
+            </Field>
+          </Section>
+          <Section
+            title={t('Sign in as a mailbox')}
+            description={t('Instance administrators can open someone’s mailbox from the Mailboxes page, with two-step verification and a reason. Every access is recorded in the organization’s activity.')}
+          >
+            <Field orientation="horizontal">
+              <Checkbox id="allowOrgAdmins" name="allowOrgAdmins" defaultChecked={s.impersonation.allowOrgAdmins} />
+              <FieldLabel htmlFor="allowOrgAdmins" className="font-normal">
+                {t('Also the owners and admins of each organization, in their organization’s mailboxes')}
               </FieldLabel>
             </Field>
           </Section>

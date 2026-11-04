@@ -382,7 +382,7 @@ export const sessionFactors = pgTable('session_factors', {
   sessionId: text()
     .primaryKey()
     .references(() => session.id, { onDelete: 'cascade' }),
-  method: text({ enum: ['passkey', 'two_factor', 'sso'] }).notNull(),
+  method: text({ enum: ['passkey', 'two_factor', 'sso', 'impersonation'] }).notNull(),
   createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
 
