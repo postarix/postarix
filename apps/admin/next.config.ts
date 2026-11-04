@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 // Where the Next.js server forwards /api requests. In production the reverse
 // proxy usually routes /api itself; this keeps development and simple setups
 // same-origin (cookies, no CORS). Next.js resolves rewrites when it builds, so
-// this is a build-time setting (the Docker image uses http://api:3000).
+// this is a build-time setting (the Docker image uses http://postarix-api:3000).
 const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:3000';
 
 const config: NextConfig = {

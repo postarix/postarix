@@ -15,7 +15,7 @@ COPY packages/ui packages/ui
 COPY apps/admin apps/admin
 # Where the admin server forwards /api when the reverse proxy does not route it
 # itself. Next.js fixes rewrites at build time.
-ARG API_INTERNAL_URL=http://api:3000
+ARG API_INTERNAL_URL=http://postarix-api:3000
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN API_INTERNAL_URL="$API_INTERNAL_URL" pnpm --filter @postarix/admin build \
  && mkdir -p /out \

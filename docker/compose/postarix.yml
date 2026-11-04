@@ -29,6 +29,9 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
       - ../postgres/10-postarix-mail-role.sh:/docker-entrypoint-initdb.d/10-postarix-mail-role.sh:ro
+    networks:
+      default:
+        aliases: [postarix-postgres]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postarix -d postarix"]
       interval: 5s
@@ -44,6 +47,9 @@ services:
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD}
     volumes:
       - valkey-data:/data
+    networks:
+      default:
+        aliases: [postarix-valkey]
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$VALKEY_PASSWORD\" valkey-cli ping | grep -q PONG"]
       interval: 5s
@@ -60,7 +66,7 @@ services:
     environment:
       # Logs for the admin panel (System → Logs); unset, nothing is reported.
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      POSTARIX_API_INTERNAL: postarix-api:3443
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     volumes:
       - certs:/certs:ro
@@ -89,11 +95,14 @@ services:
       CLAMAV_SERVERS: ${CLAMAV_SERVERS:-}
       # Logs for the admin panel (System → Logs); unset, nothing is reported.
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      POSTARIX_API_INTERNAL: postarix-api:3443
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     volumes:
       - rspamd-data:/var/lib/rspamd
       - certs:/certs:ro
+    networks:
+      default:
+        aliases: [postarix-rspamd]
     depends_on:
       unbound:
         condition: service_started
@@ -141,7 +150,7 @@ services:
         NODE_IMAGE: ${NODE_IMAGE:-node:24-trixie-slim}
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      DATABASE_URL: postgresql://postarix:${POSTGRES_PASSWORD}@postgres:5432/postarix
+      DATABASE_URL: postgresql://postarix:${POSTGRES_PASSWORD}@postarix-postgres:5432/postarix
       AUTH_URL: ${AUTH_URL:?set AUTH_URL (public URL of the API)}
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET}
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
@@ -155,7 +164,8 @@ services:
       MAIL_IMPORT_ALLOWED_HOSTS: ${MAIL_IMPORT_ALLOWED_HOSTS:-}
       QUARANTINE_RETENTION_DAYS: ${QUARANTINE_RETENTION_DAYS:-30}
       MAIL_ENGINE: cyrus
-      CYRUS_HOST: cyrus
+      CYRUS_HOST: postarix-cyrus
+      SUBMISSION_HOST: postarix-postfix
       CYRUS_PORT: 1143
       CYRUS_SECURITY: starttls
       # Cyrus' certificate names the public host; the shared certificate file
@@ -169,7 +179,7 @@ services:
       # By address: the JMAP service listens on the internal network only.
       CYRUS_JMAP_URL: https://${CYRUS_IP:-172.30.53.10}:8008
       # Filtering history shown to organization admins.
-      RSPAMD_CONTROLLER_URL: http://rspamd:11334
+      RSPAMD_CONTROLLER_URL: http://postarix-rspamd:11334
       RSPAMD_CONTROLLER_PASSWORD: ${RSPAMD_CONTROLLER_PASSWORD}
       RSPAMD_CONTROLLER_ENABLE_PASSWORD: ${RSPAMD_CONTROLLER_ENABLE_PASSWORD:-}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
@@ -180,8 +190,15 @@ services:
       POSTARIX_VERSION: ${POSTARIX_VERSION:-dev}
       DOMAIN_VERIFICATION: ${DOMAIN_VERIFICATION:-dns}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
-      VALKEY_URL: redis://:${VALKEY_PASSWORD}@valkey:6379
-    networks: [default, proxy]
+      VALKEY_URL: redis://:${VALKEY_PASSWORD}@postarix-valkey:6379
+    # The postarix-* aliases are what the services call each other: on a
+    # network shared with other apps (a Traefik network) a plain "postgres" or
+    # "api" may be another app's container.
+    networks:
+      default:
+        aliases: [postarix-api]
+      proxy:
+        aliases: [postarix-api]
     volumes:
       - certs:/certs:ro
     depends_on:
@@ -233,7 +250,8 @@ services:
       POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH}
       POSTARIX_SECRET_CYRUS_SMTP: ${POSTARIX_SECRET_CYRUS_SMTP:?run deploy/scripts/derive-secrets.sh}
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      CYRUS_SMTP_HOST: postarix-postfix:10588
+      POSTARIX_API_INTERNAL: postarix-api:3443
       # The admin IMAP service (for the API) binds to this address only too.
       ADMIN_LISTEN_ADDRESS: ${CYRUS_IP:-172.30.53.10}
       # The internal JMAP service (for the API) binds to this address only, so
@@ -255,6 +273,7 @@ services:
     networks:
       default:
         ipv4_address: ${CYRUS_IP:-172.30.53.10}
+        aliases: [postarix-cyrus]
       proxy: {}
     depends_on:
       api:
@@ -295,6 +314,9 @@ services:
       - lmtp-socket:/run/cyrus-lmtp
       - mail-logs:/var/log/postarix
       - certs:/certs:ro
+    networks:
+      default:
+        aliases: [postarix-postfix]
     depends_on:
       postgres:
         condition: service_healthy
@@ -323,7 +345,7 @@ services:
       CROWDSEC_BOUNCER_KEY: ${CROWDSEC_BOUNCER_KEY:-}
       # Logs for the admin panel (System → Logs); unset, nothing is reported.
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      POSTARIX_API_INTERNAL: postarix-api:3443
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     ports:
       - "127.0.0.1:${CROWDSEC_LAPI_PORT:-8081}:8080"
@@ -345,7 +367,7 @@ services:
     environment:
       # Logs for the admin panel (System → Logs); unset, nothing is reported.
       POSTARIX_SECRET_REPORTS: ${POSTARIX_SECRET_REPORTS:-}
-      POSTARIX_API_INTERNAL: api:3443
+      POSTARIX_API_INTERNAL: postarix-api:3443
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
     volumes:
       - clamav-data:/var/lib/clamav

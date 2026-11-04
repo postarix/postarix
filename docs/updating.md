@@ -13,10 +13,10 @@ cd /opt/postarix
 BACKUP_AGE_RECIPIENTS=/etc/postarix/backup-recipients.txt \
   deploy/scripts/backup.sh /srv/backups/postarix-before-update
 
-# 2. Get the new release (here 0.0.1-beta.5), keeping your postarix.env
-git fetch --depth 1 origin tag v0.0.1-beta.5
-git checkout v0.0.1-beta.5
-sed -i 's/^POSTARIX_VERSION=.*/POSTARIX_VERSION=0.0.1-beta.5/' docker/compose/postarix.env
+# 2. Get the new release (here 0.0.1-beta.6), keeping your postarix.env
+git fetch --depth 1 origin tag v0.0.1-beta.6
+git checkout v0.0.1-beta.6
+sed -i 's/^POSTARIX_VERSION=.*/POSTARIX_VERSION=0.0.1-beta.6/' docker/compose/postarix.env
 
 # 3. Add any secret the new release needs (changes nothing else)
 deploy/scripts/derive-secrets.sh docker/compose/postarix.env
@@ -38,7 +38,7 @@ in the service's **Environment**, then **Deploy**. See
 ## Kubernetes
 
 ```bash
-helm upgrade postarix oci://ghcr.io/postarix/charts/postarix --version 0.0.1-beta.5 -n postarix -f my-values.yaml
+helm upgrade postarix oci://ghcr.io/postarix/charts/postarix --version 0.0.1-beta.6 -n postarix -f my-values.yaml
 ```
 
 The chart keeps the secrets it generated; new ones are created on upgrade.
@@ -55,7 +55,7 @@ Release images are signed. To check that an image was built by this project's
 release workflow:
 
 ```bash
-cosign verify ghcr.io/postarix/api:0.0.1-beta.5 \
+cosign verify ghcr.io/postarix/api:0.0.1-beta.6 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/postarix/postarix/\.github/workflows/release\.yml@refs/tags/v'
 ```
