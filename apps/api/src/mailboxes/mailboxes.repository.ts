@@ -1,8 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, count, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { type DomainRow, domains, mailboxes, type MailboxRow, mailboxSendAs, member } from '../db/schema/index.js';
+import {
+  appPasswords,
+  type DomainRow,
+  domains,
+  externalIdentities,
+  mailboxes,
+  type MailboxRow,
+  mailboxSendAs,
+  member,
+  type SharedMailboxRight,
+  sharedMailboxMembers,
+  user,
+} from '../db/schema/index.js';
 import { type DomainUsage, lockDomain } from '../domains/domain-limits.js';
 import type { OrgRole, TenantContext } from '../tenancy/tenant-context.js';
 
@@ -187,5 +199,52 @@ export class MailboxesRepository {
       .where(and(this.scope(ctx), eq(mailboxes.id, id)))
       .returning({ id: mailboxes.id });
     return deleted.length > 0;
+  }
+
+  /** What an account leaves behind in the organization when it goes (for the audit log). */
+  async accountFootprint(ctx: TenantContext, userId: string): Promise<{ identities: { issuer: string; subject: string }[]; appPasswords: number }> {
+    const identities = await this.db
+      .select({ issuer: externalIdentities.issuer, subject: externalIdentities.subject })
+      .from(externalIdentities)
+      .where(and(eq(externalIdentities.organizationId, ctx.organizationId), eq(externalIdentities.userId, userId)));
+    const [passwords] = await this.db.select({ n: count() }).from(appPasswords).where(eq(appPasswords.userId, userId));
+    return { identities, appPasswords: passwords?.n ?? 0 };
+  }
+
+  /**
+   * Makes a mailbox shared in one step: its account goes (with its sessions,
+   * app passwords, external identities and memberships, by cascade), and its
+   * first members are added.
+   */
+  async convertToShared(
+    ctx: TenantContext,
+    id: string,
+    change: { userId: string | null; sharedSeen: boolean; members: { userId: string; rights: SharedMailboxRight }[] },
+  ): Promise<MailboxRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(mailboxes)
+        .set({ kind: 'shared', userId: null, sharedSeen: change.sharedSeen, updatedAt: new Date() })
+        .where(and(this.scope(ctx), eq(mailboxes.id, id), ne(mailboxes.kind, 'shared')))
+        .returning();
+      if (!row) return undefined;
+      if (change.userId) await tx.delete(user).where(eq(user.id, change.userId));
+      if (change.members.length > 0) await tx.insert(sharedMailboxMembers).values(change.members.map((m) => ({ mailboxId: id, ...m })));
+      return row;
+    });
+  }
+
+  /** Gives a shared mailbox to a (new) account; its members go. Returns who they were. */
+  async convertToPerson(ctx: TenantContext, id: string, userId: string): Promise<{ row: MailboxRow; formerMembers: string[] } | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(mailboxes)
+        .set({ kind: 'person', userId, sharedSeen: false, updatedAt: new Date() })
+        .where(and(this.scope(ctx), eq(mailboxes.id, id), eq(mailboxes.kind, 'shared')))
+        .returning();
+      if (!row) return undefined;
+      const removed = await tx.delete(sharedMailboxMembers).where(eq(sharedMailboxMembers.mailboxId, id)).returning({ userId: sharedMailboxMembers.userId });
+      return { row, formerMembers: removed.map((r) => r.userId) };
+    });
   }
 }

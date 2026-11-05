@@ -31,6 +31,7 @@ import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
 import { SharedMailboxesService } from './shared-mailboxes.js';
 import { type MailboxChanges, MailboxesRepository } from './mailboxes.repository.js';
+import type { ConvertMailboxInput } from './mailboxes.dto.js';
 
 export interface MailboxUsageDto {
   usedBytes: number | null;
@@ -244,6 +245,83 @@ export class MailboxesService {
       await this.accounts.signOutEverywhere(row.userId, 'mailbox_disabled');
     }
     await this.audit.record(ctx, 'mailbox.updated', { type: 'mailbox', id: row.id, label: row.address }, changes);
+    return toMailboxDto(row);
+  }
+
+  /**
+   * Turns a mailbox into a shared one. Its mail stays where it is on the mail
+   * server (folders, flags, read state, filters): only who reaches it changes.
+   * Its account goes, and with it its password, app passwords, sessions
+   * (everywhere, mail apps included), external identities and application
+   * tokens; its first members are added in the same step.
+   */
+  async convertToShared(ctx: TenantContext, id: string, input: Extract<ConvertMailboxInput, { to: 'shared' }>): Promise<MailboxDto> {
+    const current = await this.require(ctx, id);
+    if (current.kind === 'shared') throw new UnprocessableEntityException('This mailbox is shared already');
+    // Like deleting the account: never an instance administrator's, nor the only owner's.
+    if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: true });
+    // Members are people with a mailbox here (not the account that is going).
+    const people = new Map(
+      (await this.repository.list(ctx)).filter((m) => m.kind === 'person' && m.userId && m.userId !== current.userId).map((m) => [m.userId as string, m.address]),
+    );
+    const unknown = input.members.filter((m) => !people.has(m.userId));
+    if (unknown.length > 0) {
+      throw new UnprocessableEntityException({ message: 'Members must be people with a mailbox in this organization', code: 'UNKNOWN_MEMBER' });
+    }
+    const footprint = current.userId ? await this.repository.accountFootprint(ctx, current.userId) : { identities: [], appPasswords: 0 };
+    const memberships = current.userId ? await this.shared.membershipsOf(current.userId) : [];
+    // Open sessions end while the account still names the address.
+    if (current.userId) await this.accounts.signOutEverywhere(current.userId, 'mailbox_converted');
+    const row = await this.repository.convertToShared(ctx, id, { userId: current.userId, sharedSeen: input.sharedSeen, members: input.members });
+    if (!row) throw new ConflictException('The mailbox changed meanwhile; reload and try again');
+    // Members and seen-state mode on the mail server; any other access goes.
+    await this.shared.apply(row).catch((error: unknown) => this.logger.warn(`Could not set up the shared mailbox ${row.address}: ${String(error)}`));
+    for (const other of memberships) {
+      await this.shared.apply(other).catch((error: unknown) => this.logger.warn(`Could not update the members of ${other.address}: ${String(error)}`));
+    }
+    void this.forgetShares(ctx, row.address);
+    await this.audit.record(
+      ctx,
+      'mailbox.converted',
+      { type: 'mailbox', id: row.id, label: row.address },
+      {
+        from: current.kind,
+        to: 'shared',
+        sharedSeen: input.sharedSeen,
+        members: input.members.map((m) => ({ member: people.get(m.userId), rights: m.rights })),
+        removedIdentities: footprint.identities,
+        removedAppPasswords: footprint.appPasswords,
+      },
+    );
+    return toMailboxDto(row);
+  }
+
+  /**
+   * Turns a shared mailbox into a person's: a new account signs in as it with
+   * the given password, and its members lose it (in open sessions too). Its
+   * mail and read state stay.
+   */
+  async convertToPerson(ctx: TenantContext, id: string, input: Extract<ConvertMailboxInput, { to: 'person' }>): Promise<MailboxDto> {
+    const current = await this.require(ctx, id);
+    if (current.kind !== 'shared') throw new UnprocessableEntityException('Only a shared mailbox can become a person\'s');
+    const formerAddresses = (await this.shared.members(ctx, id)).map((m) => m.address);
+    const userId = await this.accounts.create({ email: current.address, password: input.password, name: current.displayName || current.address });
+    let converted: Awaited<ReturnType<MailboxesRepository['convertToPerson']>>;
+    try {
+      converted = await this.repository.convertToPerson(ctx, id, userId);
+    } catch (error) {
+      await this.undo(`account of ${current.address}`, () => this.accounts.delete(userId));
+      throw error;
+    }
+    if (!converted) {
+      await this.undo(`account of ${current.address}`, () => this.accounts.delete(userId));
+      throw new ConflictException('The mailbox changed meanwhile; reload and try again');
+    }
+    const { row, formerMembers } = converted;
+    // No members left: every ACL goes, and whoever had it open is signed out.
+    await this.shared.apply(row, formerMembers).catch((error: unknown) => this.logger.warn(`Could not take ${row.address} away from its members: ${String(error)}`));
+    await this.collections.restrict(row.address);
+    await this.audit.record(ctx, 'mailbox.converted', { type: 'mailbox', id: row.id, label: row.address }, { from: 'shared', to: 'person', removedMembers: formerAddresses });
     return toMailboxDto(row);
   }
 

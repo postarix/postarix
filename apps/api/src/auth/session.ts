@@ -37,3 +37,13 @@ export function apiKeyOrganizations(session: AuthSession): string[] | undefined 
 export function isSuperAdmin(session: AuthSession): boolean {
   return hasInstanceAdminRole(session.user.role) && apiKeyOrganizations(session) === undefined;
 }
+
+/**
+ * A person signed in to the panel: not an API key, not a connected
+ * application's token. For actions offered in the admin panel only.
+ */
+export function isPersonSession(session: AuthSession | undefined): boolean {
+  if (!session) return false;
+  const id = (session.session as { id?: string }).id ?? '';
+  return !id.startsWith('apikey:') && !id.startsWith('app:');
+}
