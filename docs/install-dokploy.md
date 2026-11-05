@@ -131,7 +131,11 @@ domain of the `webmail` service in Dokploy (step 6).
    ```
 
 5. Leave **Isolated deployment** off: Postarix creates its own internal
-   networks, and only its web services join `dokploy-network`.
+   networks, and only its web services (`api`, `admin`, `webmail`, and
+   `cyrus` for calendars and contacts) join `dokploy-network`. Other apps on
+   that network reach Postarix by its public name, through Traefik: no
+   Postarix container takes the mail host name as its own (see
+   Troubleshooting).
 6. **Deploy.** The first deployment downloads the images and takes a few
    minutes. In **Logs**, every container should end up running; `api`,
    `cyrus` and `postfix` report *healthy* after a minute or two.
@@ -208,4 +212,11 @@ your environment. See [Updating](./updating).
   database keeps the password it was created with. On a new installation,
   remove the project's volumes and deploy again; never generate the secrets
   twice for the same data.
+- **Another app on the server gets `ECONNREFUSED <10.x address>:443`
+  calling `https://<mail host>/api/…`:** on releases before 0.0.1-beta.11,
+  `cyrus` and `postfix` took the mail host name as their container host name,
+  and Docker's DNS answered that name with `cyrus`' address to every
+  container on `dokploy-network`. Update and redeploy (the containers are
+  recreated). Check from the other app's container:
+  `getent hosts <mail host>` must give the server's public address.
 - More in [Troubleshooting](./troubleshooting).

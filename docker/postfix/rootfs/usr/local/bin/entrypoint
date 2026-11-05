@@ -9,6 +9,9 @@ mkdir -p "$LOG_DIR"
 
 : "${MAIL_HOSTNAME:?MAIL_HOSTNAME is required (the public name of the mail server)}"
 : "${POSTFIX_DB_PASSWORD:?POSTFIX_DB_PASSWORD is required}"
+# Its name in reports to the API (Postfix itself uses myhostname below; the
+# container's host name is left unset).
+export POSTARIX_NODE_NAME="${POSTARIX_NODE_NAME:-$MAIL_HOSTNAME}"
 export POSTFIX_DB_HOST="${POSTFIX_DB_HOST:-postgres}"
 export POSTFIX_DB_NAME="${POSTFIX_DB_NAME:-postarix}"
 export POSTFIX_DB_USER="${POSTFIX_DB_USER:-postarix_mail}"
