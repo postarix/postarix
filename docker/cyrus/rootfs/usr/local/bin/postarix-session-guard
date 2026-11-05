@@ -14,7 +14,7 @@ set -u
 . /etc/postarix/mail-auth.env
 port=${POSTARIX_API_INTERNAL##*:}
 base="https://${MAIL_HOSTNAME}:${port}/api/internal/sessions/disconnects"
-node=$(hostname)
+node=${POSTARIX_NODE_NAME:-$(hostname)}
 
 api() {
   curl --silent --show-error --fail --proto '=https' \

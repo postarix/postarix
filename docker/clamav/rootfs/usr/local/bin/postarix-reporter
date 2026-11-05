@@ -21,7 +21,8 @@ version=$5
 port=${POSTARIX_API_INTERNAL##*:}
 base="https://${MAIL_HOSTNAME}:${port}/api/internal/reports"
 work=$(mktemp -d)
-host=$(hostname)
+# A stable name for this container (its host name is not set: see docs/install-dokploy.md).
+host=${POSTARIX_NODE_NAME:-$(hostname)}
 
 api() {
   curl --silent --show-error --fail --max-time 20 --proto '=https' \
