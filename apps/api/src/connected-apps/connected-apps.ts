@@ -1,3 +1,4 @@
+import { ApiDoc } from '../openapi/openapi.js';
 import { randomBytes } from 'node:crypto';
 import {
   Body,
@@ -303,23 +304,27 @@ const userIdPipe = new ZodValidationPipe(z.string().min(1).max(100));
 export class ConnectedAppsController {
   constructor(@Inject(ConnectedAppsService) private readonly apps: ConnectedAppsService) {}
 
+  @ApiDoc({ summary: 'List connected applications' })
   @Get()
   async list(@Tenant() ctx: TenantContext) {
     return { data: await this.apps.list(ctx) };
   }
 
+  @ApiDoc({ summary: 'Register a connected application', description: 'Owners. Scopes, the issuer of the identities it names people by, allowed addresses, expiry, and a secret (returned once as `clientSecret`) or public keys for private_key_jwt.' })
   @Post()
   @RequireOrgRole('owner')
   create(@Tenant() ctx: TenantContext, @Body(new ZodValidationPipe(createAppSchema)) body: z.infer<typeof createAppSchema>) {
     return this.apps.create(ctx, body);
   }
 
+  @ApiDoc({ summary: 'Change a connected application' })
   @Patch(':id')
   @RequireOrgRole('owner')
   update(@Tenant() ctx: TenantContext, @Param('id', idPipe) id: string, @Body(new ZodValidationPipe(updateAppSchema)) body: z.infer<typeof updateAppSchema>) {
     return this.apps.update(ctx, id, body);
   }
 
+  @ApiDoc({ summary: 'Give a connected application a new secret', description: 'The old one stops working; the new one is returned once.' })
   @Post(':id/secret')
   @RequireOrgRole('owner')
   @HttpCode(200)
@@ -327,6 +332,7 @@ export class ConnectedAppsController {
     return this.apps.rotateSecret(ctx, id);
   }
 
+  @ApiDoc({ summary: 'Revoke a connected application', description: 'It stops working at once, its tokens included.' })
   @Post(':id/revoke')
   @RequireOrgRole('owner')
   @HttpCode(200)
@@ -351,17 +357,20 @@ const supervisionBody = z.strictObject({ enabled: z.boolean(), notify: z.boolean
 export class SupervisionController {
   constructor(@Inject(ConnectedAppsService) private readonly apps: ConnectedAppsService) {}
 
+  @ApiDoc({ summary: 'Supervision settings', description: 'Whether supervision is allowed, whether people are told, who may supervise, recent supervision.' })
   @Get()
   get(@Tenant() ctx: TenantContext) {
     return this.apps.supervision(ctx);
   }
 
+  @ApiDoc({ summary: 'Allow or forbid supervision', description: 'Owners. Off by default.' })
   @Put()
   @RequireOrgRole('owner')
   set(@Tenant() ctx: TenantContext, @Body(new ZodValidationPipe(supervisionBody)) body: z.infer<typeof supervisionBody>) {
     return this.apps.setSupervision(ctx, body);
   }
 
+  @ApiDoc({ summary: 'Let a person supervise', description: 'A right of its own, not part of being an owner or administrator.' })
   @Put('supervisors/:userId')
   @RequireOrgRole('owner')
   add(@Tenant() ctx: TenantContext, @Param('userId', userIdPipe) userId: string) {

@@ -1,3 +1,4 @@
+import { ApiDoc } from '../openapi/openapi.js';
 import {
   Body,
   Controller,
@@ -235,11 +236,13 @@ const mailboxIdPipe = new ZodValidationPipe(z.uuid());
 export class SharedMailboxMembersController {
   constructor(@Inject(SharedMailboxesService) private readonly shared: SharedMailboxesService) {}
 
+  @ApiDoc({ summary: 'Members of a shared mailbox', description: 'People who use it and their rights: `read`, `readWrite` (also mark, move, delete, drafts) or `send` (also send as it).' })
   @Get('members')
   async list(@Tenant() ctx: TenantContext, @Param('mailboxId', mailboxIdPipe) mailboxId: string) {
     return { data: await this.shared.members(ctx, mailboxId) };
   }
 
+  @ApiDoc({ summary: 'Add a member or change their rights', description: 'A person of the organization with their own mailbox (`userId` from the mailbox list). Less rights end their open sessions at once.' })
   @Put('members/:userId')
   async set(
     @Tenant() ctx: TenantContext,
@@ -250,12 +253,14 @@ export class SharedMailboxMembersController {
     return { data: await this.shared.setMember(ctx, mailboxId, userId, body.rights) };
   }
 
+  @ApiDoc({ summary: 'Remove a member', description: 'Their access ends at once, open mail app sessions included.' })
   @Delete('members/:userId')
   @HttpCode(204)
   async remove(@Tenant() ctx: TenantContext, @Param('mailboxId', mailboxIdPipe) mailboxId: string, @Param('userId', userIdPipe) userId: string): Promise<void> {
     await this.shared.removeMember(ctx, mailboxId, userId);
   }
 
+  @ApiDoc({ summary: 'Re-apply the members to the mail server', description: 'Done every hour anyway; returns who lost access the mail server still gave.' })
   @Post('access/reconcile')
   @HttpCode(200)
   reconcile(@Tenant() ctx: TenantContext, @Param('mailboxId', mailboxIdPipe) mailboxId: string) {
@@ -272,6 +277,7 @@ const mailOptionsBody = z.strictObject({ sharedSenderHeader: z.boolean() });
 export class OrganizationMailOptionsController {
   constructor(@Inject(SharedMailboxesService) private readonly shared: SharedMailboxesService) {}
 
+  @ApiDoc({ summary: 'Organization mail options', description: '`sharedSenderHeader`: mail sent from a shared mailbox carries a Sender header with the person.' })
   @Get()
   get(@Tenant() ctx: TenantContext) {
     return this.shared.mailOptions(ctx);
