@@ -26,8 +26,8 @@ describe('Shared mailboxes on the real mail server', () => {
   let outsider: string;
   const annWeb = new ApiClient();
 
-  const call = async (client: ApiClient, methodCalls: [string, Record<string, unknown>, string][]) =>
-    (await client.ok<{ methodResponses: MethodResponse[] }>('POST', '/api/jmap/', { using: USING, methodCalls })).methodResponses;
+  const call = async (client: ApiClient, methodCalls: [string, Record<string, unknown>, string][]): Promise<[MethodResponse, ...MethodResponse[]]> =>
+    (await client.ok<{ methodResponses: [MethodResponse, ...MethodResponse[]] }>('POST', '/api/jmap/', { using: USING, methodCalls })).methodResponses;
 
   beforeAll(async () => {
     await admin.signIn(config.adminEmail, config.adminPassword);
@@ -58,7 +58,7 @@ describe('Shared mailboxes on the real mail server', () => {
     await call(annWeb, [['Email/set', { accountId: team.address, update: { [id]: { 'keywords/$seen': true } } }, 's']]);
     const benImap = await imapLogin(ben.address, PASSWORD);
     const status = await benImap.status('Other Users/support', { unseen: true });
-    expect(status.unseen).toBe(0);
+    expect(status && status.unseen).toBe(0);
     await benImap.logout();
 
     // A reader cannot change it.
@@ -96,7 +96,7 @@ describe('Shared mailboxes on the real mail server', () => {
         's',
       ],
     ]);
-    const emailId = ((created.created as Record<string, { id: string }>).d).id;
+    const emailId = (created.created as Record<string, { id: string }>).d!.id;
     const result = await annWeb.ok<{ sent: boolean; movedToSent: boolean }>('POST', '/api/mail/send', { emailId, accountId: team.address });
     expect(result).toEqual({ sent: true, movedToSent: true });
 
