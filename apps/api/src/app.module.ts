@@ -18,6 +18,7 @@ import { HealthController } from './health/health.controller.js';
 import { JmapModule } from './jmap/jmap.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { MailAuthModule } from './mail-auth/mail-auth.module.js';
+import { SessionDisconnectsModule } from './mail-sessions/session-disconnects.js';
 import { MailboxesModule } from './mailboxes/mailboxes.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SystemModule } from './system/system.module.js';
@@ -46,6 +47,7 @@ import { ApiKeysModule } from './api-keys/api-keys.js';
     CalendarModule,
     MailImportModule,
     MailAuthModule,
+    SessionDisconnectsModule,
     JmapModule,
     MailModule,
     DiscoveryModule,

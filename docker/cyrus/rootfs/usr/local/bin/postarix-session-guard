@@ -1,0 +1,65 @@
+#!/bin/sh
+# Ends open mail sessions when someone's access shrinks (a mailbox disabled, a
+# password changed, an app password revoked…): Cyrus checks credentials only
+# when a session starts. Asks the Postarix API which logins to disconnect
+# (a long poll: the answer comes as soon as there is one), ends their sessions
+# and acknowledges. New logins are decided by the login bridge as always.
+# The API keeps the requests until this node acknowledges them, so nothing is
+# lost while this container is down. The API never reaches into
+# this container: it only answers.
+#
+# /etc/postarix/mail-auth.env and mail-auth.headers (written by the entrypoint)
+# hold the API's internal address and the secret.
+set -u
+. /etc/postarix/mail-auth.env
+port=${POSTARIX_API_INTERNAL##*:}
+base="https://${MAIL_HOSTNAME}:${port}/api/internal/sessions/disconnects"
+node=$(hostname)
+
+api() {
+  curl --silent --show-error --fail --proto '=https' \
+    --connect-to "${MAIL_HOSTNAME}:${port}:${POSTARIX_API_INTERNAL}" \
+    --cacert /etc/cyrus-tls/fullchain.pem --capath /etc/ssl/certs \
+    --header @/etc/postarix/mail-auth.headers "$@"
+}
+
+# Every Cyrus service process (imapd, pop3d, timsieved, httpd for JMAP and DAV,
+# and the proxies of a Murder frontend) registers in the proc directory as
+# "service<TAB>client<TAB>user id<TAB>mailbox". A TERM signal makes it close
+# its connection gracefully. (cyr_deny does the same, but refuses new logins
+# for the seconds it takes, which mail apps would count as a failed login.)
+end_sessions() {
+  ended=0
+  for entry in /run/cyrus/proc/*; do
+    pid=${entry##*/}
+    case "$pid" in '' | *[!0-9]*) continue ;; esac
+    who=$(cut -f3 "$entry" 2>/dev/null) || continue
+    if [ "$who" = "$1" ] && kill -TERM "$pid" 2>/dev/null; then ended=$((ended + 1)); fi
+  done
+  echo "$ended"
+}
+
+log() { logger -t postarix-session-guard -- "$*" 2>/dev/null || echo "postarix-session-guard: $*"; }
+
+while :; do
+  if ! batch=$(api --max-time 40 "${base}?node=${node}"); then
+    sleep 5
+    continue
+  fi
+  [ -n "$batch" ] || continue
+  last=""
+  # One "<id> <address>" per line.
+  while read -r id user; do
+    case "$id" in '' | *[!0-9]*) continue ;; esac
+    if printf '%s' "$user" | grep -Eq '^[a-z0-9._+-]+@[a-z0-9.-]+$'; then
+      ended=$(end_sessions "$user")
+      [ "$ended" = 0 ] || log "ended $ended session(s) of $user"
+    fi
+    last=$id
+  done <<EOF
+$batch
+EOF
+  if [ -n "$last" ]; then
+    api --max-time 20 --output /dev/null --data-urlencode "node=${node}" --data-urlencode "last=${last}" "${base}/ack" || sleep 2
+  fi
+done
