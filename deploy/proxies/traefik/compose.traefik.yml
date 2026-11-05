@@ -7,6 +7,12 @@
 #   TRAEFIK_HTTP_ENTRYPOINT the HTTP entrypoint, redirected to HTTPS [web]
 #   TRAEFIK_CERTRESOLVER   the ACME resolver [letsencrypt]
 # and TRUSTED_PROXIES to the address range of that network.
+#
+# That network is usually shared with other applications. Services joining it
+# must not set `hostname:` to the mail host name (none does): Docker's DNS
+# would then answer that name with the container's internal address to every
+# container on the network, and other applications calling
+# https://<mail host>/ would reach that container instead of Traefik.
 services:
   api:
     networks: [default, traefik]
@@ -54,6 +60,9 @@ services:
       traefik.http.middlewares.postarix-https.redirectscheme.scheme: https
       traefik.http.middlewares.postarix-https.redirectscheme.permanent: "true"
 
+  # Calendars and contacts (Cyrus' HTTP port). Cyrus has no `hostname:` (its
+  # public name comes from MAIL_HOSTNAME), so joining this network does not
+  # take over the mail host name.
   cyrus:
     networks: [default, traefik]
     labels:
