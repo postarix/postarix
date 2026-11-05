@@ -34,6 +34,7 @@ import { InstanceAdminModule } from './system/instance-admin.js';
 import { InstanceSettingsModule } from './settings/instance-settings.js';
 import { ApiKeysModule } from './api-keys/api-keys.js';
 import { ConnectedAppsModule } from './connected-apps/connected-apps.js';
+import { OpenApiModule } from './openapi/openapi.js';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ConnectedAppsModule } from './connected-apps/connected-apps.js';
     InstanceAdminModule,
     ApiKeysModule,
     ConnectedAppsModule,
+    OpenApiModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

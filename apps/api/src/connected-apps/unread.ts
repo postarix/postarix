@@ -1,3 +1,4 @@
+import { ApiDoc } from '../openapi/openapi.js';
 import { Body, Controller, ForbiddenException, HttpCode, Inject, Injectable, Logger, Post, Req } from '@nestjs/common';
 import type { MailEngine } from '@postarix/mail-engine';
 import { eq } from 'drizzle-orm';
@@ -95,6 +96,7 @@ export class UnreadController {
   constructor(@Inject(UnreadService) private readonly unread: UnreadService) {}
 
   /** For connected applications' own tokens (client credentials, mail.read). */
+  @ApiDoc({ summary: 'Unread counts of many people', description: 'Inbox unread counts of up to 200 people linked to the application (by their id in it), and of the shared mailboxes they can read. Cached for 30 seconds.', appToken: 'Only a connected application\'s own token (client credentials, `mail.read`).' })
   @Post('unread')
   @HttpCode(200)
   async counts(@Req() req: AppTokenRequest, @Body(new ZodValidationPipe(unreadSchema)) body: z.infer<typeof unreadSchema>) {

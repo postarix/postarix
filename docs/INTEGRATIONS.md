@@ -41,6 +41,9 @@ allowed to name people by their Postarix user id instead (off by default):
 that skips the links, so only turn it on for an application that already
 manages everything.
 
+Every route, with its fields, is in the [API reference](api.md) (and on your
+server at `/api/docs`).
+
 ## Scopes
 
 | Scope | Gives |
