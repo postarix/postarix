@@ -487,3 +487,33 @@ export const sessionDisconnectNodes = pgTable('session_disconnect_nodes', {
   lastId: bigint({ mode: 'number' }).notNull(),
   seenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Who a person is elsewhere: an `(issuer, subject)` pair from an identity
+ * provider (its issuer and "sub"/NameID) or from an application that acts for
+ * the organization's people (its issuer and its own user id). Single sign-on
+ * and connected applications use it to find the person, whatever email the
+ * other side knows them by. A pair means something only inside its
+ * organization.
+ */
+export const externalIdentities = pgTable(
+  'external_identities',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    issuer: text().notNull(),
+    subject: text().notNull(),
+    label: text().notNull().default(''),
+    createdBy: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('external_identities_unique').on(table.organizationId, table.issuer, table.subject),
+    index('external_identities_user_id_idx').on(table.userId),
+  ],
+);

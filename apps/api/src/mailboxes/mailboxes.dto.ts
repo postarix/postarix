@@ -98,6 +98,8 @@ export type SendAsInput = z.infer<typeof sendAsSchema>;
 export interface MailboxDto {
   id: string;
   domainId: string;
+  /** The owner's account (null for a mailbox nobody signs in to). */
+  userId: string | null;
   address: string;
   localPart: string;
   displayName: string;
@@ -119,6 +121,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
   return {
     id: row.id,
     domainId: row.domainId,
+    userId: row.userId,
     address: row.address,
     localPart: row.localPart,
     displayName: row.displayName,
