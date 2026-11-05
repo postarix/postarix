@@ -108,6 +108,11 @@ Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 
 **OAUTHBEARER / XOAUTH2** for clients that support it will be evaluated later.
 
+### 4.3 Other applications acting for users
+
+External identities, shared mailboxes and connected applications (token exchange,
+supervision) are designed in [design/delegated-access.md](design/delegated-access.md).
+
 ## 5. Multi-tenancy
 
 Hierarchy:
