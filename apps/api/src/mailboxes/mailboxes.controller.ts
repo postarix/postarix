@@ -14,7 +14,11 @@ import {
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { OrgAccessGuard } from '../tenancy/org-access.guard.js';
 import { RequireOrgRole, Tenant, type TenantContext } from '../tenancy/tenant-context.js';
+import { PanelOnlyGuard } from '../auth/panel-only.guard.js';
+import { ApiDoc } from '../openapi/openapi.js';
 import {
+  type ConvertMailboxInput,
+  convertMailboxSchema,
   type CreateMailboxInput,
   createMailboxSchema,
   type MailboxDto,
@@ -65,6 +69,25 @@ export class MailboxesController {
     @Body(new ZodValidationPipe(updateMailboxSchema)) body: UpdateMailboxInput,
   ): Promise<MailboxDto> {
     return this.mailboxes.update(ctx, id, body);
+  }
+
+  /**
+   * Turns a mailbox into a shared one (its account goes; its first members are
+   * added), or a shared one into a person's (a new account; its members go).
+   * The mail stays. In the admin panel only: not for API keys.
+   */
+  @ApiDoc({
+    summary: 'Convert a mailbox to shared, or back (admin panel only)',
+    description: 'Its mail stays where it is. To shared: its password, app passwords, sessions, external identities and application tokens go; `members` are added. To person: a new account with `password`; the members go. API keys get 403 `PANEL_ONLY`.',
+  })
+  @Post(':id/convert')
+  @UseGuards(PanelOnlyGuard)
+  convert(
+    @Tenant() ctx: TenantContext,
+    @Param('id', idPipe) id: string,
+    @Body(new ZodValidationPipe(convertMailboxSchema)) body: ConvertMailboxInput,
+  ): Promise<MailboxDto> {
+    return body.to === 'shared' ? this.mailboxes.convertToShared(ctx, id, body) : this.mailboxes.convertToPerson(ctx, id, body);
   }
 
   /** Further addresses (or "@domain") the mailbox may send as. */

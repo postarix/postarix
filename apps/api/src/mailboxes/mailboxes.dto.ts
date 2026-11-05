@@ -3,7 +3,7 @@ import { normalizeAddress, normalizeLocalPart } from '../common/addresses.js';
 import { normalizeDomainName } from '../domains/domain-name.js';
 import { type RateLimit, rateLimitSchema, toRateLimit } from '../rate-limits/rate-limits.js';
 import { type SpamScores, spamScoresSchema } from '../spam/spam.js';
-import { type MailboxRow, mailboxKinds, mailboxStatuses, mailProtocols, quarantineNotifyIntervals } from '../db/schema/index.js';
+import { type MailboxRow, mailboxKinds, mailboxStatuses, mailProtocols, quarantineNotifyIntervals, sharedMailboxRights } from '../db/schema/index.js';
 
 const MIN_QUOTA = 1024 * 1024; // 1 MiB
 const MAX_QUOTA = 1024 ** 4; // 1 TiB
@@ -88,6 +88,27 @@ export const updateMailboxSchema = z
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
 
 export const setPasswordSchema = z.strictObject({ password: passwordSchema });
+
+/** Turns a mailbox into a shared one, or a shared one into a person's (its mail stays where it is). */
+export const convertMailboxSchema = z.discriminatedUnion('to', [
+  z.strictObject({
+    to: z.literal('shared'),
+    /** One read/unread state for everyone (the former owner's becomes it). */
+    sharedSeen: z.boolean().default(true),
+    /** Its first members: people with a mailbox in the organization. */
+    members: z
+      .array(z.strictObject({ userId: z.string().min(1).max(100), rights: z.enum(sharedMailboxRights) }))
+      .max(500)
+      .default([])
+      .refine((m) => new Set(m.map((x) => x.userId)).size === m.length, { message: 'Each person once' }),
+  }),
+  z.strictObject({
+    to: z.literal('person'),
+    /** The password of the new account that signs in as it. */
+    password: passwordSchema,
+  }),
+]);
+export type ConvertMailboxInput = z.infer<typeof convertMailboxSchema>;
 
 export const mailboxIdSchema = z.uuid();
 

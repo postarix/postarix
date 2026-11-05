@@ -5697,6 +5697,128 @@
         }
       }
     },
+    "/api/orgs/{orgId}/mailboxes/{id}/convert": {
+      "post": {
+        "operationId": "Mailboxes_convert",
+        "tags": [
+          "Organization: mailboxes"
+        ],
+        "summary": "Convert a mailbox to shared, or back (admin panel only)",
+        "description": "Its mail stays where it is. To shared: its password, app passwords, sessions, external identities and application tokens go; `members` are added. To person: a new account with `password`; the members go. API keys get 403 `PANEL_ONLY`.\n\nOrganization admins (and up), instance administrators, or an API key limited to the organization.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "to": {
+                        "type": "string",
+                        "const": "shared"
+                      },
+                      "sharedSeen": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "members": {
+                        "default": [],
+                        "maxItems": 500,
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "userId": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            },
+                            "rights": {
+                              "type": "string",
+                              "enum": [
+                                "read",
+                                "readWrite",
+                                "send"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "userId",
+                            "rights"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "to"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "to": {
+                        "type": "string",
+                        "const": "person"
+                      },
+                      "password": {
+                        "type": "string",
+                        "minLength": 12,
+                        "maxLength": 256
+                      }
+                    },
+                    "required": [
+                      "to",
+                      "password"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "2XX": {
+            "description": "Success"
+          }
+        }
+      }
+    },
     "/api/orgs/{orgId}/mailboxes/{id}/password": {
       "post": {
         "operationId": "Mailboxes_setPassword",

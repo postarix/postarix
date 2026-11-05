@@ -201,3 +201,8 @@ everything, but cannot judge whether it was allowed.
   secret cannot be used from elsewhere; prefer `private_key_jwt`.
 - Revoking the application, disabling a mailbox, removing someone from a
   shared mailbox or taking supervision away applies to the next request.
+- A person's mailbox can be [converted into a shared one](administration.md#converting-a-mailbox):
+  their links and tokens are removed (the next request answers `401`), and
+  the mailbox list (`GET /api/orgs/<orgId>/mailboxes`) shows it with
+  `"kind": "shared"` and `"userId": null`. Its address then appears among the
+  members' shared mailboxes.
