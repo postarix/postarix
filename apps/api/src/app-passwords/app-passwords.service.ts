@@ -1,3 +1,4 @@
+import { requestDisconnect } from '../mail-sessions/session-disconnects.js';
 import {
   ConflictException,
   Inject,
@@ -110,6 +111,8 @@ export class AppPasswordsService {
       .where(and(eq(appPasswords.userId, userId), eq(appPasswords.id, id)))
       .returning({ id: appPasswords.id });
     if (deleted.length === 0) throw new NotFoundException('App password not found');
+    // A mail app signed in with it keeps its session otherwise (Cyrus checks only at login).
+    await requestDisconnect(this.db, { userIds: [userId] }, 'app_password_revoked');
   }
 
   /**

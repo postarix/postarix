@@ -215,7 +215,7 @@ export class MailboxesService {
     if (input.spamScores !== undefined) await this.spam.publishScores(row.address, row);
     // Nobody may stay signed in to a mailbox that can no longer sign in.
     if (losesSignIn && current.status === 'active' && row.userId) {
-      await this.accounts.signOutEverywhere(row.userId);
+      await this.accounts.signOutEverywhere(row.userId, 'mailbox_disabled');
     }
     await this.audit.record(ctx, 'mailbox.updated', { type: 'mailbox', id: row.id, label: row.address }, changes);
     return toMailboxDto(row);

@@ -461,3 +461,29 @@ export const organizationArchiving = pgTable('organization_archiving', {
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+/**
+ * Requests to end every open mail session (IMAP, POP3, Sieve, JMAP) of a mail
+ * login, made when someone's access shrinks: Cyrus checks credentials only at
+ * login. Each Cyrus node applies them in order and acknowledges up to an id
+ * (see sessionDisconnectNodes), so a node that was down catches up when it is
+ * back. Old requests are pruned.
+ */
+export const sessionDisconnects = pgTable(
+  'session_disconnects',
+  {
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    /** The mail login (Cyrus user id): the mailbox address. */
+    username: text().notNull(),
+    reason: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('session_disconnects_created_at_idx').on(table.createdAt)],
+);
+
+/** How far each Cyrus node has applied the disconnect requests. */
+export const sessionDisconnectNodes = pgTable('session_disconnect_nodes', {
+  node: text().primaryKey(),
+  lastId: bigint({ mode: 'number' }).notNull(),
+  seenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
