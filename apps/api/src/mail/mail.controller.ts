@@ -7,10 +7,10 @@ import type { Env } from '../config/env.js';
 import { ENV } from '../core/tokens.js';
 import { fetchRemoteImage, ImageProxyError, verifyImageLink } from './image-proxy.js';
 import { MessageService, type RenderedMessage } from './message.service.js';
-import { SendService, sendSchema } from './send.service.js';
+import { type Identities, SendService, sendSchema } from './send.service.js';
 
 const emailIdSchema = z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/);
-const renderQuerySchema = z.object({ remoteImages: z.enum(['0', '1']).default('0') });
+const renderQuerySchema = z.object({ remoteImages: z.enum(['0', '1']).default('0'), accountId: z.string().min(3).max(320).optional() });
 const imageQuerySchema = z.object({ u: z.string().min(1).max(4096), e: z.string().max(20), s: z.string().max(100) });
 
 /** The signed-in user's own mail (webmail). Everything acts on their own mailbox. */
@@ -26,14 +26,14 @@ export class MailController {
   @HttpCode(200)
   send(
     @CurrentSession() session: AuthSession,
-    @Body(new ZodValidationPipe(sendSchema)) body: { emailId: string },
+    @Body(new ZodValidationPipe(sendSchema)) body: { emailId: string; accountId?: string | undefined },
   ): Promise<{ sent: true; movedToSent: boolean }> {
-    return this.sender.send(session.user.id, body.emailId);
+    return this.sender.send(session.user.id, body.emailId, body.accountId);
   }
 
   /** The addresses the user may send as (for the From field). */
   @Get('identities')
-  identities(@CurrentSession() session: AuthSession): Promise<{ address: string; name: string; addresses: string[] }> {
+  identities(@CurrentSession() session: AuthSession): Promise<Identities> {
     return this.sender.identities(session.user.id);
   }
 
@@ -44,7 +44,7 @@ export class MailController {
     @Param('emailId', new ZodValidationPipe(emailIdSchema)) emailId: string,
     @Query(new ZodValidationPipe(renderQuerySchema)) query: z.infer<typeof renderQuerySchema>,
   ): Promise<RenderedMessage> {
-    return this.messages.render(session.user.id, emailId, query.remoteImages === '1');
+    return this.messages.render(session.user.id, emailId, query.remoteImages === '1', query.accountId);
   }
 
   /**

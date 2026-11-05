@@ -10,7 +10,7 @@ import { originCheck } from '../common/origin-check.middleware.js';
 import type { Env } from '../config/env.js';
 import { AUTH, DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { findOwnMailbox } from './my-mailbox.js';
+import { findOwnMailbox, findSharedAccounts, type SharedAccount } from './my-mailbox.js';
 
 /** Largest JMAP API request (method calls), well above what clients send. */
 const API_BODY_LIMIT = 10 * 1024 * 1024;
@@ -35,6 +35,18 @@ export const ALLOWED_CAPABILITIES = new Set([
 ]);
 const ALLOWED_METHODS =
   /^(?:Mailbox\/(?:get|changes|query|queryChanges|set)|Email\/(?:get|changes|query|queryChanges|set|copy|import|parse)|Thread\/(?:get|changes)|SearchSnippet\/get|Blob\/(?:copy|get|lookup)|Calendar\/(?:get|changes)|CalendarEvent\/(?:get|changes|query|queryChanges|set)|AddressBook\/(?:get|changes)|Contact\/(?:get|changes|query|queryChanges|set))$/;
+
+const MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
+/** Methods that read or change mail (as opposed to calendars and contacts). */
+const MAIL_METHOD = /^(?:Mailbox|Email|Thread|SearchSnippet|Blob)\//;
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 /** Download types a browser may render inline; everything else is an attachment. */
 const INLINE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif']);
@@ -97,10 +109,18 @@ export class JmapProxy {
     }
     const address = await findOwnMailbox(this.db, session.user.id);
     if (!address) throw new ProxyError(404, 'You have no mailbox');
+    // The mail accounts this person may reach: their own and the shared
+    // mailboxes they are a member of now (PostgreSQL decides, whatever ACLs
+    // Cyrus still has).
+    const shared = await findSharedAccounts(this.db, session.user.id);
+    const mailAccounts = new Set([address, ...shared.map((s) => s.address)]);
 
     const [rawPath = '', query = ''] = req.url.split(/\?(.*)/s, 2);
     const path = rawPath.replace(/^\//, '');
     if (!ALLOWED_PATHS[method].test(path)) throw new ProxyError(404, 'Not found');
+    // Uploads and downloads name their account: only the reachable ones.
+    const blobAccount = /^(?:upload|download)\/([^/]+)/.exec(path)?.[1];
+    if (blobAccount !== undefined && !mailAccounts.has(safeDecode(blobAccount))) throw new ProxyError(404, 'Not found');
 
     const isUpload = path.startsWith('upload/');
     const abort = new AbortController();
@@ -108,7 +128,7 @@ export class JmapProxy {
 
     let body: ReadableStream<Uint8Array> | Uint8Array | undefined;
     if (method === 'POST') {
-      body = isUpload ? limitedBody(req, this.env.MAIL_UPLOAD_LIMIT) : checkApiRequest(await readAll(limitedBody(req, API_BODY_LIMIT)));
+      body = isUpload ? limitedBody(req, this.env.MAIL_UPLOAD_LIMIT) : checkApiRequest(await readAll(limitedBody(req, API_BODY_LIMIT)), { mailAccounts });
     }
 
     const upstream = await this.engine.jmap(address, {
@@ -133,7 +153,7 @@ export class JmapProxy {
     res.setHeader('x-content-type-options', 'nosniff');
 
     if (method === 'GET' && path === '' && upstream.ok) {
-      res.json(this.rewriteSession((await upstream.json()) as Record<string, unknown>));
+      res.json(this.rewriteSession((await upstream.json()) as Record<string, unknown>, address, shared));
       return;
     }
 
@@ -179,19 +199,33 @@ export class JmapProxy {
    * Points the session's URLs at this proxy instead of Cyrus, and advertises
    * only the capabilities the proxy lets through.
    */
-  private rewriteSession(session: Record<string, unknown>): Record<string, unknown> {
+  private rewriteSession(session: Record<string, unknown>, own: string, shared: SharedAccount[]): Record<string, unknown> {
     const out = { ...session };
     const keep = (value: unknown) =>
       value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => ALLOWED_CAPABILITIES.has(key))) : value;
     out.capabilities = keep(out.capabilities);
     out.primaryAccounts = keep(out.primaryAccounts);
+    const sharedByAddress = new Map(shared.map((s) => [s.address, s]));
     if (out.accounts && typeof out.accounts === 'object') {
-      out.accounts = Object.fromEntries(
-        Object.entries(out.accounts as Record<string, Record<string, unknown>>).map(([id, account]) => [
+      const accounts: [string, Record<string, unknown>][] = [];
+      for (const [id, account] of Object.entries(out.accounts as Record<string, Record<string, unknown>>)) {
+        const capabilities = (keep(account.accountCapabilities) ?? {}) as Record<string, unknown>;
+        const member = sharedByAddress.get(id);
+        // Mail of accounts other than their own and their shared mailboxes is
+        // not listed (a calendar or address book shared by a colleague keeps
+        // its account, without mail).
+        if (id !== own && !member) delete capabilities[MAIL_CAPABILITY];
+        if (Object.keys(capabilities).length === 0) continue;
+        accounts.push([
           id,
-          { ...account, accountCapabilities: keep(account.accountCapabilities) },
-        ]),
-      );
+          {
+            ...account,
+            ...(member ? { name: member.displayName || member.address, isReadOnly: member.rights === 'read' } : {}),
+            accountCapabilities: capabilities,
+          },
+        ]);
+      }
+      out.accounts = Object.fromEntries(accounts);
     }
     for (const field of SESSION_URL_FIELDS) {
       const value = out[field];
@@ -286,7 +320,7 @@ function checkCalendarEventSet(args: Record<string, unknown>): void {
  * Checks a JMAP API request against the allowed capabilities and methods, and
  * returns it re-serialized (so what Cyrus parses is exactly what was checked).
  */
-export function checkApiRequest(raw: Uint8Array): Uint8Array {
+export function checkApiRequest(raw: Uint8Array, options: { mailAccounts?: ReadonlySet<string> } = {}): Uint8Array {
   let request: unknown;
   try {
     request = JSON.parse(Buffer.from(raw).toString('utf8'));
@@ -305,8 +339,19 @@ export function checkApiRequest(raw: Uint8Array): Uint8Array {
     if (typeof name !== 'string' || !ALLOWED_METHODS.test(name)) {
       throw new ProxyError(403, `Method not available: ${String(name).slice(0, 100)}`);
     }
-    if (name === 'CalendarEvent/set' && Array.isArray(call) && call[1] && typeof call[1] === 'object') {
-      checkCalendarEventSet(call[1] as Record<string, unknown>);
+    const args = Array.isArray(call) && call[1] && typeof call[1] === 'object' ? (call[1] as Record<string, unknown>) : {};
+    if (name === 'CalendarEvent/set') checkCalendarEventSet(args);
+    // Mail methods only on the reachable mail accounts.
+    if (options.mailAccounts && MAIL_METHOD.test(name)) {
+      for (const key of ['accountId', 'fromAccountId']) {
+        const value = args[key];
+        if (value !== undefined && (typeof value !== 'string' || !options.mailAccounts.has(value))) {
+          throw new ProxyError(403, 'This account is not available');
+        }
+      }
+      if (Object.keys(args).some((key) => key.startsWith('#') && (key === '#accountId' || key === '#fromAccountId'))) {
+        throw new ProxyError(403, 'Result references are not available here');
+      }
     }
   }
   return Buffer.from(JSON.stringify(request));

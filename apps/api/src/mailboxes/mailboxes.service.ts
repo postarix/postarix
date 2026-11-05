@@ -29,6 +29,7 @@ import { TemplatesService } from '../templates/templates.js';
 import { SpamService } from '../spam/spam.js';
 import { ArchivingService } from './archiving.js';
 import { MailboxCollectionsService } from './mailbox-collections.service.js';
+import { SharedMailboxesService } from './shared-mailboxes.js';
 import { type MailboxChanges, MailboxesRepository } from './mailboxes.repository.js';
 
 export interface MailboxUsageDto {
@@ -52,6 +53,7 @@ export class MailboxesService {
     @Inject(RateLimitsService) private readonly rateLimits: RateLimitsService,
     @Inject(SpamService) private readonly spam: SpamService,
     @Inject(TemplatesService) private readonly templates: TemplatesService,
+    @Inject(SharedMailboxesService) private readonly shared: SharedMailboxesService,
   ) {}
 
   async list(ctx: TenantContext): Promise<MailboxDto[]> {
@@ -104,11 +106,16 @@ export class MailboxesService {
     const usage = await this.domains.usage(ctx, domain.id);
     if (usage) checkLimits(domain, usage);
 
-    const userId = await this.accounts.create({
-      email: address,
-      password: input.password,
-      name: input.displayName || address,
-    });
+    // A shared mailbox has no account: nobody signs in as it, its members use their own.
+    const isShared = input.kind === 'shared';
+    const userId = isShared
+      ? null
+      : await this.accounts.create({
+          email: address,
+          password: input.password ?? '',
+          name: input.displayName || address,
+        });
+    const dropAccount = () => (userId ? this.undo(`account of ${address}`, () => this.accounts.delete(userId)) : Promise.resolve());
 
     let row: MailboxRow;
     try {
@@ -120,9 +127,11 @@ export class MailboxesService {
         displayName: input.displayName,
         quotaBytes,
         kind: input.kind,
+        // Nobody signs in as it, so it never gets calendars to make private.
+        ...(isShared ? { sharedSeen: input.sharedSeen ?? true, collectionsRestrictedAt: new Date() } : {}),
       }, checkLimits);
     } catch (error) {
-      await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
+      await dropAccount();
       if (isUniqueViolation(error)) throw new ConflictException('This address is already in use');
       throw error;
     }
@@ -132,7 +141,7 @@ export class MailboxesService {
     } catch (error) {
       // The engine removes a mailbox it created only partly; undo our side.
       await this.undo(`mailbox row of ${address}`, () => this.repository.delete(ctx, row.id));
-      await this.undo(`account of ${address}`, () => this.accounts.delete(userId));
+      await dropAccount();
       if (error instanceof MailEngineError && error.code === 'already_exists') {
         this.logger.error(`The mail server already has a mailbox for ${address} with no matching record`);
         throw new ConflictException({
@@ -142,9 +151,14 @@ export class MailboxesService {
       }
       throw engineErrorToHttp(error);
     }
-    // Calendars must not be readable by everyone (Cyrus' default for free/busy).
-    // Not fatal: the background check retries mailboxes it missed.
-    await this.collections.restrict(address);
+    if (isShared) {
+      // Its seen-state mode (and no members yet) on the mail server.
+      await this.shared.apply(row).catch((error: unknown) => this.logger.warn(`Could not set up the shared mailbox ${address}: ${String(error)}`));
+    } else {
+      // Calendars must not be readable by everyone (Cyrus' default for free/busy).
+      // Not fatal: the background check retries mailboxes it missed.
+      await this.collections.restrict(address);
+    }
 
     await this.audit.record(
       ctx,
@@ -165,6 +179,12 @@ export class MailboxesService {
     if (current.userId) await this.assertMayManage(ctx, current.userId, { removing: losesSignIn });
     if (input.status === 'disabled' && current.status !== 'disabled') await this.archiving.assertMayRemove(ctx, id);
 
+    if (input.kind !== undefined && (input.kind === 'shared') !== (current.kind === 'shared')) {
+      throw new UnprocessableEntityException('A mailbox cannot become shared, or stop being shared: create a new one');
+    }
+    if (input.sharedSeen !== undefined && current.kind !== 'shared') {
+      throw new UnprocessableEntityException('Only shared mailboxes have a shared read state');
+    }
     const quotaChanges = input.quotaBytes !== undefined && input.quotaBytes !== current.quotaBytes;
     const changes: MailboxChanges = {};
     if (input.displayName !== undefined) changes.displayName = input.displayName;
@@ -177,6 +197,7 @@ export class MailboxesService {
     if (input.rateLimit !== undefined) Object.assign(changes, rateColumns(input.rateLimit));
     if (input.relayHostId !== undefined) changes.relayHostId = input.relayHostId;
     if (input.quarantineNotify !== undefined) changes.quarantineNotify = input.quarantineNotify;
+    if (input.sharedSeen !== undefined) changes.sharedSeen = input.sharedSeen;
     if (input.spamScores !== undefined) {
       changes.spamJunkScore = input.spamScores.junkScore;
       changes.spamRejectScore = input.spamScores.rejectScore;
@@ -213,6 +234,11 @@ export class MailboxesService {
     }
     if (input.rateLimit !== undefined) await this.rateLimits.publish(row.address, toRateLimit(row));
     if (input.spamScores !== undefined) await this.spam.publishScores(row.address, row);
+    if (row.kind === 'shared') {
+      if (input.sharedSeen !== undefined && input.sharedSeen !== current.sharedSeen) await this.shared.apply(row);
+      // Members use it until it is disabled; then they lose it in their open sessions too.
+      if (input.status === 'disabled' && current.status !== 'disabled') await this.shared.signOutMembers(row.id);
+    }
     // Nobody may stay signed in to a mailbox that can no longer sign in.
     if (losesSignIn && current.status === 'active' && row.userId) {
       await this.accounts.signOutEverywhere(row.userId, 'mailbox_disabled');
@@ -287,11 +313,18 @@ export class MailboxesService {
       }
       this.logger.warn(`Mailbox ${mailbox.address} was missing on the mail server during deletion`);
     }
+    if (mailbox.kind === 'shared') await this.shared.signOutMembers(mailbox.id);
+    // The shared mailboxes they belonged to stop naming their address (someone
+    // given the address later must not inherit the access).
+    const memberships = mailbox.userId ? await this.shared.membershipsOf(mailbox.userId) : [];
     // The account goes before the row: if a step fails, the row is still there
     // (and visible) so the deletion can simply be retried.
     if (mailbox.userId) await this.accounts.delete(mailbox.userId);
     await this.repository.delete(ctx, id);
     await this.audit.record(ctx, 'mailbox.deleted', { type: 'mailbox', id: mailbox.id, label: mailbox.address });
+    for (const shared of memberships) {
+      await this.shared.apply(shared).catch((error: unknown) => this.logger.warn(`Could not update the members of ${shared.address}: ${String(error)}`));
+    }
     // Colleagues' calendars and contacts shared with it are no longer shared
     // with the address (someone given it later must not inherit them).
     void this.forgetShares(ctx, mailbox.address);

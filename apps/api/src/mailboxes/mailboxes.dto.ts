@@ -27,18 +27,36 @@ const quotaSchema = z.number().int().min(MIN_QUOTA).max(MAX_QUOTA).nullable();
 const displayNameSchema = z.string().trim().max(128);
 export const passwordSchema = z.string().min(12).max(256);
 
-export const createMailboxSchema = z.strictObject({
-  domainId: z.uuid(),
-  localPart: localPartSchema,
-  displayName: displayNameSchema.default(''),
-  password: passwordSchema,
-  /** Omitted: the domain's default quota. Null: unlimited (where the domain allows it). */
-  quotaBytes: quotaSchema.optional(),
-  /** A room or equipment: invitations to it are answered by itself (see CalendarService). */
-  kind: z.enum(mailboxKinds).default('person'),
-  /** A mailbox template of the organization; omitted: its default template; null: none. */
-  templateId: z.uuid().nullable().optional(),
-});
+export const createMailboxSchema = z
+  .strictObject({
+    domainId: z.uuid(),
+    localPart: localPartSchema,
+    displayName: displayNameSchema.default(''),
+    /** Required, except for a shared mailbox (nobody signs in as it). */
+    password: passwordSchema.optional(),
+    /** Omitted: the domain's default quota. Null: unlimited (where the domain allows it). */
+    quotaBytes: quotaSchema.optional(),
+    /**
+     * A room or equipment: invitations to it are answered by itself (see
+     * CalendarService). Shared: used by its members, no account of its own.
+     */
+    kind: z.enum(mailboxKinds).default('person'),
+    /** Shared mailboxes: one read/unread state for every member (default), or one each. */
+    sharedSeen: z.boolean().optional(),
+    /** A mailbox template of the organization; omitted: its default template; null: none. */
+    templateId: z.uuid().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.kind === 'shared' && value.password !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['password'], message: 'A shared mailbox has no password: its members use their own' });
+    }
+    if (value.kind !== 'shared' && value.password === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['password'], message: 'Required' });
+    }
+    if (value.kind !== 'shared' && value.sharedSeen !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['sharedSeen'], message: 'Only for shared mailboxes' });
+    }
+  });
 export type CreateMailboxInput = z.infer<typeof createMailboxSchema>;
 
 export const updateMailboxSchema = z
@@ -63,6 +81,8 @@ export const updateMailboxSchema = z
     spamScores: spamScoresSchema.optional(),
     /** How often its people hear about mail held in quarantine. */
     quarantineNotify: z.enum(quarantineNotifyIntervals).optional(),
+    /** Shared mailboxes: one read/unread state for every member, or one each. */
+    sharedSeen: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, 'Nothing to update');
 export type UpdateMailboxInput = z.infer<typeof updateMailboxSchema>;
@@ -106,6 +126,8 @@ export interface MailboxDto {
   quotaBytes: number | null;
   status: MailboxRow['status'];
   kind: MailboxRow['kind'];
+  /** Shared mailboxes: one read/unread state for every member. */
+  sharedSeen: boolean;
   allowedProtocols: MailboxRow['allowedProtocols'];
   tlsRequiredIn: boolean;
   tlsRequiredOut: boolean;
@@ -128,6 +150,7 @@ export function toMailboxDto(row: MailboxRow): MailboxDto {
     quotaBytes: row.quotaBytes,
     status: row.status,
     kind: row.kind,
+    sharedSeen: row.sharedSeen,
     allowedProtocols: row.allowedProtocols,
     tlsRequiredIn: row.tlsRequiredIn,
     tlsRequiredOut: row.tlsRequiredOut,

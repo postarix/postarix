@@ -1,6 +1,7 @@
 import {
   type CollectionKind,
   type CollectionShare,
+  type MailboxAccessState,
   type CreateMailboxOptions,
   type EngineHealth,
   type JmapRequest,
@@ -108,6 +109,14 @@ export class MurderEngine implements MailEngine {
 
   async setShares(address: string, kind: CollectionKind, collectionId: string, shares: CollectionShare[]): Promise<void> {
     await (await this.backendOf(address)).setShares(address, kind, collectionId, shares);
+  }
+
+  async getMailboxAccess(address: string): Promise<MailboxAccessState> {
+    return (await this.backendOf(address)).getMailboxAccess(address);
+  }
+
+  async setMailboxAccess(address: string, state: MailboxAccessState): Promise<{ reduced: string[] }> {
+    return (await this.backendOf(address)).setMailboxAccess(address, state);
   }
 
   async removeGrantee(address: string, grantee: string): Promise<void> {

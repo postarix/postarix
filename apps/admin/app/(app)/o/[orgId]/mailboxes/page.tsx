@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Fingerprint, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, Fingerprint, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -30,6 +30,7 @@ import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
 import { IdentitiesDialog } from '@/components/identities-dialog';
+import { MembersDialog, SharedSenderOption } from '@/components/shared-members-dialog';
 import { SyncJobsDialog } from '@/components/sync-jobs-dialog';
 import { MailboxTemplateFields, type MailboxTemplateSettings, mailboxSettingsFrom, type Template, TemplateList } from '@/components/templates';
 import { ApiError, api, errorMessage } from '@/lib/api';
@@ -82,6 +83,7 @@ function Usage({ orgId, mailbox }: { orgId: string; mailbox: Mailbox }) {
 function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string; domains: Domain[]; open: boolean; onClose: () => void }) {
   const refresh = useRefresh(orgId);
   const [password, setPassword] = useState('');
+  const [kind, setKind] = useState<Mailbox['kind']>('person');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const templates = useOrgList<Template<MailboxTemplateSettings>>(orgId, 'mailbox-templates');
@@ -99,10 +101,11 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
         domainId: String(data.get('domainId')),
         localPart: String(data.get('localPart')),
         displayName: String(data.get('displayName')),
-        password,
+        // A shared mailbox has no password: its members use their own.
+        ...(kind === 'shared' ? { sharedSeen: data.get('sharedSeen') !== null } : { password }),
         // Empty: the domain's default quota.
         ...(String(data.get('quota')).trim() ? { quotaBytes: quotaFromGiB(String(data.get('quota'))) } : {}),
-        kind: String(data.get('kind') ?? 'person'),
+        kind,
       });
       refresh();
       setPassword('');
@@ -121,18 +124,33 @@ function CreateMailboxDialog({ orgId, domains, open, onClose }: { orgId: string;
           {error ? <Notice>{error}</Notice> : null}
           <AddressFields domains={domains} placeholder={t('jane')} />
           <FormField label={t('Display name')}>{(props) => <Input {...props} name="displayName" placeholder={t('Jane Doe')} maxLength={128} />}</FormField>
-          <FormField label={t('Type')} hint={t('Rooms and equipment are booked by inviting them to an event: they accept when free.')}>
+          <FormField
+            label={t('Type')}
+            hint={
+              kind === 'shared'
+                ? t('A team mailbox (support@, sales@): nobody signs in as it; the people you add as members use it from their own mail.')
+                : t('Rooms and equipment are booked by inviting them to an event: they accept when free.')
+            }
+          >
             {(props) => (
-              <FormSelect {...props} name="kind" defaultValue="person" className="w-full">
+              <FormSelect {...props} name="kind" value={kind} onChange={(e) => setKind(e.target.value as Mailbox['kind'])} className="w-full">
                 <FormSelectOption value="person">{t('Person')}</FormSelectOption>
+                <FormSelectOption value="shared">{t('Shared mailbox')}</FormSelectOption>
                 <FormSelectOption value="room">{t('Room')}</FormSelectOption>
                 <FormSelectOption value="equipment">{t('Equipment')}</FormSelectOption>
               </FormSelect>
             )}
           </FormField>
-          <FormField label={t('Password')} hint={t('At least 12 characters.')}>
-            {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
-          </FormField>
+          {kind === 'shared' ? (
+            <Field orientation="horizontal">
+              <Checkbox id="mailbox-shared-seen" name="sharedSeen" defaultChecked />
+              <FieldLabel htmlFor="mailbox-shared-seen" className="font-normal">{t('One read/unread state for the whole team')}</FieldLabel>
+            </Field>
+          ) : (
+            <FormField label={t('Password')} hint={t('At least 12 characters.')}>
+              {(props) => <PasswordInput {...props} value={password} onChange={setPassword} required />}
+            </FormField>
+          )}
           {templates.data?.length ? (
             <FormField label={t('Template')} hint={t('Settings the new mailbox starts with.')}>
               {(props) => (
@@ -195,6 +213,7 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
         rateLimit: rateLimitFrom(data),
         quarantineNotify: String(data.get('quarantineNotify')),
         ...(relayHosts.data ? { relayHostId: String(data.get('relayHostId') ?? '') || null } : {}),
+        ...(mailbox.kind === 'shared' ? { sharedSeen: data.get('sharedSeen') !== null } : {}),
       });
       if (sendAs.data) {
         const senders = String(data.get('sendAs'))
@@ -298,6 +317,12 @@ function EditMailboxDialog({ orgId, mailbox, onClose }: { orgId: string; mailbox
             </div>
             <p className="text-sm text-muted-foreground">{t('The webmail always works.')}</p>
           </Field>
+          {mailbox.kind === 'shared' ? (
+            <Field orientation="horizontal">
+              <Checkbox id="mailbox-shared-seen-edit" name="sharedSeen" defaultChecked={mailbox.sharedSeen} />
+              <FieldLabel htmlFor="mailbox-shared-seen-edit" className="font-normal">{t('One read/unread state for the whole team')}</FieldLabel>
+            </Field>
+          ) : null}
           <Field orientation="horizontal">
             <Checkbox id="mailbox-tls-in" name="tlsRequiredIn" defaultChecked={mailbox.tlsRequiredIn} />
             <FieldLabel htmlFor="mailbox-tls-in" className="font-normal">{t('Refuse incoming mail from servers that do not use TLS')}</FieldLabel>
@@ -459,6 +484,7 @@ export default function MailboxesPage() {
   const [spamOf, setSpamOf] = useState<Mailbox | null>(null);
   const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
   const [identitiesOf, setIdentitiesOf] = useState<Mailbox | null>(null);
+  const [membersOf, setMembersOf] = useState<Mailbox | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
   const [entering, setEntering] = useState<Mailbox | null>(null);
@@ -487,6 +513,7 @@ export default function MailboxesPage() {
         </div>
       ) : null}
       {mailboxes.data?.length ? <ArchivingSection orgId={orgId} mailboxes={mailboxes.data} /> : null}
+      {mailboxes.data?.some((m) => m.kind === 'shared') ? <SharedSenderOption orgId={orgId} /> : null}
       {mailboxes.isLoading ? (
         <Skeleton className="h-40 w-full rounded-xl" />
       ) : mailboxes.error ? (
@@ -514,6 +541,8 @@ export default function MailboxesPage() {
                     <Badge variant="secondary" className="ml-2">{t('Room')}</Badge>
                   ) : mailbox.kind === 'equipment' ? (
                     <Badge variant="secondary" className="ml-2">{t('Equipment')}</Badge>
+                  ) : mailbox.kind === 'shared' ? (
+                    <Badge variant="secondary" className="ml-2">{t('Shared')}</Badge>
                   ) : null}
                 </TableCell>
                 <TableCell>
@@ -544,17 +573,25 @@ export default function MailboxesPage() {
                         <Fingerprint aria-hidden />
                       </Button>
                     ) : null}
-                    <Button size="icon-sm" variant="ghost" aria-label={`${t('Sign in as')} ${mailbox.address}`} title={t('Sign in as')} onClick={() => setEntering(mailbox)}>
-                      <LogIn aria-hidden />
-                    </Button>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={`Reset password for ${mailbox.address}`}
-                      onClick={() => setResetting(mailbox)}
-                    >
-                      <KeyRound aria-hidden />
-                    </Button>
+                    {mailbox.kind === 'shared' ? (
+                      <Button size="icon-sm" variant="ghost" aria-label={`${t('Members of')} ${mailbox.address}`} title={t('Members')} onClick={() => setMembersOf(mailbox)}>
+                        <Users aria-hidden />
+                      </Button>
+                    ) : (
+                      <>
+                        <Button size="icon-sm" variant="ghost" aria-label={`${t('Sign in as')} ${mailbox.address}`} title={t('Sign in as')} onClick={() => setEntering(mailbox)}>
+                          <LogIn aria-hidden />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Reset password for ${mailbox.address}`}
+                          onClick={() => setResetting(mailbox)}
+                        >
+                          <KeyRound aria-hidden />
+                        </Button>
+                      </>
+                    )}
                     <Button size="icon-sm" variant="ghost" aria-label={`Delete ${mailbox.address}`} onClick={() => setDeleting(mailbox)}>
                       <Trash2 aria-hidden />
                     </Button>
@@ -601,6 +638,7 @@ export default function MailboxesPage() {
       ) : null}
       {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
       {identitiesOf ? <IdentitiesDialog orgId={orgId} mailbox={identitiesOf} onClose={() => setIdentitiesOf(null)} /> : null}
+      {membersOf ? <MembersDialog orgId={orgId} mailbox={membersOf} people={(mailboxes.data ?? []).filter((m) => m.kind === 'person' && m.userId)} onClose={() => setMembersOf(null)} /> : null}
       {entering ? <ImpersonateDialog orgId={orgId} mailbox={entering} onClose={() => setEntering(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog

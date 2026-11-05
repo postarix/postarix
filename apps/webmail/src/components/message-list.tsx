@@ -1,4 +1,4 @@
-import type { Email, Mailbox } from '@postarix/jmap-client';
+import type { Email } from '@postarix/jmap-client';
 import { Button } from '@postarix/ui/components/button';
 import { Input } from '@postarix/ui/components/input';
 import { Skeleton } from '@postarix/ui/components/skeleton';
@@ -8,7 +8,7 @@ import { Flag, Paperclip, Search } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { dayGroup, displayName, shortDate } from '@/lib/format';
-import { type Label, useEmails } from '@/lib/mail';
+import { type Label, type MailFolder, useEmails } from '@/lib/mail';
 import { labelPath, mailboxPath, navigate } from '@/lib/router';
 import { t } from '@/lib/i18n';
 
@@ -19,8 +19,11 @@ export function MessageList({
   exclude,
   search,
   selectedId,
+  accountName,
 }: {
-  mailbox: Mailbox | undefined;
+  mailbox: MailFolder | undefined;
+  /** A shared mailbox's name, shown with the folder's. */
+  accountName?: string | undefined;
   /** Show the messages with this label (across folders) instead of a folder. */
   label?: Label | null;
   labels: Label[];
@@ -29,9 +32,9 @@ export function MessageList({
   search: string;
   selectedId: string | null;
 }) {
-  const emails = useEmails(label ? null : (mailbox?.id ?? null), search, label ? { keyword: label.keyword, exclude } : null);
+  const emails = useEmails(label ? null : (mailbox?.id ?? null), search, label ? { keyword: label.keyword, exclude } : null, label ? undefined : mailbox?.accountId);
   const ready = Boolean(label) || Boolean(mailbox);
-  const title = label ? label.name : (mailbox?.name ?? 'Mail');
+  const title = label ? label.name : mailbox ? (accountName ? `${accountName}: ${mailbox.name}` : mailbox.name) : 'Mail';
   const pathFor = (emailId: string | null, q = search) => (label ? labelPath(label.keyword, emailId, q) : mailboxPath(mailbox!.id, emailId, q));
   const labelNames = new Map(labels.map((l) => [l.keyword, l.name]));
   const threadSizes: Record<string, number> = Object.assign({}, ...(emails.data?.pages.map((p) => p.threadSizes) ?? []));

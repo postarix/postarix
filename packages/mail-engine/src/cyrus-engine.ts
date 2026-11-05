@@ -19,6 +19,9 @@ import {
   type CollectionKind,
   type CollectionShare,
   type ShareAccess,
+  type MailboxAccess,
+  type MailboxAccessLevel,
+  type MailboxAccessState,
 } from './types.js';
 
 export interface CyrusEngineOptions extends ImapConnectOptions {
@@ -58,6 +61,20 @@ export const SHARE_RIGHTS: Record<CollectionKind, Record<ShareAccess, string>> =
   calendar: { read: 'lrw9', write: 'lrswitedn5679' },
   addressbook: { read: 'lrs', write: 'lrswitedn' },
 };
+/** Cyrus' per-folder switch for one seen state shared by everyone. */
+const SHARED_SEEN = '/shared/vendor/cmu/cyrus-imapd/sharedseen';
+
+/**
+ * Cyrus ACL rights for people other than the owner, on every mail folder.
+ * Reading: look up and read; with per-person seen state also keep their own
+ * (s); with one shared state, readers do not change it. Changing: also seen,
+ * flags, filing in, deleting and expunging (no folder creation, no admin).
+ */
+export function accessRights(level: MailboxAccessLevel, sharedSeen: boolean): string {
+  if (level === 'readWrite') return 'lrswitedn';
+  return sharedSeen ? 'lr' : 'lrs';
+}
+
 const COLLECTION_ID = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/;
 const COLLECTION_FOLDER: Record<CollectionKind, string> = { calendar: '#calendars', addressbook: '#addressbooks' };
 
@@ -347,6 +364,59 @@ export class CyrusEngine implements MailEngine {
         if (acl.has(grantee)) await imap.expectOk(`DELETEACL ${quote(name)} ${quote(grantee)}`);
       }
     });
+  }
+
+  /** The mailbox's mail folders (Cyrus names): its INBOX and every folder below, but not calendars, contacts and other "#" stores. */
+  private async mailFolders(imap: ImapConnection, address: string): Promise<string[]> {
+    const at = address.lastIndexOf('@');
+    const pattern = `user/${address.slice(0, at)}/*${address.slice(at)}`;
+    const below = parseList((await imap.expectOk(`LIST "" ${quote(pattern)}`)).untagged).filter((n) => !/\/#/.test(n));
+    return [CyrusEngine.mailboxName(address), ...below];
+  }
+
+  async getMailboxAccess(address: string): Promise<MailboxAccessState> {
+    const name = CyrusEngine.mailboxName(address);
+    return this.withAdmin(async (imap) => {
+      const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+      const access: MailboxAccess[] = [];
+      for (const [identifier, rights] of acl) {
+        if (identifier === address || identifier === this.options.adminUser || !ADDRESS.test(identifier)) continue;
+        if (!rights.includes('r')) continue;
+        access.push({ grantee: identifier, level: /[wite]/.test(rights) ? 'readWrite' : 'read' });
+      }
+      const metadata = await imap.expectOk(`GETMETADATA ${quote(name)} ${quote(SHARED_SEEN)}`);
+      const sharedSeen = metadata.untagged.some((line) => /sharedseen"?\s+"?true/i.test(line));
+      return { access: access.sort((a, b) => a.grantee.localeCompare(b.grantee)), sharedSeen };
+    });
+  }
+
+  async setMailboxAccess(address: string, state: MailboxAccessState): Promise<{ reduced: string[] }> {
+    CyrusEngine.mailboxName(address);
+    for (const entry of state.access) {
+      if (!ADDRESS.test(entry.grantee) || entry.grantee === address) throw new MailEngineError(`Cannot give access to ${entry.grantee}`, 'rejected');
+    }
+    const wanted = new Map(state.access.map((a) => [a.grantee, accessRights(a.level, state.sharedSeen)]));
+    const reduced = new Set<string>();
+    await this.withAdmin(async (imap) => {
+      for (const name of await this.mailFolders(imap, address)) {
+        const acl = parseAcl((await imap.expectOk(`GETACL ${quote(name)}`)).untagged);
+        for (const [identifier, rights] of acl) {
+          if (identifier === address || identifier === this.options.adminUser || !ADDRESS.test(identifier)) continue;
+          const next = wanted.get(identifier);
+          if (next === undefined) {
+            await imap.expectOk(`DELETEACL ${quote(name)} ${quote(identifier)}`);
+            reduced.add(identifier);
+          } else if ([...rights].some((right) => !next.includes(right))) {
+            reduced.add(identifier);
+          }
+        }
+        for (const [grantee, rights] of wanted) {
+          if (acl.get(grantee) !== rights) await imap.expectOk(`SETACL ${quote(name)} ${quote(grantee)} ${rights}`);
+        }
+        await imap.expectOk(`SETMETADATA ${quote(name)} (${quote(SHARED_SEEN)} ${quote(state.sharedSeen ? 'true' : 'false')})`);
+      }
+    });
+    return { reduced: [...reduced].sort() };
   }
 
   /** The mailbox's calendar and address book folders (Cyrus names). */

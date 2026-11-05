@@ -27,6 +27,25 @@ export interface CollectionShare {
   access: ShareAccess;
 }
 
+/**
+ * What people other than its owner may do in a mailbox (a shared mailbox's
+ * members): read, or also change (flags, moving, deleting, drafts). Folder
+ * management and rights stay with administrators.
+ */
+export type MailboxAccessLevel = 'read' | 'readWrite';
+
+export interface MailboxAccess {
+  /** The address of the person's own mailbox (their mail login). */
+  grantee: string;
+  level: MailboxAccessLevel;
+}
+
+export interface MailboxAccessState {
+  access: MailboxAccess[];
+  /** One read/unread state for everyone, instead of one per person. */
+  sharedSeen: boolean;
+}
+
 export interface SieveScriptInfo {
   name: string;
   active: boolean;
@@ -83,6 +102,14 @@ export interface MailEngine {
   setShares(address: string, kind: CollectionKind, collectionId: string, shares: CollectionShare[]): Promise<void>;
   /** Stops sharing all of `address`'s calendars and address books with `grantee` (a deleted mailbox). */
   removeGrantee(address: string, grantee: string): Promise<void>;
+  /** Who may use a mailbox besides its owner (all its mail folders), and its seen-state mode. */
+  getMailboxAccess(address: string): Promise<MailboxAccessState>;
+  /**
+   * Replaces who may use a mailbox besides its owner, on every mail folder
+   * (calendars and address books are left alone), and sets its seen-state
+   * mode. Returns the grantees whose access went away or shrank.
+   */
+  setMailboxAccess(address: string, state: MailboxAccessState): Promise<{ reduced: string[] }>;
   /**
    * Makes sure the mailbox's calendars and address books exist and are shared
    * with nobody by default (Cyrus lets "anyone" read calendar free/busy).
