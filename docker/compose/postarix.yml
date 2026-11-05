@@ -246,9 +246,12 @@ services:
       context: ../cyrus
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
-    hostname: ${MAIL_HOSTNAME:?set MAIL_HOSTNAME}
+    # No `hostname:` here or on postfix: Docker's DNS would answer the mail
+    # host name with this container's address to everything on its networks,
+    # including a reverse proxy network shared with other applications. Both
+    # take their public name from MAIL_HOSTNAME.
     environment:
-      MAIL_HOSTNAME: ${MAIL_HOSTNAME}
+      MAIL_HOSTNAME: ${MAIL_HOSTNAME:?set MAIL_HOSTNAME}
       CYRUS_ADMIN_PASSWORD: ${CYRUS_ADMIN_PASSWORD}
       # Only the internal secrets Cyrus uses (never INTERNAL_API_TOKEN itself).
       POSTARIX_SECRET_MAIL_AUTH: ${POSTARIX_SECRET_MAIL_AUTH}
@@ -292,7 +295,6 @@ services:
       context: ../postfix
       args:
         BASE_IMAGE: ${BASE_IMAGE:-debian:trixie-slim}
-    hostname: ${MAIL_HOSTNAME}
     # Validated DNS answers (AD bit) enable DANE for outgoing TLS.
     dns:
       - ${UNBOUND_IP:-172.30.53.53}

@@ -14,7 +14,11 @@ CYRUS_ROLE="${CYRUS_ROLE:-standalone}"
 # This server's own name in the Murder (what frontends connect to); the public
 # name otherwise.
 CYRUS_SERVERNAME="${CYRUS_SERVERNAME:-$MAIL_HOSTNAME}"
-export MAIL_HOSTNAME CYRUS_SERVERNAME
+# How it names itself to the API (log reports, session disconnects). The
+# container's host name is left unset, so MAIL_HOSTNAME never resolves to this
+# container on a network it shares with other applications.
+POSTARIX_NODE_NAME="${POSTARIX_NODE_NAME:-$CYRUS_SERVERNAME}"
+export MAIL_HOSTNAME CYRUS_SERVERNAME POSTARIX_NODE_NAME
 case "$CYRUS_ROLE" in
   standalone) ;;
   backend|frontend) : "${MURDER_MUPDATE_HOST:?MURDER_MUPDATE_HOST is required in a Murder}" ;;
