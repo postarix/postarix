@@ -103,6 +103,13 @@ export function allows(networks: string[], ip: string | undefined): boolean {
  * the admin panel with "Authorization: Bearer px_…", acting as the instance
  * administrator who created the key. Read-only keys may only read (GET).
  */
+/** A valid key used beyond its limits. */
+export interface ApiKeyRefusal {
+  refused: true;
+  code: 'API_KEY_ADDRESS' | 'API_KEY_READ_ONLY' | 'API_KEY_ORGANIZATION';
+  message: string;
+}
+
 @Injectable()
 export class ApiKeysService {
   private readonly logger = new Logger(ApiKeysService.name);
@@ -168,7 +175,14 @@ export class ApiKeysService {
    * creator is no longer an instance administrator. A key limited to some
    * organizations is refused anywhere but under /api/orgs/<one of them>/.
    */
-  async authenticate(key: string, ip: string | undefined, method: string, path = ''): Promise<AuthSession | null> {
+  /**
+   * The session an API key acts with, or why it may not make this request:
+   * `null` for an unknown, expired or revoked key (or one whose owner is no
+   * longer an instance administrator), a refusal for a valid key used beyond
+   * its limits. The refusal names the limit (and the address seen), so whoever
+   * holds the key can tell what to change.
+   */
+  async authenticate(key: string, ip: string | undefined, method: string, path = ''): Promise<AuthSession | ApiKeyRefusal | null> {
     if (!key.startsWith(API_KEY_PREFIX) || key.length < 20 || key.length > 200) return null;
     const candidates = await this.db
       .select({ key: apiKeys, owner: user })
@@ -184,14 +198,17 @@ export class ApiKeysService {
     const { key: row, owner } = match;
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
     if (!hasInstanceAdminRole(owner.role) || owner.banned) return null;
-    if (row.access === 'read' && method !== 'GET' && method !== 'HEAD') return null;
+    const refuse = (code: ApiKeyRefusal['code'], message: string): ApiKeyRefusal => {
+      this.logger.warn(`API key "${row.name}" refused (${code}): ${method} ${path} from ${ip ?? 'unknown'}`);
+      return { refused: true, code, message };
+    };
+    if (!allows(row.allowedIps, ip)) return refuse('API_KEY_ADDRESS', `This API key cannot be used from ${ip ?? 'this address'}`);
+    if (row.access === 'read' && method !== 'GET' && method !== 'HEAD') return refuse('API_KEY_READ_ONLY', 'This API key is read-only');
     if (row.organizationIds.length > 0) {
       const orgId = /^\/api\/orgs\/([^/?#]+)(?:[/?#]|$)/.exec(path)?.[1];
-      if (!orgId || !row.organizationIds.includes(decodeURIComponent(orgId))) return null;
-    }
-    if (!allows(row.allowedIps, ip)) {
-      this.logger.warn(`API key "${row.name}" used from a refused address: ${ip ?? 'unknown'}`);
-      return null;
+      if (!orgId || !row.organizationIds.includes(decodeURIComponent(orgId))) {
+        return refuse('API_KEY_ORGANIZATION', 'This API key is limited to some organizations, and this request is outside them');
+      }
     }
     void this.db
       .update(apiKeys)
