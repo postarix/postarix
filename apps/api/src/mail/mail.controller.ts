@@ -1,3 +1,4 @@
+import { ApiDoc } from '../openapi/openapi.js';
 import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ export class MailController {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
+  @ApiDoc({ summary: 'Send a draft', description: 'Sends a draft saved in the person\'s mailbox, or in a shared mailbox they may send from (`accountId`). From must be an address they may send as; Bcc is removed; the copy is filed in that mailbox\'s Sent.', appToken: `${'Connected applications may call it with a token (`Authorization: Bearer pxt_…`)'} with \`mail.send\`.` })
   @Post('send')
   @HttpCode(200)
   send(
@@ -33,12 +35,14 @@ export class MailController {
   }
 
   /** The addresses the user may send as (for the From field). */
+  @ApiDoc({ summary: 'Who the person may send as', description: 'Their own address and name, the other addresses they may send as, and the shared mailboxes they may send from (with the account to save drafts in).', appToken: `${'Connected applications may call it with a token (`Authorization: Bearer pxt_…`)'} with \`mail.read\`.` })
   @Get('identities')
   identities(@CurrentSession() session: AuthSession): Promise<Identities> {
     return this.sender.identities(session.user.id);
   }
 
   /** A message rendered for display: sanitized HTML, remote images blocked unless asked for. */
+  @ApiDoc({ summary: 'A message rendered for display', description: 'Sanitized HTML (show it in a sandboxed frame), text, attachments; remote images are replaced by links to the image proxy unless `remoteImages=1`. Reading it does not mark it read. `accountId`: a shared mailbox the person can read.', appToken: `${'Connected applications may call it with a token (`Authorization: Bearer pxt_…`)'} with \`mail.read\` or \`mail.supervise\` (own mailbox only).` })
   @Get('messages/:emailId')
   render(
     @CurrentSession() session: AuthSession,
@@ -57,6 +61,7 @@ export class MailController {
    * signature, made when the message was rendered for a signed-in user, is
    * what authorizes the fetch.
    */
+  @ApiDoc({ summary: 'A remote image of a rendered message', description: 'Signed links made by the message rendering; public on purpose (the signature authorizes it).' })
   @Public()
   @Get('image')
   async image(

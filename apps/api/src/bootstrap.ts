@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import 'reflect-metadata';
 import { ConsoleLogger, type INestApplication, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -6,6 +7,7 @@ import { toNodeHandler } from 'better-auth/node';
 import { IpAccessService } from './policies/policies.js';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import { OpenApiController } from './openapi/openapi.js';
 import { AppModule } from './app.module.js';
 import { type Auth, AUTH_BASE_PATH, CLIENT_IP_HEADER } from './auth/auth.js';
 import { bodyLimits } from './common/body-limits.middleware.js';
@@ -92,5 +94,16 @@ export async function createApp(): Promise<INestApplication> {
     ],
   });
   app.enableShutdownHooks();
+  OpenApiController.app = app;
+  OpenApiController.version = process.env.POSTARIX_VERSION ?? apiVersion();
   return app;
+}
+
+/** The API package's version (when the image does not say which release it is). */
+function apiVersion(): string {
+  try {
+    return (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string }).version ?? 'dev';
+  } catch {
+    return 'dev';
+  }
 }

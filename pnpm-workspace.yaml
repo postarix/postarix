@@ -21,3 +21,5 @@ minimumReleaseAgeExclude:
 allowBuilds:
   "@swc/core": true
   esbuild: true
+  # swagger-ui-dist depends on it; its install script only reports usage: never run it.
+  "@scarf/scarf": false

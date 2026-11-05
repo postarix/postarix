@@ -381,7 +381,8 @@ hour, the services' state and disk use, and the largest organizations.
   copy, sent in the background.
 - **Templates:** domain and mailbox templates (see above).
 
-- **API keys:** for scripts and other software (provisioning, monitoring).
+- **API keys:** for scripts and other software (provisioning, monitoring);
+  every route is described at `/api/docs` (see the [API reference](api.md)).
   They call the same API as the admin panel with
   `Authorization: Bearer px_…`, as the administrator who created the key:
   read-only keys can only read, and a key can be limited to some addresses
