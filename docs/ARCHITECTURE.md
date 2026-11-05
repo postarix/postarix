@@ -105,8 +105,14 @@ Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 3. Cyrus and Postfix validate logins through **saslauthd** with PAM. A `pam_exec` helper posts the credentials to an internal endpoint of `apps/api` (`/api/internal/mail-auth`), authenticated with a shared secret. (`saslauthd`'s `httpform` mechanism would be simpler, but Debian does not compile it in.) saslauthd's credential cache stays off so revoking an app password takes effect immediately.
 4. Failed account-password attempts are limited per username in the API (app passwords, which cannot be guessed, keep working), on top of CrowdSec watching the mail logs (Phase 5).
 5. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
+6. Cyrus checks credentials only when a session starts. So whenever access shrinks (mailbox or domain disabled, password changed, app password revoked, second factor added, account banned or deleted), the API records a **disconnect request** in PostgreSQL. A loop in each Cyrus container long-polls the API's internal listener for them, ends the person's open sessions (it signals their processes, found in Cyrus' process registry; new logins go through the login bridge as usual), and acknowledges up to the last one; a node that was down catches up when it is back.
 
 **OAUTHBEARER / XOAUTH2** for clients that support it will be evaluated later.
+
+### 4.3 Other applications acting for users
+
+External identities, shared mailboxes and connected applications (token exchange,
+supervision) are designed in [design/delegated-access.md](design/delegated-access.md).
 
 ## 5. Multi-tenancy
 
@@ -418,6 +424,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Calendar scheduling is done by the API, not by Cyrus: invitations, replies and cancellations are built from Cyrus' own iCalendar for the event and sent through the internal submission port from the person's address; an incoming one changes the calendar only when the person asks and only when its sender is the organizer (cancellations) or the attendee (replies) it speaks for. Sharing is set through the API (colleagues only) as Cyrus ACLs. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
+| 2026-11-04 | Open mail sessions end when access ends: disconnect requests in PostgreSQL, applied by a long-polling loop in each Cyrus container that signals the person's Cyrus processes (Cyrus only checks credentials at login; `cyr_deny` would also refuse new logins for a few seconds). |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |
 | 2026-11-01 | License **AGPL-3.0**. |
 | 2026-11-01 | ORM: **Drizzle** (explicit SQL, strong typing, versioned migrations; official Better Auth adapter). |

@@ -253,6 +253,13 @@
       "when": 1793718736781,
       "tag": "0035_known_mephisto",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793848282037,
+      "tag": "0036_omniscient_switch",
+      "breakpoints": true
     }
   ]
 }
