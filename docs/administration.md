@@ -120,6 +120,36 @@ password encrypted until it is stopped or deleted; a one-time job erases it
 when it ends. **Run now** starts a repeating job at once. Old servers on a
 private network must be allowed first (see [Migration](MIGRATION.md)).
 
+### Identities
+
+The **identities** button of a person's mailbox (the fingerprint) links its
+owner to who they are elsewhere: an `(issuer, subject)` pair, where the issuer
+is an identity provider's issuer URL or the name an application uses for
+itself, and the subject is the person's id there (an OpenID Connect `sub`, a
+SAML NameID, an application's user id).
+
+- **Single sign-on** first looks for the identity the provider asserts (its
+  issuer and the person's `sub`) among the organization's identities, and signs
+  in the person linked to it, whatever email the provider sends: useful when
+  the provider knows people by another email. A linked person whose mailbox
+  cannot sign in is refused. Unlinked people keep signing in by email, as
+  before.
+- **Connected applications** name the person they act for by an identity of
+  their own issuer.
+- A pair means something only inside its organization, and links one person.
+  Only owners of person mailboxes can be linked, never an instance
+  administrator. Linking and unlinking are recorded in **Activity**.
+- With an API key limited to the organization:
+
+  ```
+  GET    /api/orgs/<orgId>/identities?userId=…&issuer=…
+  POST   /api/orgs/<orgId>/identities   {"mailboxId": "…", "issuer": "…", "subject": "…", "label": "…"}
+  DELETE /api/orgs/<orgId>/identities/<id>
+  ```
+
+  `userId` can be given instead of `mailboxId` (mailboxes list their owner's
+  `userId`).
+
 ### Sign in as a mailbox
 
 Instance administrators can open someone's mailbox in the webmail, as its
