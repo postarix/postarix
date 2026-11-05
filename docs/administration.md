@@ -74,7 +74,10 @@ Besides the name, quota and password, a mailbox has:
 - **Status.** *Active*; *Receives mail, nobody can sign in* (for a shared
   address read through other means, or an account on hold); or *Disabled*
   (no sign-in and no mail: senders get an error). Leaving *Active* signs
-  everyone out of it.
+  everyone out of it, mail apps included: connections already open (IMAP,
+  POP3, Sieve) are closed within seconds, not only new sign-ins refused. The
+  same happens when its password changes, an app password is revoked, a
+  second factor or passkey is added, or the account is banned or deleted.
 - **Mail apps may use:** IMAP, POP3, SMTP (sending), Sieve filters, and
   calendars and contacts (CalDAV/CardDAV). The protocols left out are refused
   for its password and its app passwords alike; the webmail always works.

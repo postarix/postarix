@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from '../auth/passwords.js';
 import { AUTH, DATABASE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { account, session, user } from '../db/schema/index.js';
+import { type DisconnectReason, requestDisconnect } from '../mail-sessions/session-disconnects.js';
 import { loadInstanceSettings, passwordProblem } from '../settings/instance-settings.js';
 
 export interface AccountSummary {
@@ -84,11 +85,14 @@ export class AccountsService {
         .where(and(eq(account.userId, userId), eq(account.providerId, 'credential')));
       await tx.delete(session).where(eq(session.userId, userId));
     });
+    await requestDisconnect(this.db, { userIds: [userId] }, 'password_changed');
   }
 
   /** Signs the user out everywhere. */
-  async signOutEverywhere(userId: string): Promise<void> {
+  async signOutEverywhere(userId: string, reason: DisconnectReason = 'signed_out_everywhere'): Promise<void> {
     await this.db.delete(session).where(eq(session.userId, userId));
+    // Mail apps too: their sessions were checked only when they started.
+    await requestDisconnect(this.db, { userIds: [userId] }, reason);
   }
 
   /** Checks the account (web) password. */
@@ -104,6 +108,7 @@ export class AccountsService {
 
   /** Deletes the user; sessions, memberships and app passwords cascade. */
   async delete(userId: string): Promise<void> {
+    await requestDisconnect(this.db, { userIds: [userId] }, 'account_deleted');
     await this.db.delete(user).where(eq(user.id, userId));
   }
 }

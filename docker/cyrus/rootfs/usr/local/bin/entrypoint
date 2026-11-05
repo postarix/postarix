@@ -286,5 +286,8 @@ POSTARIX_SASL_INSTANCE=jmap saslauthd -a pam -r -m /run/saslauthd-jmap -n 2
   done
 ) &
 
+# Ends the open sessions of people whose access was taken away (asks the API).
+if [ "$CYRUS_ROLE" != mupdate ]; then postarix-session-guard & fi
+
 log "starting Cyrus ($CYRUS_ROLE, $CYRUS_SERVERNAME) for $MAIL_HOSTNAME"
 exec /usr/sbin/cyrmaster -D -M /etc/cyrus.conf -C /etc/imapd.conf

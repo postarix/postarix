@@ -1,3 +1,4 @@
+import { requestDisconnect } from '../mail-sessions/session-disconnects.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, count, eq, inArray, max } from 'drizzle-orm';
 import { DATABASE } from '../core/tokens.js';
@@ -90,6 +91,7 @@ export class DomainsRepository {
       .from(mailboxes)
       .where(and(eq(mailboxes.organizationId, ctx.organizationId), eq(mailboxes.domainId, id)));
     await this.db.delete(session).where(inArray(session.userId, owners));
+    await requestDisconnect(this.db, { domainId: id }, 'domain_disabled');
   }
 
   /** How many alias domains repeat this domain. */

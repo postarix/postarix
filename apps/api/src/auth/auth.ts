@@ -4,6 +4,7 @@ import { betterAuth } from 'better-auth';
 import { eq } from 'drizzle-orm';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
+import { type DisconnectReason, requestDisconnect } from '../mail-sessions/session-disconnects.js';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import type { Env } from '../config/env.js';
 import type { Database } from '../db/client.js';
@@ -99,6 +100,9 @@ function accountKey(email: unknown): string | null {
   return typeof email === 'string' && email.length <= 320 ? email.trim().toLowerCase() : null;
 }
 
+/** Disconnect reasons noted by "before" database hooks, for their "after" hooks. */
+const pendingDisconnects = new WeakMap<object, DisconnectReason>();
+
 export function createAuth(db: Database, env: Env, counters: CounterStore = new MemoryCounterStore()) {
   const localCounters = new MemoryCounterStore();
   // 10 failed sign-ins per account per 15 minutes, like mail logins.
@@ -171,6 +175,33 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
     },
     telemetry: { enabled: false },
     databaseHooks: {
+      // Mail sessions are checked only at login: end the open ones when an
+      // update takes access away (see requestDisconnect). "before" sees what
+      // changes, "after" which account it was.
+      user: {
+        update: {
+          before: async (data, context) => {
+            if (context && (data.banned === true || data.twoFactorEnabled === true)) {
+              pendingDisconnects.set(context, data.banned === true ? 'account_banned' : 'second_factor_added');
+            }
+          },
+          after: async (updated, context) => {
+            const reason = context ? pendingDisconnects.get(context) : undefined;
+            if (reason) await requestDisconnect(db, { userIds: [updated.id] }, reason);
+          },
+        },
+      },
+      account: {
+        update: {
+          before: async (data, context) => {
+            if (context && typeof data.password === 'string') pendingDisconnects.set(context, 'password_changed');
+          },
+          after: async (updated, context) => {
+            const reason = context ? pendingDisconnects.get(context) : undefined;
+            if (reason && updated.providerId === 'credential') await requestDisconnect(db, { userIds: [updated.userId] }, reason);
+          },
+        },
+      },
       session: {
         create: {
           // Whatever the sign-in method: a mailbox that may not sign in (or is
@@ -240,6 +271,11 @@ export function createAuth(db: Database, env: Env, counters: CounterStore = new 
               await signInFailures.recordSuccess(email);
             }
           }
+        }
+        // With a passkey, the account password stops working for mail apps.
+        if (ctx.path === '/passkey/verify-registration' && !(ctx.context.returned instanceof APIError)) {
+          const current = await getSessionFromCtx(ctx).catch(() => null);
+          if (current) await requestDisconnect(db, { userIds: [current.user.id] }, 'second_factor_added');
         }
         // Remember how strong a new session is (see SecondFactorPolicy).
         const method = strongSignInMethod(ctx.path);

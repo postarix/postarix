@@ -34,9 +34,10 @@ These were checked against the running stack before relying on them:
    in every installation today): an IDLE connection stayed open for more than a
    minute after the mailbox was disabled, and STATUS still answered. Only new
    logins are refused (the login bridge checks the mailbox status).
-5. **`cyr_deny <user>` ends all of that user's sessions at once** (the IDLE
-   connection closed within milliseconds), and refuses new ones until
-   `cyr_deny -a <user>`.
+5. **`cyr_deny <user>` ends all of that user's sessions** (the IDLE connection
+   closed at once), but refuses new logins until `cyr_deny -a`, and takes a few
+   seconds. Sending TERM to the user's processes listed in `/run/cyrus/proc`
+   ends them just as well, with no refusal window.
 
 ## P0. Ending open sessions when access ends
 
@@ -55,17 +56,21 @@ How, keeping the rule that the API never reaches into the mail containers:
   API's internal listener. The API answers as soon as there are requests newer
   than that node's cursor (or after 25 s with nothing), so the delay is about a
   second.
-- For each address the loop runs `cyr_deny <user>` (all sessions end) and then
-  `cyr_deny -a <user>` (new logins are decided by the login bridge as usual),
-  then acknowledges up to the last id it applied. The API keeps a **cursor per
+- For each address the loop ends that user's sessions: every Cyrus service
+  process registers its user in Cyrus' process registry (`/run/cyrus/proc`), and
+  a TERM signal makes it close its connection gracefully. (`cyr_deny` does the
+  same, but also refuses new logins for the seconds it takes, which mail apps
+  count as failed logins.) New logins are decided by the login bridge as usual.
+  Then it acknowledges up to the last id it applied. The API keeps a **cursor per
   node** (`session_disconnect_cursors`), so a node that was down for any length
   of time applies everything it missed when its loop starts again. A node seen
   for the first time starts at the latest request (it has no older sessions).
   Requests are pruned after 30 days.
 - With a Cyrus Murder, the loop runs on every frontend and backend, each with
   its own cursor.
+- It uses the mail-login secret the Cyrus containers already have, so no
+  installation needs a new secret.
 
-The admin panel's mailbox page says "Sessions ended" once acknowledged.
 
 ## P1. External identities
 
