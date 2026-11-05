@@ -30,6 +30,11 @@ Errors are JSON, for example
 `{ "statusCode": 422, "message": "Verify the domain before adding mailboxes", "code": "DOMAIN_NOT_VERIFIED" }`;
 validation errors list their `issues`.
 
+An unknown, expired or revoked API key answers 401. A valid key used beyond
+its limits answers 403 with a `code`: `API_KEY_ADDRESS` (the message names the
+address the request came from, as Postarix sees it), `API_KEY_READ_ONLY` or
+`API_KEY_ORGANIZATION`. Each refusal is also logged by the API.
+
 ## Common tasks with an API key
 
 ```bash
