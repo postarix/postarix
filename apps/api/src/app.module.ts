@@ -33,6 +33,7 @@ import { PoliciesModule } from './policies/policies.js';
 import { InstanceAdminModule } from './system/instance-admin.js';
 import { InstanceSettingsModule } from './settings/instance-settings.js';
 import { ApiKeysModule } from './api-keys/api-keys.js';
+import { ConnectedAppsModule } from './connected-apps/connected-apps.js';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ApiKeysModule } from './api-keys/api-keys.js';
     ImpersonationModule,
     InstanceAdminModule,
     ApiKeysModule,
+    ConnectedAppsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: SessionGuard }],

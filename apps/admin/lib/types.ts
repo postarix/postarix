@@ -91,6 +91,32 @@ export interface Mailbox {
   createdAt: string;
 }
 
+/** Another application allowed to act for the organization's people (see docs/INTEGRATIONS.md). */
+export interface ConnectedApp {
+  id: string;
+  name: string;
+  clientId: string;
+  identityIssuer: string;
+  scopes: ('mail.read' | 'mail.write' | 'mail.send' | 'mail.supervise')[];
+  allowedIps: string[];
+  expiresAt: string | null;
+  revokedAt: string | null;
+  jwksUri: string | null;
+  hasJwks: boolean;
+  hasSecret: boolean;
+  requirePrivateKeyJwt: boolean;
+  allowUserIdSubjects: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+export interface Supervision {
+  enabled: boolean;
+  notify: boolean;
+  supervisors: { userId: string; address: string; displayName: string; createdAt: string }[];
+  recent: { id: string; supervisorId: string; subjectId: string; reason: string; expiresAt: string; createdAt: string; app: string }[];
+}
+
 /** A member of a shared mailbox, and what they may do with it. */
 export interface SharedMember {
   userId: string;

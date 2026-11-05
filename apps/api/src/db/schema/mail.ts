@@ -560,8 +560,107 @@ export const organizationMailOptions = pgTable('organization_mail_options', {
     .references(() => organization.id, { onDelete: 'cascade' }),
   /** Mail sent from a shared mailbox says who sent it ("Sender:" header), besides the audit record. */
   sharedSenderHeader: boolean().notNull().default(false),
+  /** Connected applications may let people with the "may supervise" right read others' mailboxes. */
+  supervisionEnabled: boolean().notNull().default(false),
+  /** The mailbox's owner is told by mail when someone supervises it. */
+  supervisionNotify: boolean().notNull().default(false),
   updatedAt: timestamp({ withTimezone: true })
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+export const connectedAppScopes = ['mail.read', 'mail.write', 'mail.send', 'mail.supervise'] as const;
+export type ConnectedAppScope = (typeof connectedAppScopes)[number];
+
+/**
+ * Another application (a helpdesk, a CRM, an intranet) the organization lets
+ * act for its people: it exchanges its credentials for short-lived tokens
+ * that act as one person (RFC 8693), and reaches their mail through the API.
+ * One organization only. Only a hash of the secret is kept.
+ */
+export const connectedApps = pgTable(
+  'connected_apps',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    clientId: text().notNull().unique(),
+    /** SHA-256 of the client secret (256 random bits), hex; null: no secret (private_key_jwt only). */
+    secretHash: text(),
+    /** Its public keys for private_key_jwt (RFC 7523): a JWKS URL, or the keys themselves. */
+    jwksUri: text(),
+    jwks: jsonb().$type<{ keys: Record<string, unknown>[] }>(),
+    requirePrivateKeyJwt: boolean().notNull().default(false),
+    /** The issuer of the external identities it may name (P1). */
+    identityIssuer: text().notNull(),
+    /** Whether it may also name people by their Postarix user id. */
+    allowUserIdSubjects: boolean().notNull().default(false),
+    scopes: text({ enum: connectedAppScopes }).array().notNull(),
+    /** Addresses or networks (CIDR) it may ask from; empty: anywhere. */
+    allowedIps: text().array().notNull().default(sql`ARRAY[]::text[]`),
+    expiresAt: timestamp({ withTimezone: true }),
+    revokedAt: timestamp({ withTimezone: true }),
+    lastUsedAt: timestamp({ withTimezone: true }),
+    createdBy: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('connected_apps_organization_id_idx').on(table.organizationId)],
+);
+export type ConnectedAppRow = typeof connectedApps.$inferSelect;
+
+/** People of an organization who may read others' mailboxes through a connected application (with a reason). */
+export const organizationSupervisors = pgTable(
+  'organization_supervisors',
+  {
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    grantedBy: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.organizationId, table.userId] })],
+);
+
+/** A supervisor reading someone's mailbox through an application: why, and until when. */
+export const supervisionGrants = pgTable(
+  'supervision_grants',
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    organizationId: text()
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    appId: uuid()
+      .notNull()
+      .references(() => connectedApps.id, { onDelete: 'cascade' }),
+    supervisorId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    subjectId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    reason: text().notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('supervision_grants_lookup_idx').on(table.appId, table.supervisorId, table.subjectId)],
+);
+
+/** Every request made under supervision: which methods, when (never content). */
+export const supervisionAccess = pgTable(
+  'supervision_access',
+  {
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    grantId: uuid()
+      .notNull()
+      .references(() => supervisionGrants.id, { onDelete: 'cascade' }),
+    request: text().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('supervision_access_grant_idx').on(table.grantId)],
+);

@@ -11,6 +11,7 @@ import type { Env } from '../config/env.js';
 import { AUTH, DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
 import { findOwnMailbox, findSharedAccounts, type SharedAccount } from './my-mailbox.js';
+import { type AppTokenGrant, AppTokensService } from '../connected-apps/app-tokens.js';
 
 /** Largest JMAP API request (method calls), well above what clients send. */
 const API_BODY_LIMIT = 10 * 1024 * 1024;
@@ -37,6 +38,36 @@ const ALLOWED_METHODS =
   /^(?:Mailbox\/(?:get|changes|query|queryChanges|set)|Email\/(?:get|changes|query|queryChanges|set|copy|import|parse)|Thread\/(?:get|changes)|SearchSnippet\/get|Blob\/(?:copy|get|lookup)|Calendar\/(?:get|changes)|CalendarEvent\/(?:get|changes|query|queryChanges|set)|AddressBook\/(?:get|changes)|Contact\/(?:get|changes|query|queryChanges|set))$/;
 
 const MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
+/** What a connected application's token may use: mail, nothing else. */
+const APP_CAPABILITIES = new Set(['urn:ietf:params:jmap:core', MAIL_CAPABILITY]);
+/** Methods that only read. */
+const READ_METHOD = /^(?:Mailbox|Email|Thread)\/(?:get|changes|query|queryChanges)$|^SearchSnippet\/get$|^Blob\/(?:get|lookup)$/;
+
+/** What a connected application's token may do in JMAP. */
+export interface TokenAccess {
+  /** Change mail (mail.write, never under supervision). */
+  write: boolean;
+}
+
+function accessOf(grant: AppTokenGrant): TokenAccess {
+  return { write: grant.scopes.includes('mail.write') && !grant.supervisionGrantId };
+}
+
+/** A connected application's bearer token on the request, if any. */
+function appBearer(req: Request): string | null {
+  const header = req.headers.authorization;
+  return typeof header === 'string' && /^Bearer\s+pxt_/i.test(header) ? header.replace(/^Bearer\s+/i, '').trim() : null;
+}
+
+/** The method names of a checked JMAP request, for the supervision log. */
+function methodNames(body: Uint8Array): string {
+  try {
+    const calls = (JSON.parse(Buffer.from(body).toString('utf8')) as { methodCalls?: unknown[][] }).methodCalls ?? [];
+    return calls.map((c) => String(c[0])).join(', ').slice(0, 900);
+  } catch {
+    return '?';
+  }
+}
 /** Methods that read or change mail (as opposed to calendars and contacts). */
 const MAIL_METHOD = /^(?:Mailbox|Email|Thread|SearchSnippet|Blob)\//;
 
@@ -84,6 +115,7 @@ export class JmapProxy {
     @Inject(MAIL_ENGINE) private readonly engine: MailEngine,
     @Inject(ENV) private readonly env: Env,
     @Inject(SecondFactorPolicy) private readonly secondFactor: SecondFactorPolicy,
+    @Inject(AppTokensService) private readonly appTokens: AppTokensService,
   ) {
     this.checkOrigin = originCheck([env.AUTH_URL, ...env.TRUSTED_ORIGINS]);
     // Path-only, so the URLs work wherever the webmail is served from (behind
@@ -93,6 +125,12 @@ export class JmapProxy {
 
   /** Express handler, to mount on /api/jmap. */
   readonly handle = (req: Request, res: Response, next: NextFunction): void => {
+    // A connected application's bearer token: no cookie is used, so there is
+    // no cross-site request to guard against.
+    if (appBearer(req)) {
+      this.serve(req, res).catch((error: unknown) => this.fail(res, error, next));
+      return;
+    }
     this.checkOrigin(req, res, () => {
       this.serve(req, res).catch((error: unknown) => this.fail(res, error, next));
     });
@@ -102,18 +140,33 @@ export class JmapProxy {
     const method = req.method === 'HEAD' ? 'GET' : req.method;
     if (method !== 'GET' && method !== 'POST') throw new ProxyError(405, 'Method not allowed');
 
-    const session = await this.auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
-    if (!session) throw new ProxyError(401, 'Sign in first');
-    if (!(await this.secondFactor.satisfied(session.user.id, session.session.id))) {
-      throw new ProxyError(403, 'Your organization requires a second sign-in step. Set it up in your account settings.', SECOND_FACTOR_REQUIRED);
+    // Who: a person's web session, or a connected application acting for one.
+    let userId: string;
+    let grant: AppTokenGrant | null = null;
+    const bearer = appBearer(req);
+    if (bearer) {
+      const found = await this.appTokens.authenticate(bearer, req.ip);
+      if (found === 'limited') throw new ProxyError(429, 'Too many requests from this application; slow down');
+      if (!found || !found.userId) throw new ProxyError(401, 'Invalid or expired token');
+      grant = found;
+      userId = found.userId;
+    } else {
+      const session = await this.auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
+      if (!session) throw new ProxyError(401, 'Sign in first');
+      if (!(await this.secondFactor.satisfied(session.user.id, session.session.id))) {
+        throw new ProxyError(403, 'Your organization requires a second sign-in step. Set it up in your account settings.', SECOND_FACTOR_REQUIRED);
+      }
+      userId = session.user.id;
     }
-    const address = await findOwnMailbox(this.db, session.user.id);
+    const address = await findOwnMailbox(this.db, userId);
     if (!address) throw new ProxyError(404, 'You have no mailbox');
     // The mail accounts this person may reach: their own and the shared
     // mailboxes they are a member of now (PostgreSQL decides, whatever ACLs
-    // Cyrus still has).
-    const shared = await findSharedAccounts(this.db, session.user.id);
+    // Cyrus still has). Supervision reaches their own mailbox only.
+    const supervising = Boolean(grant?.supervisionGrantId);
+    const shared = supervising ? [] : await findSharedAccounts(this.db, userId);
     const mailAccounts = new Set([address, ...shared.map((s) => s.address)]);
+    const access = grant ? accessOf(grant) : null;
 
     const [rawPath = '', query = ''] = req.url.split(/\?(.*)/s, 2);
     const path = rawPath.replace(/^\//, '');
@@ -123,12 +176,21 @@ export class JmapProxy {
     if (blobAccount !== undefined && !mailAccounts.has(safeDecode(blobAccount))) throw new ProxyError(404, 'Not found');
 
     const isUpload = path.startsWith('upload/');
+    if (access) {
+      if (isUpload && !access.write) throw new ProxyError(403, 'This token cannot change mail');
+      if (path.startsWith('eventsource') && supervising) throw new ProxyError(403, 'Not available under supervision');
+    }
     const abort = new AbortController();
     res.on('close', () => abort.abort());
 
     let body: ReadableStream<Uint8Array> | Uint8Array | undefined;
     if (method === 'POST') {
-      body = isUpload ? limitedBody(req, this.env.MAIL_UPLOAD_LIMIT) : checkApiRequest(await readAll(limitedBody(req, API_BODY_LIMIT)), { mailAccounts });
+      body = isUpload
+        ? limitedBody(req, this.env.MAIL_UPLOAD_LIMIT)
+        : checkApiRequest(await readAll(limitedBody(req, API_BODY_LIMIT)), { mailAccounts, ...(access ? { access } : {}) });
+    }
+    if (grant && supervising) {
+      await this.appTokens.logSupervision(grant, method === 'POST' && body && !isUpload ? `JMAP ${methodNames(body as Uint8Array)}` : `${method} ${path.split('/')[0] || 'session'}`);
     }
 
     const upstream = await this.engine.jmap(address, {
@@ -153,7 +215,7 @@ export class JmapProxy {
     res.setHeader('x-content-type-options', 'nosniff');
 
     if (method === 'GET' && path === '' && upstream.ok) {
-      res.json(this.rewriteSession((await upstream.json()) as Record<string, unknown>, address, shared));
+      res.json(this.rewriteSession((await upstream.json()) as Record<string, unknown>, address, shared, access));
       return;
     }
 
@@ -199,10 +261,12 @@ export class JmapProxy {
    * Points the session's URLs at this proxy instead of Cyrus, and advertises
    * only the capabilities the proxy lets through.
    */
-  private rewriteSession(session: Record<string, unknown>, own: string, shared: SharedAccount[]): Record<string, unknown> {
+  private rewriteSession(session: Record<string, unknown>, own: string, shared: SharedAccount[], access: TokenAccess | null): Record<string, unknown> {
     const out = { ...session };
+    // A connected application's token reaches mail only.
+    const allowed = access ? APP_CAPABILITIES : ALLOWED_CAPABILITIES;
     const keep = (value: unknown) =>
-      value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => ALLOWED_CAPABILITIES.has(key))) : value;
+      value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => allowed.has(key))) : value;
     out.capabilities = keep(out.capabilities);
     out.primaryAccounts = keep(out.primaryAccounts);
     const sharedByAddress = new Map(shared.map((s) => [s.address, s]));
@@ -221,6 +285,7 @@ export class JmapProxy {
           {
             ...account,
             ...(member ? { name: member.displayName || member.address, isReadOnly: member.rights === 'read' } : {}),
+            ...(access && !access.write ? { isReadOnly: true } : {}),
             accountCapabilities: capabilities,
           },
         ]);
@@ -320,7 +385,7 @@ function checkCalendarEventSet(args: Record<string, unknown>): void {
  * Checks a JMAP API request against the allowed capabilities and methods, and
  * returns it re-serialized (so what Cyrus parses is exactly what was checked).
  */
-export function checkApiRequest(raw: Uint8Array, options: { mailAccounts?: ReadonlySet<string> } = {}): Uint8Array {
+export function checkApiRequest(raw: Uint8Array, options: { mailAccounts?: ReadonlySet<string>; access?: TokenAccess } = {}): Uint8Array {
   let request: unknown;
   try {
     request = JSON.parse(Buffer.from(raw).toString('utf8'));
@@ -329,8 +394,9 @@ export function checkApiRequest(raw: Uint8Array, options: { mailAccounts?: Reado
   }
   const { using, methodCalls } = (request ?? {}) as { using?: unknown; methodCalls?: unknown };
   if (!Array.isArray(using) || !Array.isArray(methodCalls)) throw new ProxyError(400, 'Not a JMAP request');
+  const capabilities = options.access ? APP_CAPABILITIES : ALLOWED_CAPABILITIES;
   for (const capability of using) {
-    if (typeof capability !== 'string' || !ALLOWED_CAPABILITIES.has(capability)) {
+    if (typeof capability !== 'string' || !capabilities.has(capability)) {
       throw new ProxyError(403, `Capability not available: ${String(capability).slice(0, 100)}`);
     }
   }
@@ -338,6 +404,10 @@ export function checkApiRequest(raw: Uint8Array, options: { mailAccounts?: Reado
     const name: unknown = Array.isArray(call) ? call[0] : undefined;
     if (typeof name !== 'string' || !ALLOWED_METHODS.test(name)) {
       throw new ProxyError(403, `Method not available: ${String(name).slice(0, 100)}`);
+    }
+    // Connected applications: mail only, and changes only with mail.write.
+    if (options.access && (!MAIL_METHOD.test(name) || (!options.access.write && !READ_METHOD.test(name)))) {
+      throw new ProxyError(403, `Not allowed with this token: ${name}`);
     }
     const args = Array.isArray(call) && call[1] && typeof call[1] === 'object' ? (call[1] as Record<string, unknown>) : {};
     if (name === 'CalendarEvent/set') checkCalendarEventSet(args);
