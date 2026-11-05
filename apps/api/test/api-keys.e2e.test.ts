@@ -56,7 +56,8 @@ describe('API keys', () => {
     const { body } = await root.post('/api/system/api-keys').send({ name: 'Monitoring', access: 'read' }).expect(201);
     const key = asKey(body.key);
     await key.get('/api/system/status').expect(200);
-    await key.post(`/api/orgs/${org.orgId}/mailboxes`).send({ domainId: org.domainId, localPart: 'nope', password: PASSWORD }).expect(401);
+    const refused = await key.post(`/api/orgs/${org.orgId}/mailboxes`).send({ domainId: org.domainId, localPart: 'nope', password: PASSWORD }).expect(403);
+    expect(refused.body.code).toBe('API_KEY_READ_ONLY');
   });
 
   it('works only from the allowed addresses', async () => {
@@ -64,7 +65,8 @@ describe('API keys', () => {
       .post('/api/system/api-keys')
       .send({ name: 'Office only', access: 'read', allowedIps: ['203.0.113.0/24'] })
       .expect(201);
-    await asKey(body.key).get('/api/system/status').expect(401);
+    const refused = await asKey(body.key).get('/api/system/status').expect(403);
+    expect(refused.body).toMatchObject({ code: 'API_KEY_ADDRESS', message: expect.stringMatching(/127\.0\.0\.1|::1/) });
     const local = await root
       .post('/api/system/api-keys')
       .send({ name: 'Localhost', access: 'read', allowedIps: ['127.0.0.1', '::1'] })
@@ -105,17 +107,24 @@ describe('API keys', () => {
     const mailboxes = await key.get(`/api/orgs/${org.orgId}/mailboxes`).expect(200);
     expect(mailboxes.body.data.map((m: { address: string }) => m.address)).toContain(org.address);
     await key.post(`/api/orgs/${org.orgId}/aliases`).send({ domainId: org.domainId, localPart: 'from-key', destinations: [org.address] }).expect(201);
+    // Writes of every kind, also with an empty body (refused by validation, not by the key).
+    const person = mailboxes.body.data.find((m: { address: string }) => m.address === org.address);
+    const linked = await key.post(`/api/orgs/${org.orgId}/identities`).send({ mailboxId: person.id, issuer: 'https://app.example.test', subject: '1' }).expect(201);
+    expect(Object.keys(linked.body).sort()).toEqual(['address', 'createdAt', 'id', 'issuer', 'label', 'subject', 'userId']);
+    await key.post(`/api/orgs/${org.orgId}/identities`).expect(400);
     // Not the instance's limits (those are for instance administrators).
     await patch(`/api/orgs/${org.orgId}/domains/${org.domainId}`).send({ maxMailboxes: 1000 }).expect(403);
 
     // Nothing of other organizations, and nothing of the instance.
-    await key.get(`/api/orgs/${other.orgId}/mailboxes`).expect(401);
-    await key.get(`/api/orgs/${other.orgId}/overview`).expect(401);
-    await key.get('/api/system/status').expect(401);
-    await key.get('/api/system/api-keys').expect(401);
-    await key.get('/api/admin/organizations').expect(401);
-    await key.get('/api/me/organizations').expect(401);
-    await key.get(`/api/orgs/${org.orgId}x/mailboxes`).expect(401);
+    await key.get(`/api/orgs/${other.orgId}/mailboxes`).expect(403);
+    await key.get(`/api/orgs/${other.orgId}/overview`).expect(403);
+    await key.get('/api/system/status').expect(403);
+    await key.get('/api/system/api-keys').expect(403);
+    await key.get('/api/admin/organizations').expect(403);
+    await key.get('/api/me/organizations').expect(403);
+    await key.get(`/api/orgs/${org.orgId}x/mailboxes`).expect(403);
+    const outside = await key.get('/api/system/status').expect(403);
+    expect(outside.body.code).toBe('API_KEY_ORGANIZATION');
     // An unlimited key still reaches everything.
     const all = await root.post('/api/system/api-keys').send({ name: 'Everything', access: 'read' }).expect(201);
     await asKey(all.body.key).get(`/api/orgs/${other.orgId}/mailboxes`).expect(200);

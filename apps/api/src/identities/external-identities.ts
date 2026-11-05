@@ -114,7 +114,7 @@ export class ExternalIdentitiesRepository {
 }
 
 function toDto(row: { id: string; userId: string; address: string; issuer: string; subject: string; label: string; createdAt: Date }): ExternalIdentityDto {
-  return { ...row, createdAt: row.createdAt.toISOString() };
+  return { id: row.id, userId: row.userId, address: row.address, issuer: row.issuer, subject: row.subject, label: row.label, createdAt: row.createdAt.toISOString() };
 }
 
 @Injectable()
