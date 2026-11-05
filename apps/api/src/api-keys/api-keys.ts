@@ -34,7 +34,7 @@ export const API_KEY_PREFIX = 'px_';
 const LOOKUP_LENGTH = 12;
 
 /** An address or network: "203.0.113.7", "203.0.113.0/24", "2001:db8::/32". */
-const networkSchema = z
+export const networkSchema = z
   .string()
   .trim()
   .max(64)
@@ -83,7 +83,7 @@ const toDto = (row: ApiKeyRow, names: Map<string, string> = new Map()): ApiKeyDt
 
 const hash = (key: string) => createHash('sha256').update(key).digest('hex');
 
-function allows(networks: string[], ip: string | undefined): boolean {
+export function allows(networks: string[], ip: string | undefined): boolean {
   if (networks.length === 0) return true;
   if (!ip) return false;
   const address = ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;

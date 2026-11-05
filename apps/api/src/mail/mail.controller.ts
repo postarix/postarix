@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
 import { type AuthSession, CurrentSession, Public } from '../auth/session.js';
@@ -8,6 +8,7 @@ import { ENV } from '../core/tokens.js';
 import { fetchRemoteImage, ImageProxyError, verifyImageLink } from './image-proxy.js';
 import { MessageService, type RenderedMessage } from './message.service.js';
 import { type Identities, SendService, sendSchema } from './send.service.js';
+import type { AppTokenRequest } from '../connected-apps/unread.js';
 
 const emailIdSchema = z.string().min(1).max(255).regex(/^[A-Za-z0-9_-]+$/);
 const renderQuerySchema = z.object({ remoteImages: z.enum(['0', '1']).default('0'), accountId: z.string().min(3).max(320).optional() });
@@ -43,7 +44,10 @@ export class MailController {
     @CurrentSession() session: AuthSession,
     @Param('emailId', new ZodValidationPipe(emailIdSchema)) emailId: string,
     @Query(new ZodValidationPipe(renderQuerySchema)) query: z.infer<typeof renderQuerySchema>,
+    @Req() req: AppTokenRequest,
   ): Promise<RenderedMessage> {
+    // Supervision reaches the person's own mailbox only, not their shared ones.
+    if (req.appToken?.supervisionGrantId && query.accountId) throw new NotFoundException('Mailbox not found');
     return this.messages.render(session.user.id, emailId, query.remoteImages === '1', query.accountId);
   }
 

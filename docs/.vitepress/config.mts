@@ -15,6 +15,7 @@ const pages: Record<string, string> = {
   'MIGRATION.md': 'migration.md',
   'CONNECTING-DEVICES.md': 'connecting-devices.md',
   'ARCHITECTURE.md': 'architecture.md',
+  'INTEGRATIONS.md': 'integrations.md',
 };
 
 export default defineConfig({
@@ -91,6 +92,7 @@ export default defineConfig({
           { text: 'Calendar, invitations and rooms', link: '/calendar' },
           { text: 'Archiving and legal hold', link: '/archiving' },
           { text: 'Moving from another provider', link: '/migration' },
+          { text: 'Integrating another application', link: '/integrations' },
         ],
       },
       {
