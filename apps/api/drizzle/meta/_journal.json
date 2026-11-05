@@ -260,6 +260,13 @@
       "when": 1793848282037,
       "tag": "0036_omniscient_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793849596627,
+      "tag": "0037_left_abomination",
+      "breakpoints": true
     }
   ]
 }

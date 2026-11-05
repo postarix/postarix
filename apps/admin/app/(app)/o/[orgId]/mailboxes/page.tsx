@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { Archive, Fingerprint, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -29,6 +29,7 @@ import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
+import { IdentitiesDialog } from '@/components/identities-dialog';
 import { SyncJobsDialog } from '@/components/sync-jobs-dialog';
 import { MailboxTemplateFields, type MailboxTemplateSettings, mailboxSettingsFrom, type Template, TemplateList } from '@/components/templates';
 import { ApiError, api, errorMessage } from '@/lib/api';
@@ -457,6 +458,7 @@ export default function MailboxesPage() {
   const [resetting, setResetting] = useState<Mailbox | null>(null);
   const [spamOf, setSpamOf] = useState<Mailbox | null>(null);
   const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
+  const [identitiesOf, setIdentitiesOf] = useState<Mailbox | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
   const [entering, setEntering] = useState<Mailbox | null>(null);
@@ -537,6 +539,11 @@ export default function MailboxesPage() {
                     <Button size="icon-sm" variant="ghost" aria-label={`Sync jobs of ${mailbox.address}`} onClick={() => setSyncOf(mailbox)}>
                       <RefreshCw aria-hidden />
                     </Button>
+                    {mailbox.userId && mailbox.kind === 'person' ? (
+                      <Button size="icon-sm" variant="ghost" aria-label={`${t('Identities of')} ${mailbox.address}`} title={t('Identities')} onClick={() => setIdentitiesOf(mailbox)}>
+                        <Fingerprint aria-hidden />
+                      </Button>
+                    ) : null}
                     <Button size="icon-sm" variant="ghost" aria-label={`${t('Sign in as')} ${mailbox.address}`} title={t('Sign in as')} onClick={() => setEntering(mailbox)}>
                       <LogIn aria-hidden />
                     </Button>
@@ -593,6 +600,7 @@ export default function MailboxesPage() {
         </AppDialog>
       ) : null}
       {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
+      {identitiesOf ? <IdentitiesDialog orgId={orgId} mailbox={identitiesOf} onClose={() => setIdentitiesOf(null)} /> : null}
       {entering ? <ImpersonateDialog orgId={orgId} mailbox={entering} onClose={() => setEntering(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog
