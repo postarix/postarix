@@ -8,12 +8,15 @@ import type { OrgRole, TenantContext } from '../tenancy/tenant-context.js';
 
 export interface NewMailbox {
   domainId: string;
-  userId: string;
+  /** Null for a shared mailbox (no account of its own). */
+  userId: string | null;
   localPart: string;
   address: string;
   displayName: string;
   quotaBytes: number | null;
   kind?: MailboxRow['kind'];
+  sharedSeen?: boolean;
+  collectionsRestrictedAt?: Date;
 }
 
 export type MailboxChanges = Partial<
@@ -32,6 +35,7 @@ export type MailboxChanges = Partial<
     | 'spamJunkScore'
     | 'spamRejectScore'
     | 'quarantineNotify'
+    | 'sharedSeen'
   >
 >;
 
@@ -92,6 +96,8 @@ export class MailboxesRepository {
         .values({ ...input, organizationId: ctx.organizationId })
         .returning();
       if (!row) throw new Error('Insert returned no row');
+      // A shared mailbox has no account: its members are people with their own mailbox.
+      if (!input.userId) return row;
       await tx
         .insert(member)
         .values({

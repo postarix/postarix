@@ -21,10 +21,17 @@ export type MethodResponse = [string, Record<string, unknown>, string];
 export class ServerJmap {
   private accountId: string | undefined;
 
+  /**
+   * Logs in as `address`; acts on `account` when given (a shared mailbox the
+   * person may use: Cyrus checks their rights there), else on their own.
+   */
   constructor(
     private readonly engine: MailEngine,
     readonly address: string,
-  ) {}
+    account?: string,
+  ) {
+    this.accountId = account;
+  }
 
   async primaryAccount(): Promise<string> {
     if (this.accountId) return this.accountId;

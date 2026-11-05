@@ -84,8 +84,19 @@ export interface Mailbox {
   spamScores: SpamScores;
   /** How often its people hear about quarantined mail. */
   quarantineNotify: 'never' | 'hourly' | 'daily' | 'weekly';
-  /** Rooms and equipment answer calendar invitations by themselves. */
-  kind: 'person' | 'room' | 'equipment';
+  /** Rooms and equipment answer calendar invitations by themselves; shared mailboxes are used by their members. */
+  kind: 'person' | 'room' | 'equipment' | 'shared';
+  /** Shared mailboxes: one read/unread state for every member. */
+  sharedSeen: boolean;
+  createdAt: string;
+}
+
+/** A member of a shared mailbox, and what they may do with it. */
+export interface SharedMember {
+  userId: string;
+  address: string;
+  displayName: string;
+  rights: 'read' | 'readWrite' | 'send';
   createdAt: string;
 }
 

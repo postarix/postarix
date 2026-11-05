@@ -22,6 +22,13 @@ const ROW = 'flex items-center gap-2 border-b px-5';
 const LABEL = 'w-14 shrink-0 text-sm text-muted-foreground';
 const BARE = 'h-11 rounded-none border-0 bg-transparent px-0 shadow-none! focus-visible:ring-0 dark:bg-transparent';
 
+/** An address the composer may send as; shared mailboxes carry their account. */
+export interface SenderOption {
+  address: string;
+  name?: string;
+  accountId?: string;
+}
+
 export function Composer({
   initial,
   identities,
@@ -29,7 +36,8 @@ export function Composer({
   onSent,
 }: {
   initial: DraftInput;
-  identities: string[];
+  /** Who it may be sent as: the person's addresses, and shared mailboxes they may send from. */
+  identities: SenderOption[];
   onClose: () => void;
   onSent: () => void;
 }) {
@@ -56,9 +64,13 @@ export function Composer({
       return null;
     }
     const html = body.current?.html() ?? '';
+    // A shared mailbox's address: the draft lives in (and is sent from) its account.
+    const sender = identities.find((option) => option.address === from);
     return {
       ...initial,
       from,
+      fromName: sender?.name ?? initial.fromName ?? '',
+      ...(sender?.accountId ? { accountId: sender.accountId } : { accountId: undefined }),
       to: parsed.to.addresses,
       cc: parsed.cc.addresses,
       bcc: parsed.bcc.addresses,
@@ -101,7 +113,7 @@ export function Composer({
       }
       setUploading((n) => n + 1);
       try {
-        const blob = await jmap.upload(file);
+        const blob = await jmap.upload(file, identities.find((option) => option.address === from)?.accountId);
         setAttachments((list) => [...list, { blobId: blob.blobId, name: file.name, type: file.type || blob.type, size: file.size }]);
       } catch (e) {
         setError(`Could not attach ${file.name}: ${errorMessage(e)}`);
@@ -129,9 +141,9 @@ export function Composer({
             <div className={ROW}>
               <label htmlFor={`${id}-from`} className={LABEL}>{t('From')}</label>
               <FormSelect id={`${id}-from`} value={from} onChange={(e) => setFrom(e.target.value)} className={`${BARE} w-full pr-8`}>
-                {identities.map((address) => (
-                  <FormSelectOption key={address} value={address}>
-                    {address}
+                {identities.map((option) => (
+                  <FormSelectOption key={option.address} value={option.address}>
+                    {option.accountId && option.name ? `${option.name} <${option.address}>` : option.address}
                   </FormSelectOption>
                 ))}
               </FormSelect>
