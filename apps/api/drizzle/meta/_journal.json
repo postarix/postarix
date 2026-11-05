@@ -274,6 +274,13 @@
       "when": 1793850422818,
       "tag": "0038_lazy_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793851913293,
+      "tag": "0039_blue_spirit",
+      "breakpoints": true
     }
   ]
 }

@@ -293,6 +293,9 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
+      jose:
+        specifier: ^6.2.14
+        version: 6.2.14
       nodemailer:
         specifier: ^10.3.1
         version: 10.3.1
@@ -351,9 +354,6 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
-      jose:
-        specifier: ^6.2.14
-        version: 6.2.14
       samlify:
         specifier: 2.13.1
         version: 2.13.1
