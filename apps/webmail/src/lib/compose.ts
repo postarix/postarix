@@ -13,6 +13,8 @@ export interface Attachment {
 
 export interface DraftInput {
   from: string;
+  /** The account the draft is saved in and sent from: a shared mailbox's; omitted for the person's own. */
+  accountId?: string;
   /** The sender's name shown with From ("Ann Example <ann@…>"), or '' for the bare address. */
   fromName?: string;
   to: EmailAddress[];
@@ -103,8 +105,11 @@ function wrapHtml(fragment: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.5">${fragment}</body></html>`;
 }
 
-async function mailboxIdByRole(role: string): Promise<string> {
-  const { list } = await jmap.call<{ list: { id: string; role: string | null }[] }>('Mailbox/get', { properties: ['role'] });
+async function mailboxIdByRole(role: string, accountId?: string): Promise<string> {
+  const { list } = await jmap.call<{ list: { id: string; role: string | null }[] }>('Mailbox/get', {
+    ...(accountId ? { accountId } : {}),
+    properties: ['role'],
+  });
   const found = list.find((m) => m.role === role);
   if (!found) throw new Error(`No ${role} folder`);
   return found.id;
@@ -152,8 +157,8 @@ export function draftEmail(input: DraftInput, draftsId: string): Record<string, 
  * place, so a previous version (`replaces`) is destroyed in the same request.
  */
 export async function saveDraft(input: DraftInput, replaces?: string | null): Promise<string> {
-  const accountId = await jmap.accountId();
-  const draftsId = await mailboxIdByRole('drafts');
+  const accountId = input.accountId ?? (await jmap.accountId());
+  const draftsId = await mailboxIdByRole('drafts', accountId);
   const results = await jmap.batch((b) =>
     b.add('Email/set', {
       accountId,
@@ -173,5 +178,5 @@ export async function saveDraft(input: DraftInput, replaces?: string | null): Pr
 /** Saves the draft, then asks the API to send it (which moves it to Sent). */
 export async function sendDraft(input: DraftInput, replaces?: string | null): Promise<void> {
   const id = await saveDraft(input, replaces);
-  await api('/mail/send', { method: 'POST', body: { emailId: id } });
+  await api('/mail/send', { method: 'POST', body: { emailId: id, ...(input.accountId ? { accountId: input.accountId } : {}) } });
 }

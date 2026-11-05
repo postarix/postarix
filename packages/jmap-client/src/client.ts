@@ -110,10 +110,10 @@ export class JmapClient {
     return results.get('c0') as T;
   }
 
-  /** Uploads a file; returns its blob id. */
-  async upload(file: Blob): Promise<{ blobId: Id; type: string; size: number }> {
+  /** Uploads a file (to the primary mail account, or `accountId`); returns its blob id. */
+  async upload(file: Blob, accountId?: Id): Promise<{ blobId: Id; type: string; size: number }> {
     const session = await this.session();
-    const url = session.uploadUrl.replace('{accountId}', encodeURIComponent(await this.accountId()));
+    const url = session.uploadUrl.replace('{accountId}', encodeURIComponent(accountId ?? (await this.accountId())));
     const response = await this.request(url, {
       method: 'POST',
       headers: { 'content-type': file.type || 'application/octet-stream' },
@@ -122,10 +122,10 @@ export class JmapClient {
     return (await response.json()) as { blobId: Id; type: string; size: number };
   }
 
-  async downloadUrl(blobId: Id, name: string, type = 'application/octet-stream'): Promise<string> {
+  async downloadUrl(blobId: Id, name: string, type = 'application/octet-stream', accountId?: Id): Promise<string> {
     const session = await this.session();
     return session.downloadUrl
-      .replace('{accountId}', encodeURIComponent(await this.accountId()))
+      .replace('{accountId}', encodeURIComponent(accountId ?? (await this.accountId())))
       .replace('{blobId}', encodeURIComponent(blobId))
       .replace('{name}', encodeURIComponent(name))
       .replace('{type}', encodeURIComponent(type));

@@ -104,24 +104,24 @@ describe('JMAP proxy for the webmail', () => {
   });
 
   it('serves downloads as attachments, except plain images, and never lets them run', async () => {
-    const html = await ann.get('/api/jmap/download/u1/B1/page.html?accept=text/html').expect(200);
+    const html = await ann.get(`/api/jmap/download/${annAddress}/B1/page.html?accept=text/html`).expect(200);
     expect(html.headers['content-disposition']).toMatch(/^attachment; filename\*=UTF-8''page\.html$/);
     expect(html.headers['content-security-policy']).toContain('sandbox');
     expect(html.headers['x-content-type-options']).toBe('nosniff');
-    const png = await ann.get('/api/jmap/download/u1/B2/photo.png').expect(200);
+    const png = await ann.get(`/api/jmap/download/${annAddress}/B2/photo.png`).expect(200);
     expect(png.headers['content-disposition']).toMatch(/^inline;/);
     expect(calls.map((c) => c.request.query)).toEqual(['accept=text/html', '']);
   });
 
   it('streams uploads up to the limit and refuses larger ones', async () => {
     await ann
-      .post('/api/jmap/upload/u1/')
+      .post(`/api/jmap/upload/${annAddress}/`)
       .set('content-type', 'application/octet-stream')
       .send(Buffer.alloc(1024, 1))
       .expect(200);
     expect(calls[0]?.body.length).toBe(1024);
     await ann
-      .post('/api/jmap/upload/u1/')
+      .post(`/api/jmap/upload/${annAddress}/`)
       .set('content-type', 'application/octet-stream')
       .send(Buffer.alloc(51 * 1024 * 1024, 1))
       .expect(413);
@@ -161,30 +161,36 @@ describe('JMAP proxy for the webmail', () => {
       Response.json({
         apiUrl: '/jmap/',
         capabilities: full,
-        primaryAccounts: { 'urn:ietf:params:jmap:mail': 'a', 'urn:ietf:params:jmap:submission': 'a' },
-        accounts: { a: { name: annAddress, accountCapabilities: full } },
+        primaryAccounts: { 'urn:ietf:params:jmap:mail': annAddress, 'urn:ietf:params:jmap:submission': annAddress },
+        accounts: { [annAddress]: { name: annAddress, accountCapabilities: full } },
       });
     const res = await ann.get('/api/jmap/').expect(200);
     const kept = ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'];
     expect(Object.keys(res.body.capabilities)).toEqual(kept);
     expect(Object.keys(res.body.primaryAccounts)).toEqual(['urn:ietf:params:jmap:mail']);
-    expect(Object.keys(res.body.accounts.a.accountCapabilities)).toEqual(kept);
+    expect(Object.keys(res.body.accounts[annAddress].accountCapabilities)).toEqual(kept);
   });
 
   it('answers a malformed download name without an error', async () => {
-    const res = await ann.get('/api/jmap/download/u1/B1/%E0%A4').expect(200);
+    const res = await ann.get(`/api/jmap/download/${annAddress}/B1/%E0%A4`).expect(200);
     expect(res.headers['content-disposition']).toBe("attachment; filename*=UTF-8''download");
   });
 
   it('keeps people of other organizations on their own mailbox', async () => {
     const other = await mailboxInNewOrg(app, 'jmap-other');
     await other.agent.get('/api/jmap/').expect(200);
+    // Naming someone else's account is refused before reaching the mail server.
     await other.agent
       .post('/api/jmap/')
       .set('authorize-as', annAddress)
       .send({ using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'], methodCalls: [['Email/get', { accountId: annAddress }, 'c0']] })
+      .expect(403);
+    await other.agent.get(`/api/jmap/download/${annAddress}/B1/x.png`).expect(404);
+    await other.agent
+      .post('/api/jmap/')
+      .set('authorize-as', annAddress)
+      .send({ using: ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail'], methodCalls: [['Email/get', {}, 'c0']] })
       .expect(200);
-    await other.agent.get('/api/jmap/download/ann-account/B1/x.png').expect(200);
-    expect(calls.map((c) => c.address)).toEqual([other.address, other.address, other.address]);
+    expect(calls.map((c) => c.address)).toEqual([other.address, other.address]);
   });
 });

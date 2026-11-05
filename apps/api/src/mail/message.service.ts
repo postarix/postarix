@@ -3,7 +3,7 @@ import type { MailEngine } from '@postarix/mail-engine';
 import type { Env } from '../config/env.js';
 import { DATABASE, ENV, MAIL_ENGINE } from '../core/tokens.js';
 import type { Database } from '../db/client.js';
-import { findOwnMailbox } from '../jmap/my-mailbox.js';
+import { resolveMailAccount } from '../jmap/my-mailbox.js';
 import { proxiedImageUrl } from './image-proxy.js';
 import { JmapMethodError, ServerJmap } from './jmap-client.js';
 import { htmlToText, sanitizeEmailHtml, textToHtml } from './sanitize.js';
@@ -102,10 +102,12 @@ export class MessageService {
     this.imageBase = new URL('/api/mail/image', env.AUTH_URL).href;
   }
 
-  async render(userId: string, emailId: string, remoteImages: boolean): Promise<RenderedMessage> {
-    const address = await findOwnMailbox(this.db, userId);
-    if (!address) throw new NotFoundException('You have no mailbox');
-    const jmap = new ServerJmap(this.engine, address);
+  /** Renders a message of the person's own mailbox, or of a shared mailbox they may read (`accountId`). */
+  async render(userId: string, emailId: string, remoteImages: boolean, accountId?: string): Promise<RenderedMessage> {
+    const reach = await resolveMailAccount(this.db, userId, accountId);
+    if (!reach) throw new NotFoundException(accountId ? 'Mailbox not found' : 'You have no mailbox');
+    const address = reach.login;
+    const jmap = new ServerJmap(this.engine, address, reach.shared ? reach.account : undefined);
 
     let list: JmapEmail[];
     try {

@@ -3,7 +3,7 @@ import http from 'node:http';
 import net from 'node:net';
 import tls from 'node:tls';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CyrusEngine, jmapUrl, parseAcl, sharesFromAcl } from './cyrus-engine.js';
+import { accessRights, CyrusEngine, jmapUrl, parseAcl, sharesFromAcl } from './cyrus-engine.js';
 import { ImapConnection, quote } from './imap-connection.js';
 import { MailEngineError } from './types.js';
 
@@ -174,6 +174,58 @@ describe('CyrusEngine', () => {
     server = await fakeServer(ok);
     await engineFor(server.port).createMailbox('bob@example.com', { quotaBytes: null });
     expect(server.received).not.toContainEqual(expect.stringMatching(/^SETQUOTA/));
+  });
+
+  it('gives people access to every mail folder of a mailbox, and takes it away', async () => {
+    const acls: Record<string, string> = {
+      'user/team@example.com': 'team@example.com lrswipkxtecdan cyrus lrswipkxtecdan old@example.com lrswitedn ann@example.com lrswitedn',
+      'user/team/Sent@example.com': 'team@example.com lrswipkxtecdan ann@example.com lrswitedn',
+      'user/team/Junk@example.com': 'team@example.com lrswipkxtecdan anyone p',
+    };
+    server = await fakeServer((command, tag) => {
+      if (command.startsWith('LIST')) {
+        return [
+          '* LIST (\\HasNoChildren) "/" "user/team/Sent@example.com"',
+          '* LIST (\\HasNoChildren) "/" "user/team/Junk@example.com"',
+          '* LIST (\\HasChildren) "/" "user/team/#calendars@example.com"',
+          `${tag} OK done`,
+        ];
+      }
+      const getacl = /^GETACL "([^"]+)"$/.exec(command);
+      if (getacl) return [`* ACL "${getacl[1]}" ${acls[getacl[1]!] ?? ''}`, `${tag} OK done`];
+      return `${tag} OK done`;
+    });
+    const result = await engineFor(server.port).setMailboxAccess('team@example.com', {
+      access: [
+        { grantee: 'ann@example.com', level: 'read' },
+        { grantee: 'bob@example.com', level: 'readWrite' },
+      ],
+      sharedSeen: true,
+    });
+    // Old loses everything, Ann goes down to reading: both must be signed out of their sessions.
+    expect(result.reduced).toEqual(['ann@example.com', 'old@example.com']);
+    const changes = server.received.filter((c) => /^(SETACL|DELETEACL|SETMETADATA)/.test(c));
+    expect(changes).toEqual([
+      'DELETEACL "user/team@example.com" "old@example.com"',
+      'SETACL "user/team@example.com" "ann@example.com" lr',
+      'SETACL "user/team@example.com" "bob@example.com" lrswitedn',
+      'SETMETADATA "user/team@example.com" ("/shared/vendor/cmu/cyrus-imapd/sharedseen" "true")',
+      'SETACL "user/team/Sent@example.com" "ann@example.com" lr',
+      'SETACL "user/team/Sent@example.com" "bob@example.com" lrswitedn',
+      'SETMETADATA "user/team/Sent@example.com" ("/shared/vendor/cmu/cyrus-imapd/sharedseen" "true")',
+      'SETACL "user/team/Junk@example.com" "ann@example.com" lr',
+      'SETACL "user/team/Junk@example.com" "bob@example.com" lrswitedn',
+      'SETMETADATA "user/team/Junk@example.com" ("/shared/vendor/cmu/cyrus-imapd/sharedseen" "true")',
+    ]);
+    // Calendars are not mail folders; "anyone p" on Junk stays (Spam delivery).
+    expect(server.received.some((c) => c.includes('#calendars') && c.startsWith('SETACL'))).toBe(false);
+    expect(server.received.some((c) => c.includes('anyone'))).toBe(false);
+  });
+
+  it('maps access levels to Cyrus rights', () => {
+    expect(accessRights('read', true)).toBe('lr');
+    expect(accessRights('read', false)).toBe('lrs');
+    expect(accessRights('readWrite', true)).toBe('lrswitedn');
   });
 
   it('grants itself the delete right before deleting', async () => {

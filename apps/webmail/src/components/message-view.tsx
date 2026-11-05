@@ -1,4 +1,3 @@
-import type { Mailbox } from '@postarix/jmap-client';
 import { Alert, AlertDescription } from '@postarix/ui/components/alert';
 import { Button } from '@postarix/ui/components/button';
 import {
@@ -20,7 +19,7 @@ import { type ComponentProps, useEffect, useState } from 'react';
 import { errorMessage } from '@/lib/api';
 import { addressList, displayName, formatBytes, longDate, shortDate } from '@/lib/format';
 import { jmap } from '@/lib/jmap';
-import { type Label, type RenderedMessage, useCreateLabel, useMessage, useThread, useUpdateEmails } from '@/lib/mail';
+import { type Label, type MailFolder, type RenderedMessage, useCreateLabel, useMessage, useThread, useUpdateEmails } from '@/lib/mail';
 import { mailboxPath, navigate } from '@/lib/router';
 import { Avatar } from './avatar';
 import { InvitationCard } from './invitation-card';
@@ -41,11 +40,11 @@ function IconAction({ label, children, ...props }: { label: string } & Component
   );
 }
 
-function AttachmentLink({ attachment }: { attachment: RenderedMessage['attachments'][number] }) {
+function AttachmentLink({ attachment, accountId }: { attachment: RenderedMessage['attachments'][number]; accountId: string }) {
   const [href, setHref] = useState<string | null>(null);
   useEffect(() => {
-    void jmap.downloadUrl(attachment.blobId, attachment.name, attachment.type).then(setHref);
-  }, [attachment]);
+    void jmap.downloadUrl(attachment.blobId, attachment.name, attachment.type, accountId || undefined).then(setHref);
+  }, [attachment, accountId]);
   return (
     <a
       href={href ?? undefined}
@@ -65,8 +64,8 @@ function AttachmentLink({ attachment }: { attachment: RenderedMessage['attachmen
 }
 
 /** The other messages of the conversation, oldest first; the open one is marked. */
-function Conversation({ threadId, currentId, pathFor }: { threadId: string; currentId: string; pathFor: (emailId: string) => string }) {
-  const thread = useThread(threadId);
+function Conversation({ threadId, accountId, currentId, pathFor }: { threadId: string; accountId: string; currentId: string; pathFor: (emailId: string) => string }) {
+  const thread = useThread(threadId, accountId);
   const list = thread.data ?? [];
   if (list.length < 2) return null;
   return (
@@ -153,11 +152,18 @@ export function MessageView({
   pathFor,
   onReply,
   onForward,
+  shared = false,
+  readOnly = false,
 }: {
   emailId: string;
-  mailbox: Mailbox;
-  mailboxes: Mailbox[];
+  mailbox: MailFolder;
+  /** The folders of the message's account. */
+  mailboxes: MailFolder[];
   labels: Label[];
+  /** A shared mailbox (labels are the person's own, for their own mailbox). */
+  shared?: boolean;
+  /** A shared mailbox the person may only read: no changes, no read marks. */
+  readOnly?: boolean;
   search: string;
   /** Where "back" goes (the folder or label the message was opened from). */
   backPath?: string;
@@ -167,8 +173,10 @@ export function MessageView({
   onForward: (message: RenderedMessage) => void;
 }) {
   const [remoteImages, setRemoteImages] = useState(false);
-  const message = useMessage(emailId, remoteImages);
-  const update = useUpdateEmails();
+  const message = useMessage(emailId, remoteImages, mailbox.accountId);
+  const updateEmails = useUpdateEmails();
+  // Every change is made in the message's own account.
+  const update = { mutate: (args: Parameters<typeof updateEmails.mutate>[0]) => updateEmails.mutate({ ...args, accountId: mailbox.accountId }) };
   const back = () => navigate(backPath ?? mailboxPath(mailbox.id, null, search));
   const linkTo = pathFor ?? ((id: string) => mailboxPath(mailbox.id, id, search));
 
@@ -177,7 +185,7 @@ export function MessageView({
   // Opening a message marks it read.
   const data = message.data;
   useEffect(() => {
-    if (data && !data.keywords.$seen) update.mutate({ update: { [data.id]: { 'keywords/$seen': true } } });
+    if (data && !data.keywords.$seen && !readOnly) update.mutate({ update: { [data.id]: { 'keywords/$seen': true } } });
   }, [data?.id]);
 
   if (message.isLoading) {
@@ -195,7 +203,7 @@ export function MessageView({
 
   const trash = mailboxes.find((m) => m.role === 'trash');
   const archive = mailboxes.find((m) => m.role === 'archive');
-  const moveTo = (target: Mailbox) => {
+  const moveTo = (target: MailFolder) => {
     update.mutate({ update: { [data.id]: { mailboxIds: { [target.id]: true } } } });
     back();
   };
@@ -211,6 +219,8 @@ export function MessageView({
         <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t('Back to the list')} onClick={back}>
           <ArrowLeft aria-hidden />
         </Button>
+        {readOnly ? null : (
+          <>
         {archive && mailbox.role !== 'archive' ? (
           <IconAction label={t('Archive')} onClick={() => moveTo(archive)}>
             <Archive aria-hidden />
@@ -248,11 +258,13 @@ export function MessageView({
         >
           <Flag aria-hidden className={data.keywords.$flagged ? 'fill-current text-destructive' : undefined} />
         </IconAction>
-        <LabelMenu
-          message={data}
-          labels={labels}
-          onToggle={(keyword, on) => update.mutate({ update: { [data.id]: { [`keywords/${keyword}`]: on ? true : null } } })}
-        />
+        {shared ? null : (
+          <LabelMenu
+            message={data}
+            labels={labels}
+            onToggle={(keyword, on) => update.mutate({ update: { [data.id]: { [`keywords/${keyword}`]: on ? true : null } } })}
+          />
+        )}
         <IconAction
           label={t('Mark as unread')}
           onClick={() => {
@@ -262,6 +274,8 @@ export function MessageView({
         >
           {data.keywords.$seen ? <Mail aria-hidden /> : <MailOpen aria-hidden />}
         </IconAction>
+          </>
+        )}
         <div className="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={() => onReply(data, false)}>
             <Reply aria-hidden />{t('Reply')}</Button>
@@ -309,7 +323,7 @@ export function MessageView({
           </div>
         ) : null}
 
-        <Conversation threadId={data.threadId} currentId={data.id} pathFor={linkTo} />
+        <Conversation threadId={data.threadId} accountId={mailbox.accountId} currentId={data.id} pathFor={linkTo} />
 
         <Separator />
 
@@ -330,7 +344,7 @@ export function MessageView({
         {data.attachments.length ? (
           <section aria-label={t('Attachments')} className="grid gap-2 sm:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))]">
             {data.attachments.map((a) => (
-              <AttachmentLink key={a.blobId} attachment={a} />
+              <AttachmentLink key={a.blobId} attachment={a} accountId={mailbox.accountId} />
             ))}
           </section>
         ) : null}

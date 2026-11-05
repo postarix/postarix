@@ -20,10 +20,49 @@ export function sortMailboxes(list: Mailbox[]): Mailbox[] {
   return [...list].sort((a, b) => rank(a) - rank(b) || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
+/** A folder, with the mail account it belongs to (the person's own, or a shared mailbox's). */
+export type MailFolder = Mailbox & { accountId: string };
+
+/** A mail account the person can reach: their own mailbox, or a shared mailbox they are a member of. */
+export interface MailAccount {
+  id: string;
+  name: string;
+  personal: boolean;
+  /** Read-only members cannot change anything in it. */
+  readOnly: boolean;
+  folders: MailFolder[];
+}
+
+const MAIL_CAPABILITY = 'urn:ietf:params:jmap:mail';
+
+async function loadMailAccounts(): Promise<MailAccount[]> {
+  const session = await jmap.session();
+  const own = session.primaryAccounts[MAIL_CAPABILITY];
+  const accounts = Object.entries(session.accounts ?? {})
+    .filter(([, account]) => MAIL_CAPABILITY in (account.accountCapabilities ?? {}))
+    .map(([id, account]) => ({ id, name: account.name, personal: id === own, readOnly: Boolean(account.isReadOnly) }))
+    // Their own mailbox first, then shared ones by name.
+    .sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name));
+  const results = await jmap.batch((b) => {
+    for (const account of accounts) b.add('Mailbox/get', { accountId: account.id });
+  });
+  return accounts.map((account, i) => ({
+    ...account,
+    folders: sortMailboxes(((results.get(`c${i}`) as { list?: Mailbox[] } | undefined)?.list ?? []) as Mailbox[]).map((m) => ({ ...m, accountId: account.id })),
+  }));
+}
+
+/** Every mail account the person can reach, with its folders. */
+export function useMailAccounts() {
+  return useQuery({ queryKey: keys.mailboxes, queryFn: loadMailAccounts });
+}
+
+/** The folders of the person's own mailbox. */
 export function useMailboxes() {
   return useQuery({
     queryKey: keys.mailboxes,
-    queryFn: async () => sortMailboxes((await jmap.call<{ list: Mailbox[] }>('Mailbox/get')).list),
+    queryFn: loadMailAccounts,
+    select: (accounts) => accounts.find((a) => a.personal)?.folders ?? [],
   });
 }
 
@@ -47,13 +86,13 @@ export interface EmailPage {
  * One page of a folder (or of a label, across folders but Trash and Junk),
  * one row per conversation: the newest message of each.
  */
-export function useEmails(mailboxId: string | null, search: string, label?: { keyword: string; exclude: string[] } | null) {
+export function useEmails(mailboxId: string | null, search: string, label?: { keyword: string; exclude: string[] } | null, account?: string) {
   return useInfiniteQuery({
     queryKey: keys.emails(mailboxId ?? '', search, label?.keyword ?? ''),
     enabled: mailboxId !== null || Boolean(label),
     initialPageParam: 0,
     queryFn: async ({ pageParam }): Promise<EmailPage> => {
-      const accountId = await jmap.accountId();
+      const accountId = account ?? (await jmap.accountId());
       const filter: Record<string, unknown> = label
         ? { hasKeyword: label.keyword, ...(label.exclude.length ? { inMailboxOtherThan: label.exclude } : {}) }
         : { inMailbox: mailboxId };
@@ -108,19 +147,33 @@ export interface RenderedMessage {
   calendar: boolean;
 }
 
-export function useMessage(id: string | null, remoteImages: boolean) {
+export function useMessage(id: string | null, remoteImages: boolean, accountId?: string) {
   return useQuery({
-    queryKey: keys.message(id ?? '', remoteImages),
+    queryKey: [...keys.message(id ?? '', remoteImages), accountId ?? ''],
     enabled: id !== null,
-    queryFn: () => api<RenderedMessage>(`/mail/messages/${encodeURIComponent(id!)}${remoteImages ? '?remoteImages=1' : ''}`),
+    queryFn: () => {
+      const query = new URLSearchParams();
+      if (remoteImages) query.set('remoteImages', '1');
+      if (accountId) query.set('accountId', accountId);
+      const qs = query.toString();
+      return api<RenderedMessage>(`/mail/messages/${encodeURIComponent(id!)}${qs ? `?${qs}` : ''}`);
+    },
     staleTime: 5 * 60_000,
   });
+}
+
+/** Who the person may send as: their own addresses, and the shared mailboxes they may send from. */
+export interface Identities {
+  address: string;
+  name?: string;
+  addresses: string[];
+  shared?: { address: string; name: string; accountId: string }[];
 }
 
 export function useIdentities() {
   return useQuery({
     queryKey: keys.identities,
-    queryFn: () => api<{ address: string; name?: string; addresses: string[] }>('/mail/identities'),
+    queryFn: () => api<Identities>('/mail/identities'),
     staleTime: 10 * 60_000,
   });
 }
@@ -129,10 +182,14 @@ export function useIdentities() {
 export function useUpdateEmails() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { update?: Record<string, Record<string, unknown>>; destroy?: string[] }) => {
+    mutationFn: async (args: { update?: Record<string, Record<string, unknown>>; destroy?: string[]; accountId?: string }) => {
       const result = await jmap.call<{ notUpdated?: Record<string, { type: string }> | null; notDestroyed?: Record<string, { type: string }> | null }>(
         'Email/set',
-        { ...(args.update ? { update: args.update } : {}), ...(args.destroy ? { destroy: args.destroy } : {}) },
+        {
+          ...(args.accountId ? { accountId: args.accountId } : {}),
+          ...(args.update ? { update: args.update } : {}),
+          ...(args.destroy ? { destroy: args.destroy } : {}),
+        },
       );
       const failure = Object.values(result.notUpdated ?? {})[0] ?? Object.values(result.notDestroyed ?? {})[0];
       if (failure) throw new Error(`The mail server refused the change (${failure.type})`);
@@ -155,12 +212,12 @@ export interface ThreadMessage {
 }
 
 /** The messages of a conversation, oldest first (drafts left out). */
-export function useThread(threadId: string | null) {
+export function useThread(threadId: string | null, account?: string) {
   return useQuery({
-    queryKey: keys.thread(threadId ?? ''),
+    queryKey: [...keys.thread(threadId ?? ''), account ?? ''],
     enabled: threadId !== null,
     queryFn: async () => {
-      const accountId = await jmap.accountId();
+      const accountId = account ?? (await jmap.accountId());
       const results = await jmap.batch((b) => {
         const thread = b.add('Thread/get', { accountId, ids: [threadId] });
         b.add('Email/get', {

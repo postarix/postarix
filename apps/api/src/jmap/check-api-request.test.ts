@@ -52,4 +52,19 @@ describe('checkApiRequest', () => {
     const out = checkApiRequest(Buffer.from('{ "using": ["urn:ietf:params:jmap:core"], "methodCalls": [] , "extra": 1 }'));
     expect(JSON.parse(Buffer.from(out).toString())).toEqual({ using: ['urn:ietf:params:jmap:core'], methodCalls: [], extra: 1 });
   });
+
+  it('reaches mail only in the accounts given (their own and their shared mailboxes)', () => {
+    const mailAccounts = new Set(['ann@x.test', 'team@x.test']);
+    const run = (methodCalls: unknown[], using = MAIL) => () => checkApiRequest(body(using, methodCalls), { mailAccounts });
+    expect(run([['Email/query', { accountId: 'team@x.test' }, 'c']])).not.toThrow();
+    expect(run([['Email/copy', { fromAccountId: 'ann@x.test', accountId: 'team@x.test' }, 'c']])).not.toThrow();
+    expect(run([['Email/get', {}, 'c']])).not.toThrow();
+    expect(run([['Email/get', { accountId: 'bob@x.test' }, 'c']])).toThrow(/not available/);
+    expect(run([['Mailbox/get', { accountId: 'bob@x.test' }, 'c']])).toThrow(/not available/);
+    expect(run([['Email/copy', { fromAccountId: 'bob@x.test', accountId: 'ann@x.test' }, 'c']])).toThrow(/not available/);
+    expect(run([['Blob/copy', { fromAccountId: 'bob@x.test', accountId: 'ann@x.test' }, 'c']])).toThrow(/not available/);
+    expect(run([['Email/get', { accountId: 7 }, 'c']])).toThrow(/not available/);
+    // Calendars shared by colleagues are not mail.
+    expect(run([['CalendarEvent/query', { accountId: 'bob@x.test' }, 'c']], CAL)).not.toThrow();
+  });
 });
