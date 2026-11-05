@@ -174,6 +174,30 @@ describe('Single sign-on', () => {
       expect(member.back.headers.location).toContain('error=NO_MAILBOX');
     });
 
+    it('signs in the person linked to the identity, whatever email the provider sends', async () => {
+      const ops = await mailbox(alice, orgA, domainA.id, 'ops');
+      const sub = `idp-ops-${Date.now()}`;
+      await alice.agent.post(`/api/orgs/${orgA}/identities`).send({ mailboxId: ops.id, issuer: idp.issuer, subject: sub }).expect(201);
+      const personal = await ssoSignIn(info.address, { sub, email: 'someone.personal@gmail.example', email_verified: true });
+      expect(personal.sessionEmail).toBe(ops.address);
+      // Even when the email is another person's mailbox: the link decides.
+      const other = await ssoSignIn(info.address, { sub, email: info.address, email_verified: true });
+      expect(other.sessionEmail).toBe(ops.address);
+      // The same subject linked in another organization means nothing here.
+      const inB = await mailbox(bob, orgB, domainB.id, 'x');
+      await bob.agent.post(`/api/orgs/${orgB}/identities`).send({ mailboxId: inB.id, issuer: idp.issuer, subject: 'only-in-b' }).expect(201);
+      const foreign = await ssoSignIn(info.address, { sub: 'only-in-b', email: 'nobody@elsewhere.example', email_verified: true });
+      expect(foreign.sessionEmail).toBeNull();
+      // A linked mailbox that cannot sign in refuses, rather than falling back to the email.
+      await alice.agent.patch(`/api/orgs/${orgA}/mailboxes/${ops.id}`).send({ status: 'no_login' }).expect(200);
+      const off = await ssoSignIn(info.address, { sub, email: info.address, email_verified: true });
+      expect(off.sessionEmail).toBeNull();
+      expect(off.back.headers.location).toContain('error=NO_MAILBOX');
+      // Unlinked subjects keep the email rule.
+      const byEmail = await ssoSignIn(info.address, { sub: 'never-linked', email: info.address, email_verified: true });
+      expect(byEmail.sessionEmail).toBe(info.address);
+    });
+
     it('stops working once the mailbox is disabled', async () => {
       await alice.agent.patch(`/api/orgs/${orgA}/mailboxes/${info.id}`).send({ status: 'disabled' }).expect(200);
       const { back, sessionEmail } = await ssoSignIn(info.address, { sub: 'idp-user-1', email: info.address, email_verified: true });

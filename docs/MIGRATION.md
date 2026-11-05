@@ -116,4 +116,6 @@ Calendar/Contacts, DAVx⁵) connected to Postarix works too (see
 If the organization signs in with Microsoft Entra ID, Google Workspace, Okta or
 another OpenID Connect or SAML provider, connect it in Admin → Sign-in. People
 then sign in to the webmail and the admin panel with their company account;
-mail apps keep using app passwords.
+mail apps keep using app passwords. People are found by the email the provider
+sends; when the provider knows someone by another email, link them with the
+mailbox's **identities** button (see [Administration](administration.md#identities)).

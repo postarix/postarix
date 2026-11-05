@@ -67,6 +67,8 @@ export interface DnsRecordCheck extends DnsRecord {
 export interface Mailbox {
   id: string;
   domainId: string;
+  /** The owner's account; null for a mailbox nobody signs in to. */
+  userId: string | null;
   address: string;
   localPart: string;
   displayName: string;
@@ -84,6 +86,17 @@ export interface Mailbox {
   quarantineNotify: 'never' | 'hourly' | 'daily' | 'weekly';
   /** Rooms and equipment answer calendar invitations by themselves. */
   kind: 'person' | 'room' | 'equipment';
+  createdAt: string;
+}
+
+/** Who a person is elsewhere: an identity provider's or an application's (issuer, subject). */
+export interface ExternalIdentity {
+  id: string;
+  userId: string;
+  address: string;
+  issuer: string;
+  subject: string;
+  label: string;
   createdAt: string;
 }
 
