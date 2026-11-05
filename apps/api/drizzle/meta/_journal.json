@@ -267,6 +267,13 @@
       "when": 1793849596627,
       "tag": "0037_left_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793850422818,
+      "tag": "0038_lazy_santa_claus",
+      "breakpoints": true
     }
   ]
 }

@@ -109,6 +109,54 @@ template applies to every domain an organization adds, so new domains start
 with the instance's limits. Changing or deleting a template does not change
 what was already made with it.
 
+### Shared mailboxes
+
+A **shared mailbox** (type *Shared mailbox* when creating it) is a team's
+address, like `support@` or `sales@`. It receives mail and has its own quota,
+aliases and filters, but no account: nobody signs in as it, so it has no
+password. Its **members** (the people button) use it from their own mail:
+
+| Members can | In the webmail and mail apps |
+|---|---|
+| **Read** | See its folders and messages |
+| **Read and organize** | Also mark read or unread, flag, move, file, delete, save drafts |
+| **Read, organize and send** | Also send as the shared address |
+
+- Members must have their own mailbox in the organization. In the webmail the
+  shared mailbox appears below their folders; in IMAP apps, under
+  **Other Users**.
+- **One read/unread state for the whole team** (on by default): when someone
+  handles a message, it is read for everyone. Off, each member keeps their own.
+  People who can only read never change it.
+- Folders are managed by administrators; members cannot create or delete
+  them.
+- Mail sent from it goes out as the shared address and is filed in **its**
+  Sent folder. Who sent it is always recorded in **Activity**; the
+  **Shared mailboxes** option on this page can also add a `Sender:` header with
+  the person (most apps then show "Ana on behalf of Support"). Mail apps can
+  send as it too, with the person's own login (no `Sender:` header then).
+  Sending limits apply to the person and to the shared mailbox.
+- Removing a member, giving them less, disabling the shared mailbox or the
+  member's own mailbox takes effect at once, including mail apps already
+  connected. A member whose mailbox is deleted stops being one.
+- Postarix keeps the members and checks every hour that the mail server
+  agrees, fixing it if not.
+
+With an API key limited to the organization:
+
+```
+POST   /api/orgs/<orgId>/mailboxes                      {"kind": "shared", "domainId": "…", "localPart": "support", "displayName": "Support", "sharedSeen": true}
+PATCH  /api/orgs/<orgId>/mailboxes/<id>                 {"sharedSeen": false}
+GET    /api/orgs/<orgId>/mailboxes/<id>/members
+PUT    /api/orgs/<orgId>/mailboxes/<id>/members/<userId> {"rights": "read" | "readWrite" | "send"}
+DELETE /api/orgs/<orgId>/mailboxes/<id>/members/<userId>
+POST   /api/orgs/<orgId>/mailboxes/<id>/access/reconcile
+GET    /api/orgs/<orgId>/mail-options
+PUT    /api/orgs/<orgId>/mail-options                   {"sharedSenderHeader": true}
+```
+
+A person's `userId` is in the mailbox list (`GET /api/orgs/<orgId>/mailboxes`).
+
 ### Sync jobs
 
 The **sync jobs** button of a mailbox copies mail from another IMAP server

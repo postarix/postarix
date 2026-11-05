@@ -9,6 +9,7 @@ import {
   jsonb,
   real,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -22,8 +23,12 @@ import { relayHosts } from './routing.js';
 export const mailboxStatuses = ['active', 'no_login', 'disabled'] as const;
 export type MailboxStatus = (typeof mailboxStatuses)[number];
 
-/** People's mailboxes, or bookable resources: their calendar answers invitations by itself. */
-export const mailboxKinds = ['person', 'room', 'equipment'] as const;
+/**
+ * People's mailboxes; bookable resources (their calendar answers invitations
+ * by itself); or shared mailboxes: no account of their own (nobody signs in as
+ * them), used by their members.
+ */
+export const mailboxKinds = ['person', 'room', 'equipment', 'shared'] as const;
 export type MailboxKind = (typeof mailboxKinds)[number];
 
 /** How often a mailbox's people hear about new quarantined mail. */
@@ -60,6 +65,8 @@ export const mailboxes = pgTable(
     quotaBytes: bigint({ mode: 'number' }),
     status: text({ enum: mailboxStatuses }).notNull().default('active'),
     kind: text({ enum: mailboxKinds }).notNull().default('person'),
+    /** One read/unread state for everyone who uses it (shared mailboxes), instead of one per person. */
+    sharedSeen: boolean().notNull().default(false),
     allowedProtocols: text({ enum: mailProtocols })
       .array()
       .notNull()
@@ -517,3 +524,44 @@ export const externalIdentities = pgTable(
     index('external_identities_user_id_idx').on(table.userId),
   ],
 );
+
+export const sharedMailboxRights = ['read', 'readWrite', 'send'] as const;
+export type SharedMailboxRight = (typeof sharedMailboxRights)[number];
+
+/**
+ * Members of a shared mailbox and what they may do: read; also change
+ * (flags, moving, deleting, drafts); also send as it. People of the same
+ * organization who own a person mailbox (Cyrus knows them by its address).
+ * The source of truth: Cyrus ACLs are set from it (MailboxAccessService).
+ */
+export const sharedMailboxMembers = pgTable(
+  'shared_mailbox_members',
+  {
+    mailboxId: uuid()
+      .notNull()
+      .references(() => mailboxes.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    rights: text({ enum: sharedMailboxRights }).notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp({ withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [primaryKey({ columns: [table.mailboxId, table.userId] }), index('shared_mailbox_members_user_id_idx').on(table.userId)],
+);
+
+/** Mail options an organization sets for itself. One row per organization; no row means the defaults. */
+export const organizationMailOptions = pgTable('organization_mail_options', {
+  organizationId: text()
+    .primaryKey()
+    .references(() => organization.id, { onDelete: 'cascade' }),
+  /** Mail sent from a shared mailbox says who sent it ("Sender:" header), besides the audit record. */
+  sharedSenderHeader: boolean().notNull().default(false),
+  updatedAt: timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

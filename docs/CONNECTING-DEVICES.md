@@ -48,6 +48,12 @@ you choose what happens to it: it stays in the inbox, goes to a folder named
 after the tag (created when the first message arrives), or gets `[tag]` in front
 of its subject.
 
+Shared mailboxes you are a member of (a team's `support@`, say) appear in
+your IMAP app under **Other Users** (for example `Other Users/support`), with
+your own login: nothing else to set up. With the right to send, choose the
+shared address as the sender in your app (Thunderbird: add it as an identity of
+your account); the server accepts it from your login.
+
 Most calendar and contacts apps only need `https://mail.example.com`: they find
 the rest through `/.well-known/caldav` and `/.well-known/carddav`.
 

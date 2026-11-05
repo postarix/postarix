@@ -113,9 +113,9 @@ describe('Webmail access to mail (JMAP through the API)', () => {
   });
 
   it("does not let one user read another user's account", async () => {
-    const [[name, result]] = (await ben.call([['Mailbox/get', { accountId: ann.accountId }, 'm']])) as [MethodResponse];
-    expect(name).toBe('error');
-    expect(String(result.type)).toMatch(/accountNotFound|forbidden|accountNotSupportedByMethod/);
+    // Refused by the API before reaching the mail server.
+    const res = await ben.api.request('POST', '/api/jmap/', { using: USING, methodCalls: [['Mailbox/get', { accountId: ann.accountId }, 'm']] });
+    expect(res.status).toBe(403);
   });
 
   async function draft(from: string, subject: string): Promise<string> {

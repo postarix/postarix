@@ -424,6 +424,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Calendar scheduling is done by the API, not by Cyrus: invitations, replies and cancellations are built from Cyrus' own iCalendar for the event and sent through the internal submission port from the person's address; an incoming one changes the calendar only when the person asks and only when its sender is the organizer (cancellations) or the attendee (replies) it speaks for. Sharing is set through the API (colleagues only) as Cyrus ACLs. |
 | 2026-11-02 | UI components: **shadcn/ui** (Radix UI + Tailwind CSS v4) in `packages/ui`, shared by the admin panel and the webmail. |
 | 2026-11-01 | Monorepo with **pnpm workspaces + Turborepo**. |
+| 2026-11-04 | Shared mailboxes: mailboxes of kind `shared` with no account; members and rights (`read`, `readWrite`, `send`) in PostgreSQL, applied as Cyrus ACLs on every mail folder (and Cyrus' `sharedseen`), reconciled hourly. The JMAP proxy lists and reaches only the person's own account and their shared mailboxes; sending from one checks `send` and files the copy in its Sent. |
 | 2026-11-04 | Open mail sessions end when access ends: disconnect requests in PostgreSQL, applied by a long-polling loop in each Cyrus container that signals the person's Cyrus processes (Cyrus only checks credentials at login; `cyr_deny` would also refuse new logins for a few seconds). |
 | 2026-11-01 | Proxy-agnostic; mail ports bypass the reverse proxy. |
 | 2026-11-01 | License **AGPL-3.0**. |

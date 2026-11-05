@@ -239,7 +239,12 @@ mailbox), and P0 ends their open IMAP sessions.
   PUT    /api/orgs/:orgId/mailboxes/:id/members/:userId   { rights: "read" | "readWrite" | "send" }
   DELETE /api/orgs/:orgId/mailboxes/:id/members/:userId
   POST   /api/orgs/:orgId/mailboxes/:id/access/reconcile
+  GET    /api/orgs/:orgId/mail-options
+  PUT    /api/orgs/:orgId/mail-options                    { sharedSenderHeader }
   ```
+- `/api/mail/messages/:id` takes `?accountId=` (a shared mailbox the person may
+  read); the webmail's download and upload URLs carry the account, and the
+  proxy refuses accounts the person cannot reach.
 - Webmail: shared mailboxes appear in the sidebar under the personal folders
   with their folders and unread counts; the composer's From offers them when the
   person has `send`; read-only members see no write actions.

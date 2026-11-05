@@ -154,7 +154,7 @@ describe('Webmail sending rules', () => {
 
   it('lists the addresses the user may send as, own address first', async () => {
     const res = await ann.get('/api/mail/identities').expect(200);
-    expect(res.body).toEqual({ address: annAddress, name: 'Ann Example', addresses: [annAddress, `sales@${domainName}`] });
+    expect(res.body).toEqual({ address: annAddress, name: 'Ann Example', addresses: [annAddress, `sales@${domainName}`], shared: [] });
     await admin.agent.get('/api/mail/identities').expect(404);
   });
 

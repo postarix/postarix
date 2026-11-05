@@ -7,6 +7,7 @@ import {
   type SieveScriptInfo,
   type CollectionKind,
   type CollectionShare,
+  type MailboxAccessState,
   MailEngineError,
 } from './types.js';
 
@@ -21,6 +22,8 @@ interface StoredMailbox {
  */
 export class MemoryMailEngine implements MailEngine {
   readonly mailboxes = new Map<string, StoredMailbox>();
+  /** Who may use each mailbox besides its owner. */
+  readonly access = new Map<string, MailboxAccessState>();
   /** When set, the next call fails with this error (to test rollbacks). */
   failNext: MailEngineError | null = null;
   /** Answers JMAP requests in tests; without it, JMAP is unavailable. */
@@ -102,6 +105,27 @@ export class MemoryMailEngine implements MailEngine {
     const key = this.collectionKey(address, kind, collectionId);
     if (shares.some((s) => s.grantee === address)) throw new MailEngineError('Cannot share with the owner', 'rejected');
     this.shares.set(key, [...shares].sort((a, b) => a.grantee.localeCompare(b.grantee)));
+  }
+
+  async getMailboxAccess(address: string): Promise<MailboxAccessState> {
+    this.checkFailure();
+    this.get(address);
+    const state = this.access.get(address) ?? { access: [], sharedSeen: false };
+    return { access: state.access.map((a) => ({ ...a })), sharedSeen: state.sharedSeen };
+  }
+
+  async setMailboxAccess(address: string, state: MailboxAccessState): Promise<{ reduced: string[] }> {
+    this.checkFailure();
+    this.get(address);
+    if (state.access.some((a) => a.grantee === address)) throw new MailEngineError('Cannot give access to the owner', 'rejected');
+    const before = this.access.get(address)?.access ?? [];
+    const next = new Map(state.access.map((a) => [a.grantee, a.level]));
+    const reduced = before
+      .filter((a) => !next.has(a.grantee) || (a.level === 'readWrite' && next.get(a.grantee) === 'read'))
+      .map((a) => a.grantee)
+      .sort();
+    this.access.set(address, { access: [...state.access].sort((a, b) => a.grantee.localeCompare(b.grantee)), sharedSeen: state.sharedSeen });
+    return { reduced };
   }
 
   async removeGrantee(address: string, grantee: string): Promise<void> {
