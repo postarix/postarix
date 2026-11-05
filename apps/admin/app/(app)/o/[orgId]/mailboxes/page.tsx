@@ -13,7 +13,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@postari
 import { Textarea } from '@postarix/ui/components/textarea';
 import { cn } from '@postarix/ui/lib/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Fingerprint, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2, Users } from 'lucide-react';
+import { Archive, ArrowRightLeft, Fingerprint, Inbox, KeyRound, LayoutTemplate, LogIn, Pencil, Plus, RefreshCw, ShieldAlert, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
@@ -29,6 +29,7 @@ import { PageHeader } from '@/components/page-header';
 import { PasswordInput } from '@/components/password-input';
 import { RateLimitField, rateLimitFrom } from '@/components/rate-limit-field';
 import { SpamDialog } from '@/components/spam-dialog';
+import { ConvertMailboxDialog } from '@/components/convert-mailbox-dialog';
 import { IdentitiesDialog } from '@/components/identities-dialog';
 import { MembersDialog, SharedSenderOption } from '@/components/shared-members-dialog';
 import { SyncJobsDialog } from '@/components/sync-jobs-dialog';
@@ -485,6 +486,7 @@ export default function MailboxesPage() {
   const [syncOf, setSyncOf] = useState<Mailbox | null>(null);
   const [identitiesOf, setIdentitiesOf] = useState<Mailbox | null>(null);
   const [membersOf, setMembersOf] = useState<Mailbox | null>(null);
+  const [converting, setConverting] = useState<Mailbox | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [deleting, setDeleting] = useState<Mailbox | null>(null);
   const [entering, setEntering] = useState<Mailbox | null>(null);
@@ -592,6 +594,15 @@ export default function MailboxesPage() {
                         </Button>
                       </>
                     )}
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`${mailbox.kind === 'shared' ? t('Make personal:') : t('Make shared:')} ${mailbox.address}`}
+                      title={mailbox.kind === 'shared' ? t('Make personal') : t('Make shared')}
+                      onClick={() => setConverting(mailbox)}
+                    >
+                      <ArrowRightLeft aria-hidden />
+                    </Button>
                     <Button size="icon-sm" variant="ghost" aria-label={`Delete ${mailbox.address}`} onClick={() => setDeleting(mailbox)}>
                       <Trash2 aria-hidden />
                     </Button>
@@ -639,6 +650,15 @@ export default function MailboxesPage() {
       {syncOf ? <SyncJobsDialog orgId={orgId} mailbox={syncOf} onClose={() => setSyncOf(null)} /> : null}
       {identitiesOf ? <IdentitiesDialog orgId={orgId} mailbox={identitiesOf} onClose={() => setIdentitiesOf(null)} /> : null}
       {membersOf ? <MembersDialog orgId={orgId} mailbox={membersOf} people={(mailboxes.data ?? []).filter((m) => m.kind === 'person' && m.userId)} onClose={() => setMembersOf(null)} /> : null}
+      {converting ? (
+        <ConvertMailboxDialog
+          orgId={orgId}
+          mailbox={converting}
+          people={(mailboxes.data ?? []).filter((m) => m.kind === 'person' && m.userId)}
+          onDone={refresh}
+          onClose={() => setConverting(null)}
+        />
+      ) : null}
       {entering ? <ImpersonateDialog orgId={orgId} mailbox={entering} onClose={() => setEntering(null)} /> : null}
       {resetting ? <ResetPasswordDialog orgId={orgId} mailbox={resetting} onClose={() => setResetting(null)} /> : null}
       <ConfirmDialog

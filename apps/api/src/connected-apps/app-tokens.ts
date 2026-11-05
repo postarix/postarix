@@ -21,7 +21,7 @@ import {
   supervisionGrants,
   user,
 } from '../db/schema/index.js';
-import { resolveExternalIdentity } from '../identities/resolve-identity.js';
+import { personUsable, resolveExternalIdentity } from '../identities/resolve-identity.js';
 import type { SystemMailer } from '../mail/system-mailer.js';
 import { JwksCache } from './jwks.js';
 
@@ -388,6 +388,8 @@ export class AppTokensService {
     if (!this.usable(app) || !allows(app.allowedIps, ip)) return null;
     // Scopes taken away since the token was issued no longer work.
     if (grant.scopes.some((s) => !(app.scopes as string[]).includes(s))) return null;
+    // The person too: a token stops when their mailbox is disabled, becomes shared, or they are banned.
+    if (grant.userId && !(await personUsable(this.db, app.organizationId, grant.userId))) return null;
     if (grant.supervisionGrantId) {
       const [live] = await this.db
         .select({ id: supervisionGrants.id })

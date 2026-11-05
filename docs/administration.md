@@ -157,6 +157,34 @@ PUT    /api/orgs/<orgId>/mail-options                   {"sharedSenderHeader": t
 
 A person's `userId` is in the mailbox list (`GET /api/orgs/<orgId>/mailboxes`).
 
+#### Converting a mailbox
+
+The **convert** button (two arrows) turns an existing mailbox into a shared
+one, for example the mailbox of someone who left, or a `sales@` everyone
+signed in to with one password. Its mail **stays where it is** on the mail
+server: folders, flags, read state and its filters and automatic reply are
+kept, nothing is copied. In the same step:
+
+- Its account goes: its password, app passwords, two-step sign-in and
+  passkeys, its links to other applications ([Identities](#identities)) and
+  any token a [connected application](INTEGRATIONS.md) holds for that person.
+  Whoever is signed in to it (webmail, mail apps, calendars) is signed out.
+  The former owner cannot be a member, since they have no other mailbox to
+  sign in with.
+- You choose its first members and their rights; **one read/unread state**
+  starts on (the former owner's read state becomes the team's).
+- Never the mailbox of an instance administrator or of the organization's only
+  owner (as when deleting it).
+
+A shared mailbox can be turned back into a person's: you set the password of a
+new account, its mail stays, and its members lose it at once.
+
+Both are recorded in **Activity** (members, identities and app passwords
+removed). Converting is done in the admin panel only, by the organization's
+owners and administrators or instance administrators; API keys get `403`
+`PANEL_ONLY`. Software sees the change in the mailbox list: `kind` becomes
+`"shared"` (or `"person"`), and `userId` becomes `null` (or the new account).
+
 ### Sync jobs
 
 The **sync jobs** button of a mailbox copies mail from another IMAP server

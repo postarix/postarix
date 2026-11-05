@@ -159,8 +159,9 @@ describe('Connected applications', () => {
     await a.owner.agent.patch(`/api/orgs/${a.orgId}/apps/${client.id}`).send({ expiresAt: null }).expect(200);
 
     await a.owner.agent.patch(`/api/orgs/${a.orgId}/mailboxes/${aUser.id}`).send({ status: 'disabled' }).expect(200);
-    await http().get('/api/mail/identities').set(bearer(t)).expect(404);
-    await http().get('/api/jmap/').set(bearer(t)).expect(404);
+    // The token itself stops working while the person may not be reached.
+    await http().get('/api/mail/identities').set(bearer(t)).expect(401);
+    await http().get('/api/jmap/').set(bearer(t)).expect(401);
     expect((await exchange('u-1', 'mail.read').expect(400)).body.error).toBe('invalid_grant');
     await a.owner.agent.patch(`/api/orgs/${a.orgId}/mailboxes/${aUser.id}`).send({ status: 'active' }).expect(200);
 

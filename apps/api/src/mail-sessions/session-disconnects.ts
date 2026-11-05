@@ -15,6 +15,7 @@ export type DisconnectReason =
   | 'mailbox_deleted'
   | 'domain_disabled'
   | 'account_deleted'
+  | 'mailbox_converted'
   | 'account_banned'
   | 'password_changed'
   | 'second_factor_added'
