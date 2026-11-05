@@ -81,7 +81,8 @@ export class SessionGuard implements CanActivate {
         request.method,
         (request.originalUrl ?? request.url ?? '').split('?')[0],
       );
-      if (!keySession) throw new UnauthorizedException('Invalid API key, or not allowed for this request');
+      if (!keySession) throw new UnauthorizedException('Invalid, expired or revoked API key');
+      if ('refused' in keySession) throw new ForbiddenException({ message: keySession.message, code: keySession.code });
       request.auth = keySession;
       return true;
     }
