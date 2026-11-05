@@ -1,3 +1,4 @@
+import { ApiDoc } from '../openapi/openapi.js';
 import {
   Body,
   ConflictException,
@@ -164,16 +165,19 @@ const listQuery = z.object({ userId: z.string().min(1).max(100).optional(), issu
 export class ExternalIdentitiesController {
   constructor(@Inject(ExternalIdentitiesService) private readonly identities: ExternalIdentitiesService) {}
 
+  @ApiDoc({ summary: 'List external identities', description: 'Who the organization\'s people are elsewhere: (issuer, subject) pairs used by single sign-on and connected applications.' })
   @Get()
   async list(@Tenant() ctx: TenantContext, @Query(new ZodValidationPipe(listQuery)) query: z.infer<typeof listQuery>) {
     return { data: await this.identities.list(ctx, query) };
   }
 
+  @ApiDoc({ summary: 'Link a person to an external identity', description: 'By `mailboxId` or `userId` (a person mailbox of the organization; never an instance administrator). One person per pair in an organization.' })
   @Post()
   link(@Tenant() ctx: TenantContext, @Body(new ZodValidationPipe(linkIdentitySchema)) body: LinkIdentityInput) {
     return this.identities.link(ctx, body);
   }
 
+  @ApiDoc({ summary: 'Unlink an external identity' })
   @Delete(':id')
   @HttpCode(204)
   async unlink(@Tenant() ctx: TenantContext, @Param('id', new ZodValidationPipe(z.uuid())) id: string): Promise<void> {

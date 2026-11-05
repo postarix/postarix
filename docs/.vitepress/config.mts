@@ -16,6 +16,7 @@ const pages: Record<string, string> = {
   'CONNECTING-DEVICES.md': 'connecting-devices.md',
   'ARCHITECTURE.md': 'architecture.md',
   'INTEGRATIONS.md': 'integrations.md',
+  'API.md': 'api.md',
 };
 
 export default defineConfig({
@@ -98,6 +99,7 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'API reference', link: '/api' },
           { text: 'Architecture and decisions', link: '/architecture' },
           { text: 'Reverse proxies', link: `${repo}/tree/main/deploy/proxies` },
           { text: 'Security policy', link: `${repo}/blob/main/SECURITY.md` },
