@@ -13,10 +13,10 @@ cd /opt/postarix
 BACKUP_AGE_RECIPIENTS=/etc/postarix/backup-recipients.txt \
   deploy/scripts/backup.sh /srv/backups/postarix-before-update
 
-# 2. Get the new release (here 0.0.1-beta.6), keeping your postarix.env
-git fetch --depth 1 origin tag v0.0.1-beta.6
-git checkout v0.0.1-beta.6
-sed -i 's/^POSTARIX_VERSION=.*/POSTARIX_VERSION=0.0.1-beta.6/' docker/compose/postarix.env
+# 2. Get the new release (here 1.0.0), keeping your postarix.env
+git fetch --depth 1 origin tag v1.0.0
+git checkout v1.0.0
+sed -i 's/^POSTARIX_VERSION=.*/POSTARIX_VERSION=1.0.0/' docker/compose/postarix.env
 
 # 3. Add any secret the new release needs (changes nothing else)
 deploy/scripts/derive-secrets.sh docker/compose/postarix.env
@@ -38,10 +38,21 @@ in the service's **Environment**, then **Deploy**. See
 ## Kubernetes
 
 ```bash
-helm upgrade postarix oci://ghcr.io/postarix/charts/postarix --version 0.0.1-beta.6 -n postarix -f my-values.yaml
+helm upgrade postarix oci://ghcr.io/postarix/charts/postarix --version 1.0.0 -n postarix -f my-values.yaml
 ```
 
 The chart keeps the secrets it generated; new ones are created on upgrade.
+
+## From a 0.0.1 beta
+
+Update as above; the database migrations run by themselves. Then:
+
+- `cyrus` and `postfix` are recreated (they no longer take the mail host name
+  as their container host name), so mail apps reconnect once.
+- A connected application's token for a person whose mailbox is disabled, or
+  became shared, now answers `401` (before: `404`).
+- An API key used beyond its limits now answers `403` with a `code` (before:
+  `401`); see the [API reference](./api).
 
 ## Going back
 
@@ -55,7 +66,7 @@ Release images are signed. To check that an image was built by this project's
 release workflow:
 
 ```bash
-cosign verify ghcr.io/postarix/api:0.0.1-beta.6 \
+cosign verify ghcr.io/postarix/api:1.0.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/postarix/postarix/\.github/workflows/release\.yml@refs/tags/v'
 ```

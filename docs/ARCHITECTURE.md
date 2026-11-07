@@ -103,7 +103,7 @@ Thunderbird, Outlook or a phone's mail app don't understand web sessions. So:
 1. Users create **app passwords** in their portal. Each has a name, a scope (IMAP, SMTP, DAV) and a last-used timestamp, and can be revoked individually.
 2. They are stored as **argon2id** hashes in PostgreSQL.
 3. Cyrus and Postfix validate logins through **saslauthd** with PAM. A `pam_exec` helper posts the credentials to an internal endpoint of `apps/api` (`/api/internal/mail-auth`), authenticated with a shared secret. (`saslauthd`'s `httpform` mechanism would be simpler, but Debian does not compile it in.) saslauthd's credential cache stays off so revoking an app password takes effect immediately.
-4. Failed account-password attempts are limited per username in the API (app passwords, which cannot be guessed, keep working), on top of CrowdSec watching the mail logs (Phase 5).
+4. Failed account-password attempts are limited per username in the API (app passwords, which cannot be guessed, keep working), on top of CrowdSec watching the mail logs.
 5. The account password is also accepted for mail protocols **only while the user has no second factor**. Once 2FA is enabled, only app passwords work, so a stolen password alone can no longer read mail.
 6. Cyrus checks credentials only when a session starts. So whenever access shrinks (mailbox or domain disabled, password changed, app password revoked, second factor added, account banned or deleted), the API records a **disconnect request** in PostgreSQL. A loop in each Cyrus container long-polls the API's internal listener for them, ends the person's open sessions (it signals their processes, found in Cyrus' process registry; new logins go through the login bridge as usual), and acknowledges up to the last one; a node that was down catches up when it is back.
 
@@ -229,7 +229,7 @@ Postfix and Cyrus need TLS certificates too. Three configurable modes:
 
 In every mode a watcher detects certificate changes and reloads Postfix and Cyrus without dropping service. Without any certificate, a self-signed one is generated so the stack still starts (development only).
 
-## 9. Mail flow (Phase 1 design)
+## 9. Mail flow
 
 ### 9.1 Inbound
 
@@ -274,7 +274,7 @@ Examples: DKIM key rotation, periodic DNS checks for every domain, quarantine cl
 - Health checks in every container.
 - Prometheus metrics on the API's internal port 9464: HTTP traffic and latency by route pattern, web sign-ins and mail-app logins by result, the Node.js process, and Rspamd's metrics relayed at `/metrics/rspamd` (so Prometheus holds no Rspamd password). Alert rules in `deploy/monitoring/alerts.yml`; an optional Prometheus for Compose; ServiceMonitor and PrometheusRule in the chart. See `docs/MONITORING.md`.
 - Structured JSON logs from the API (`LOG_FORMAT=json`).
-- Not yet: exporters for Postfix, Cyrus, PostgreSQL and Valkey internals; Grafana dashboards.
+- Not included: exporters for Postfix, Cyrus, PostgreSQL and Valkey internals, and Grafana dashboards (standard exporters can be added next to the stack).
 
 ## 12. Deployment and scaling
 
@@ -331,81 +331,37 @@ postarix/
 └── docs/               Documentation
 ```
 
-## 15. Roadmap
+## 15. Scope
 
-### Phase 0 — Foundations
-- [x] Monorepo (pnpm + Turborepo), CI, linters, conventions.
-- [x] Development Docker Compose: PostgreSQL, Valkey.
-- [x] `apps/api` with Better Auth, organizations and roles.
-- [x] Initial database schema and migrations.
-- [x] First multi-tenant resource (domains) with isolation tests.
+Postarix 1.0 covers:
 
-### Phase 1 — Working mail
-- [x] Postfix, Cyrus, Rspamd and Unbound containers.
-- [x] Postfix reading domains, mailboxes and aliases from PostgreSQL.
-- [x] `CyrusEngine` (create mailboxes with default folders, quotas).
-- [x] Mailboxes, aliases and app passwords in the API.
-- [x] Authentication bridge (saslauthd → PAM → API).
-- [x] DNS verification of domains.
-- [x] Integration tests that send and receive real mail through the stack.
-- [x] Per-domain DKIM signing (and ARC sealing), DNS record guidance.
-- [x] Certificates (self-signed, ACME, external) with automatic reload.
-- [x] DANE for outgoing mail through the local validating resolver.
-- [x] Reverse proxy templates (Caddy, nginx, Traefik, HAProxy), tested for internal-route leaks.
-- **Milestone:** send and receive mail from a standard client (covered by the integration tests).
+- **Mail:** Postfix, Cyrus IMAP, Rspamd and Unbound wired together; domains,
+  mailboxes, aliases, catch-alls and quotas from PostgreSQL; per-domain DKIM
+  and ARC; SPF, DMARC, MTA-STS and DANE; certificates (ACME, external,
+  cert-manager) with automatic reload; optional ClamAV and CrowdSec.
+- **Admin panel:** organizations, domains with live DNS status, mailboxes
+  (people, shared, rooms, equipment), aliases, members and roles, sign-in
+  rules, SSO (OpenID Connect, SAML 2.0), external identities, connected
+  applications and supervision, filtering history, archiving and legal hold,
+  audit log, API keys.
+- **Webmail:** conversations, labels, search, rich-text composing, safe
+  rendering, filters, automatic replies, shared mailboxes, mail import.
+- **Calendar and contacts:** JMAP in the webmail, CalDAV/CardDAV for devices,
+  invitations (iTIP/iMIP), free/busy, sharing, rooms and equipment, .ics and
+  .vcf import.
+- **Accounts:** passwords, two-step sign-in (TOTP, passkeys) that an
+  organization can require, app passwords scoped by protocol.
+- **Integration:** a documented REST API (OpenAPI), API keys limited by
+  organization, address and access, OAuth 2.0 Token Exchange for applications
+  acting for people (`docs/INTEGRATIONS.md`).
+- **Operations:** signed multi-arch images, Docker Compose with proxy
+  templates, Dokploy, a Helm chart, Cyrus Murder for scale-out and moving
+  mailboxes between backends, encrypted backups, Prometheus metrics and alerts.
 
-CrowdSec moved to Phase 5: blocking at the firewall needs a bouncer on the host,
-which a container cannot provide without host networking. Until then, Postfix
-limits authentication, connection and message rates per client, and the API locks
-out the account password after repeated failures (app passwords keep working).
-
-### Phase 2 — Admin panel
-- [x] `apps/admin` (Next.js, shadcn/ui) served under `/admin`, with a strict nonce-based CSP.
-- [x] Organizations, domains, mailboxes, aliases and members with their roles.
-- [x] Live DNS status per domain (verification, MX, SPF, DKIM, DMARC), with the records to publish.
-- [x] Audit log of every change, per organization.
-- [x] Account page: profile, password, TOTP two-factor, passkeys, app passwords.
-- [x] Playwright end-to-end tests (including cross-organization access) in CI; Docker image and proxy routes.
-- Moved to Phase 5: MTA-STS (needs its policy host) and the Rspamd quarantine and logs view (needs per-organization filtering of Rspamd's history, which is instance-wide).
-
-### Phase 3 — Webmail
-- [x] `apps/webmail` (React + Vite, shadcn/ui) at the site root; `packages/jmap-client`.
-- [x] JMAP through the API (`/api/jmap/*`): Cyrus' internal JMAP service, logged in as the user with short-lived API-minted tokens.
-- [x] Folders, message list, full-text search (Xapian), reading, flags, moving, deleting, archiving.
-- [x] Safe rendering: server-side sanitizing, sandboxed iframe with CSP, remote images blocked by default and fetched through a signed, SSRF-safe proxy; inline images embedded.
-- [x] Composing, replying, forwarding, attachments, drafts; sending through the API with From ownership checks and Bcc removal.
-- [x] Real-time updates (JMAP push over server-sent events).
-- [x] Browser tests against the full stack in CI.
-- Done later: automatic reply and forwarding and filters (kept as one Sieve script of the mailbox), conversations (JMAP threads), formatted composing (sanitized HTML with a plain-text part), labels (named per person, stored on messages as keywords).
-
-### Phase 4 — Calendar and contacts
-- [x] Calendar in the webmail over JMAP Calendars (JSCalendar): month view, agenda on small screens, all-day and repeating events, places and notes.
-- [x] Contacts in the webmail over Cyrus' JMAP contacts: list with search, details, editing; suggestions while writing mail.
-- [x] The same calendars and address books sync to phones and desktop apps over CalDAV/CardDAV (`/dav`, discovery through `/.well-known`) with DAV-scoped app passwords; default calendar and address book created on first use.
-- [x] A visual identity of its own for every interface (ink, postal yellow, airmail edge; Bricolage Grotesque and Instrument Sans, self-hosted).
-- [x] Integration and browser tests: JMAP ↔ CalDAV/CardDAV sync, privacy between users, calendar and contacts in the browser.
-- [x] Week and day views.
-- [x] Invitations by email (iTIP over iMIP, RFC 5546/6047): guests on events, invitations and updates sent from the organizer's address, answers (going, maybe, not going) from the message, replies and cancellations applied to the calendar. Cyrus' own scheduling stays off; the API sends, under the person's sending limits. See `docs/CALENDAR.md`.
-- [x] Free/busy of colleagues (same organization only, times without details) while inviting.
-- [x] Calendars and contacts shared with colleagues (same organization), to see or to edit; shared calendars and contacts appear in the webmail and over CalDAV/CardDAV. Calendars are no longer readable by "anyone" (Cyrus' default free/busy right).
-- [x] Rooms and equipment: mailboxes of their own kind, booked by inviting them; they accept when free (first occurrence of a repeating event) and decline otherwise, keep the event in their calendar, and get no email.
-- [x] Importing calendars (.ics) and contacts (.vcf) exported from other services.
-
-### Phase 5 — Enterprise and scale
-- [x] SSO with OpenID Connect and SAML 2.0.
-- [x] Two-step sign-in required by organization (authenticator app or passkey): until people set one up they only reach their account settings; mail apps then need app passwords.
-- [x] CrowdSec (optional `crowdsec` profile) reading the Postfix and Cyrus logs, with the firewall bouncer on the host (see `docs/CROWDSEC.md`).
-- [x] Cyrus Murder: mailboxes spread over several Cyrus backends behind a frontend, with a mupdate server; the API places new mailboxes and talks to each one's backend (Compose overlay, Helm `mail.murder`, CI runs the integration tests on a two-backend Murder). See `docs/SCALING.md`.
-- [x] Helm chart.
-- [x] Moving mailboxes between Murder backends (`move-mailboxes` command, Cyrus XFER).
-- Replication (Cyrus `sync_client`/`sync_server`) for standby backends.
-- [x] Migration from other providers: built-in mail import from any IMAP account (Gmail with app passwords, resumable, incremental), plus calendar and contact files (`docs/MIGRATION.md`). Microsoft 365 needs OAuth, not supported yet.
-- [x] Archiving (journaling to an archive mailbox through Postfix) and legal hold (no deletion of mailboxes or the organization) (`docs/ARCHIVING.md`).
-- [x] Filtering history per organization (from Rspamd's history, filtered to the organization's domains); MTA-STS policy host.
-- [x] Organization deletion with full deprovisioning (Cyrus mailboxes, accounts, DKIM keys).
-- [x] Production tooling: signed multi-arch release images and Helm chart, install guide with a bundled Caddy, Prometheus metrics and alerts, encrypted backups (`docs/INSTALL.md`, `docs/MONITORING.md`, `docs/BACKUP.md`).
-- [x] Internal security review before release (calendar parsing, account takeover between admins, second-factor sessions, JMAP request checks, sanitizer, per-container secrets, mail relay and backscatter limits, network policies).
-- External security audit → **1.0**.
+Not included: replication of Cyrus backends to standbys (`sync_client` /
+`sync_server`), importing from Microsoft 365 (it needs OAuth; IMAP import works
+with any server that allows passwords), and exporters for the mail daemons'
+internals.
 
 ## Decision log
 
@@ -446,7 +402,7 @@ out the account password after repeated failures (app passwords keep working).
 | 2026-11-02 | Internal endpoints refuse any request carrying `X-Forwarded-For`/`Forwarded`: if a proxy ever exposes them by mistake, they still answer 404. |
 | 2026-11-02 | Cyrus admin rights exist only on an internal port (1143) with its own configuration; the public services have no admins. The admin account cannot even log in on the public services (sasldb only in the admin configuration). |
 | 2026-11-02 | The `From` header of submitted mail must equal the envelope sender, which Postfix ties to the login; the null sender is refused on submission. This closes cross-tenant DKIM signing. |
-| 2026-11-02 | Mail-login lockout (10 failures / 15 min) applies to the account password only. App passwords (~120 bits) keep working, so an attacker cannot lock real clients out. Per-IP throttling comes with CrowdSec (Phase 5). |
+| 2026-11-02 | Mail-login lockout (10 failures / 15 min) applies to the account password only. App passwords (~120 bits) keep working, so an attacker cannot lock real clients out. Per-IP throttling is CrowdSec's job. |
 | 2026-11-02 | Network split: the proxy only reaches the API, Cyrus HTTP and the certs service; LMTP is a Unix socket; the API verifies Cyrus' certificate. |
 | 2026-11-02 | SSO signs in only the owner of an active mailbox of the identity provider's organization (checked on every sign-in). An organization's IdP thus has no more power than its admins, who can already reset those mailboxes' passwords, and never reaches other tenants or instance administrators. Providers are owned by a banned, passwordless system account because Better Auth deletes a provider with its owning user. |
 

@@ -12,9 +12,14 @@ everything you need to run your own email into one system:
   safe rendering of untrusted mail.
 - **Calendar and contacts** in the webmail and on phones and desktop apps
   (CalDAV/CardDAV): invitations, free/busy, sharing, rooms and equipment.
+- **Shared mailboxes** for teams (`support@`, `sales@`), with members and
+  rights, usable from the webmail and from mail apps.
 - **An admin panel** for organizations, domains (with the exact DNS records to
   publish), mailboxes, aliases, members and roles, sign-in rules, single
   sign-on, filtering history, archiving and an audit log.
+- **An API** for everything the panel does ([reference](./api)), and a
+  standard way for other applications to act for your people
+  ([integrations](./integrations)).
 
 It works the same for one person with a domain, a company, or a provider
 hosting many organizations: multi-tenancy is part of the core.
@@ -55,8 +60,11 @@ The full picture, with the reasons behind each choice, is in
 
 Ready? [Install on Ubuntu](./install-ubuntu) or [with Dokploy](./install-dokploy) — or first [try it on your computer](./try-locally).
 
-## Project status
+## Releases
 
-Postarix is a **beta**: feature-complete for self-hosting and reviewed for
-security internally; an external security audit comes before 1.0. Releases and
-their notes are on [GitHub](https://github.com/postarix/postarix/releases).
+Postarix follows [semantic versioning](https://semver.org): updates within a
+major version (1.x) keep your data and configuration working, and their
+database migrations run by themselves. Every release, with its notes, is on
+[GitHub](https://github.com/postarix/postarix/releases); see
+[Updating](./updating). Security fixes go to the latest release
+([security policy](https://github.com/postarix/postarix/blob/main/SECURITY.md)).

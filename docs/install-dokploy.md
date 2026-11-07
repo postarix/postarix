@@ -15,7 +15,7 @@ and the mail ports go straight to Postfix and Cyrus, as they must.
 :::
 
 The examples use `mail.example.com` for the mail server's name and
-`0.0.1-beta.6` for the [release](https://github.com/postarix/postarix/releases).
+`1.0.0` for the [release](https://github.com/postarix/postarix/releases).
 
 ## 1. DNS
 
@@ -42,8 +42,8 @@ Postarix needs a set of random secrets. Generate them on the Dokploy server
 (over SSH), in a temporary copy of the project:
 
 ```bash
-git clone --depth 1 --branch v0.0.1-beta.6 https://github.com/postarix/postarix /tmp/postarix
-/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.6
+git clone --depth 1 --branch v1.0.0 https://github.com/postarix/postarix /tmp/postarix
+/tmp/postarix/deploy/scripts/generate-env.sh mail.example.com you@example.com 1.0.0
 cat /tmp/postarix/docker/compose/postarix.env
 ```
 
@@ -101,7 +101,7 @@ domain of the `webmail` service in Dokploy (step 6).
 1. **Create a project** (e.g. *Mail*), then **Create Service → Compose**.
 2. **General → Provider:** *Git* (or *GitHub*), repository
    `https://github.com/postarix/postarix`, branch `main` — or, better, the
-   release tag `v0.0.1-beta.6` if your Dokploy version lets you pick tags.
+   release tag `v1.0.0` if your Dokploy version lets you pick tags.
    **Compose path:** `docker/compose/postarix.yml`. Compose type: *Docker
    Compose* (not Stack).
 3. **Environment:** paste the configuration from step 3, then change or add
@@ -204,7 +204,7 @@ your environment. See [Updating](./updating).
   address:** `TRUSTED_PROXIES` does not match `dokploy-network`'s range.
 - **Port 25 is already in use:** another app on the server publishes it.
 - **The API restarts with "password authentication failed for user
-  postarix":** on releases before 0.0.1-beta.6, the API looked up its database
+  postarix":** on releases before 1.0.0, the API looked up its database
   as `postgres`, and on `dokploy-network` that name can belong to another
   app's database. Update. (If the database volume was created with other
   secrets, see the next point.)
@@ -212,11 +212,9 @@ your environment. See [Updating](./updating).
   database keeps the password it was created with. On a new installation,
   remove the project's volumes and deploy again; never generate the secrets
   twice for the same data.
-- **Another app on the server gets `ECONNREFUSED <10.x address>:443`
-  calling `https://<mail host>/api/…`:** on releases before 0.0.1-beta.11,
-  `cyrus` and `postfix` took the mail host name as their container host name,
-  and Docker's DNS answered that name with `cyrus`' address to every
-  container on `dokploy-network`. Update and redeploy (the containers are
-  recreated). Check from the other app's container:
-  `getent hosts <mail host>` must give the server's public address.
+- **Another app on the server cannot reach `https://<mail host>/`:** from
+  its container, `getent hosts <mail host>` must give the server's public
+  address. If it gives a `10.x` address, a container on `dokploy-network`
+  has taken the mail host name as its own host name (`hostname:` in a
+  Compose file); Postarix' containers never do.
 - More in [Troubleshooting](./troubleshooting).

@@ -77,10 +77,7 @@ The API hands the message to Postfix over its internal submission port, and
 checks Postfix' certificate first. Read the reason with
 `postarix logs api | grep "Submission failed"`:
 
-- `ESOCKET` with a Let's Encrypt certificate on releases before
-  0.0.1-beta.5: the API did not trust public certificate authorities there.
-  Update.
-- `ESOCKET` or a certificate error otherwise: the `certs` service has no
+- `ESOCKET` or a certificate error: the `certs` service has no
   valid certificate for `MAIL_HOSTNAME` yet (`postarix logs certs`).
 - `ECONNREFUSED`: Postfix is not running (`postarix ps`).
 

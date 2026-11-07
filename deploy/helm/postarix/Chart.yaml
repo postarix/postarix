@@ -2,8 +2,8 @@ apiVersion: v2
 name: postarix
 description: Self-hosted email platform (Postfix, Cyrus IMAP, Rspamd) with a modern API, admin panel and webmail.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: "1.0.0"
 license: AGPL-3.0-only
 home: https://github.com/postarix/postarix
 keywords: [email, imap, smtp, caldav, carddav, webmail]
