@@ -1,6 +1,6 @@
 # Design: external identities, shared mailboxes and connected applications
 
-Status: **approved** (2026-11-04), with the owner's changes folded in. Implemented; the public guide for integrators is [INTEGRATIONS.md](../INTEGRATIONS.md). Linked from [ARCHITECTURE.md](../ARCHITECTURE.md).
+Status: **implemented** in 1.0. The public guide for integrators is [INTEGRATIONS.md](../INTEGRATIONS.md); this document keeps the design and the reasons behind it. Linked from [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 These three features let another web application (a helpdesk, a CRM, a company
 intranet…) be the mail client of its own users. Postarix stays the mail server,

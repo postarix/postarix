@@ -9,7 +9,7 @@ with `docker compose … up -d`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `POSTARIX_VERSION` | — | The release to run, e.g. `0.0.1-beta.6` (the image tag). |
+| `POSTARIX_VERSION` | — | The release to run, e.g. `1.0.0` (the image tag). |
 | `POSTARIX_REGISTRY` | `ghcr.io/postarix` | Where the images come from (a mirror, or your own builds). |
 | `MAIL_HOSTNAME` | — | Public name of the mail server: MX target, certificate name, web address. |
 | `AUTH_URL` | — | Public HTTPS URL of the web interface, normally `https://<MAIL_HOSTNAME>`. |

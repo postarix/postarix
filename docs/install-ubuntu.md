@@ -10,7 +10,7 @@ replace the example values:
 | `example.com` | your mail domain (addresses will be `you@example.com`) |
 | `you@example.com` | an address where you read mail now (Let's Encrypt notices) |
 | `203.0.113.10` | the server's public IPv4 address |
-| `0.0.1-beta.6` | the [latest release](https://github.com/postarix/postarix/releases) |
+| `1.0.0` | the [latest release](https://github.com/postarix/postarix/releases) |
 
 ::: tip Not on Ubuntu?
 Any Linux with Docker Engine 27+ works: follow the same steps with your
@@ -139,7 +139,7 @@ you publish yourself later. Postarix publishes nothing else.
 ## 6. Get Postarix
 
 ```bash
-git clone --depth 1 --branch v0.0.1-beta.6 https://github.com/postarix/postarix /opt/postarix
+git clone --depth 1 --branch v1.0.0 https://github.com/postarix/postarix /opt/postarix
 cd /opt/postarix
 ```
 
@@ -147,7 +147,7 @@ Create the configuration, with fresh random secrets, for your server name,
 your e-mail and the release you cloned:
 
 ```bash
-deploy/scripts/generate-env.sh mail.example.com you@example.com 0.0.1-beta.6
+deploy/scripts/generate-env.sh mail.example.com you@example.com 1.0.0
 ```
 
 This writes `docker/compose/postarix.env`, readable by root only. **Copy it

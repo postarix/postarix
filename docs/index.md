@@ -28,6 +28,8 @@ features:
     details: Two-step sign-in, passkeys, app passwords, SSO (OpenID Connect and SAML), DKIM, DMARC, MTA-STS and DANE, signed release images.
   - title: Runs anywhere
     details: One Linux server with Docker Compose, a PaaS like Dokploy, or Kubernetes with the Helm chart — and Cyrus Murder when one mail server is not enough.
+  - title: Built to integrate
+    details: A documented REST API with scoped API keys, and OAuth 2.0 Token Exchange so a helpdesk or intranet can be your people's mail client — shared mailboxes included — without ever seeing a password.
   - title: Moving in is easy
     details: People import their old mail from Gmail or any IMAP account from the webmail, and their calendars and contacts from .ics and .vcf files.
   - title: Built for operators

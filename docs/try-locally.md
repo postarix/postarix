@@ -42,7 +42,7 @@ the simplest is to run step 2 below inside a container,
 **1. Get Postarix**
 
 ```bash
-git clone --depth 1 --branch v0.0.1-beta.6 https://github.com/postarix/postarix ~/postarix
+git clone --depth 1 --branch v1.0.0 https://github.com/postarix/postarix ~/postarix
 cd ~/postarix
 ```
 
@@ -50,7 +50,7 @@ cd ~/postarix
 every `*.localhost` name to your own computer):
 
 ```bash
-deploy/scripts/generate-env.sh mail.localhost you@example.com 0.0.1-beta.6
+deploy/scripts/generate-env.sh mail.localhost you@example.com 1.0.0
 ```
 
 Then edit `docker/compose/postarix.env` for a local trial: change or add
