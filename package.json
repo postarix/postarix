@@ -21,10 +21,10 @@
     "dev:services:down": "docker compose -f docker/compose/dev.yml down"
   },
   "devDependencies": {
-    "turbo": "^2.11.10",
+    "turbo": "^2.11.11",
     "eslint": "^10.14.0",
     "@eslint/js": "^10.0.1",
-    "typescript-eslint": "^8.72.1",
+    "typescript-eslint": "^8.72.2",
     "globals": "^17.14.0",
     "typescript": "~6.0.3"
   }
